@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /s /b \"c:\\Users\\EnzoP\\OneDrive\\Escritorio\\Proyectos 2026 ENZO - VALE\\JuegoTruco\\src\")",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(del \"c:\\Users\\EnzoP\\OneDrive\\Escritorio\\Proyectos 2026 ENZO - VALE\\JuegoTruco\\src\\app\\api\\socket\\route.ts\")",
+      "Bash(npm run dev:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(taskkill:*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(curl:*)",
+      "Bash(npx playwright install:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(dir:*)"
+    ]
+  }
+}

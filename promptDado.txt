@@ -1,0 +1,101 @@
+Actuá como un arquitecto senior full-stack especializado en juegos online en tiempo real.
+
+Vas a crear la base técnica y estructural de un juego online de Truco Uruguayo, usando:
+
+Next.js
+
+TypeScript
+
+Socket.IO
+
+Backend y frontend en el mismo proyecto
+
+🎯 Objetivo del juego
+
+Soportar Truco Uruguayo en las modalidades:
+
+1 vs 1
+
+2 vs 2
+
+3 vs 3
+
+Siempre con 2 equipos, con 1 a 3 jugadores por equipo
+
+🧠 Reglas de arquitectura (OBLIGATORIAS)
+
+Todo el estado del juego vive en el backend
+
+El frontend solo envía intenciones
+
+El backend valida turnos, cartas y cantos
+
+El motor del juego NO debe asumir cantidad fija de jugadores
+
+Código simple, legible, sin sobre-ingeniería
+
+🔌 Comunicación
+
+Usar Socket.IO
+
+Eventos tipados en TypeScript
+
+Uso de rooms para partidas
+
+🧱 Backend
+
+Servidor Node.js custom dentro de Next.js
+
+Un engine de Truco genérico, capaz de manejar:
+
+Turnos rotativos
+
+Cartas por jugador
+
+Cantos (Truco, Retruco, Vale 4)
+
+Puntaje por equipo
+
+🃏 Lógica del Truco
+
+Implementar:
+
+Mazo uruguayo
+
+Reglas correctas del Truco Uruguayo
+
+Resolución de manos
+
+Toda la lógica debe estar aislada en src/truco/
+
+🧑‍💻 Frontend
+
+React (Next.js App Router)
+
+Pantalla de lobby (crear/unirse a sala)
+
+Pantalla de mesa de Truco
+
+Renderizar el estado recibido del servidor
+
+No implementar lógica de reglas en el cliente
+
+🚫 NO hacer
+
+No usar base de datos
+
+No usar serverless ni edge functions
+
+No confiar en el cliente
+
+No hardcodear 1vs1
+
+📦 Resultado esperado
+
+Estructura de carpetas correcta
+
+Código base funcional
+
+Engine extensible
+
+Comentarios claros explicando decisiones importantes
