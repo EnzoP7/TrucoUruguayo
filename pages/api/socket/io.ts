@@ -3,6 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { Server as ServerIO } from 'socket.io';
 import { GameManager } from '@/truco/game/GameManager';
 import { Jugador, Carta, GritoTipo, EnvidoTipo } from '@/types/truco';
+import { TrucoEngine } from '@/truco/engine/TrucoEngine';
 
 export const config = {
   api: {
@@ -13,20 +14,22 @@ export const config = {
 // Instancia global del game manager
 const gameManager = new GameManager();
 
-// Mapeo nombre -> mesaId para reconexión
+// Mapeo nombre -> mesaId para reconexión (unused but kept for future use)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const jugadorNombreAMesa: Map<string, { mesaId: string; nombre: string }> = new Map();
 
 // Timers de desconexión pendiente (para cancelar si reconecta)
 const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
 
-const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SocketHandler = (_req: NextApiRequest, res: NextApiResponse & { socket: { server: any } }) => {
   if (res.socket.server.io) {
     res.end();
     return;
   }
 
   console.log('Setting up Socket.IO server...');
-  const httpServer: NetServer = res.socket.server as any;
+  const httpServer: NetServer = res.socket.server;
   const io = new ServerIO(httpServer, {
     path: '/api/socket/io',
     addTrailingSlash: false,
@@ -40,7 +43,8 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
     console.log(`Client connected: ${socket.id}`);
 
     // Helper: enviar estado a todos los jugadores de una partida (cada uno ve solo sus cartas)
-    const emitirEstadoATodos = (mesaId: string, engine: any, evento: string, extraData?: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const emitirEstadoATodos = (_mesaId: string, engine: TrucoEngine, evento: string, extraData?: Record<string, unknown>) => {
       const estado = engine.getEstado();
       estado.jugadores.forEach((j: Jugador) => {
         const estadoParaJugador = engine.getEstadoParaJugador(j.id);
@@ -50,7 +54,8 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
     };
 
     // Helper: emitir estado actualizado a todos
-    const actualizarEstado = (engine: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const actualizarEstado = (engine: TrucoEngine) => {
       const estado = engine.getEstado();
       estado.jugadores.forEach((j: Jugador) => {
         const estadoParaJugador = engine.getEstadoParaJugador(j.id);
@@ -59,7 +64,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
     };
 
     // Auto-iniciar siguiente ronda después de un delay
-    const autoSiguienteRonda = (engine: any, mesaId: string) => {
+    const autoSiguienteRonda = (engine: TrucoEngine) => {
       const estado = engine.getEstado();
       if (estado.estado === 'terminado') return;
 
@@ -86,7 +91,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
           jugadores: p.engine.getEstado().jugadores.length,
           estado: p.engine.getEstado().estado
         })));
-      } catch (error) {
+      } catch {
         callback(false, 'Failed to join lobby');
       }
     });
@@ -120,7 +125,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
           tamañoSala: data.tamañoSala || '2v2',
           estado: 'esperando'
         });
-      } catch (error) {
+      } catch {
         callback(false);
       }
     });
@@ -169,7 +174,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
         });
 
         callback(true, 'Unido a la partida');
-      } catch (error) {
+      } catch {
         callback(false, 'Error al unirse a la partida');
       }
     });
@@ -223,7 +228,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
         } else {
           callback(false, 'No se puede reconectar');
         }
-      } catch (error) {
+      } catch {
         callback(false, 'Error al reconectar');
       }
     });
@@ -258,7 +263,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
         });
 
         callback(true, 'Partida iniciada');
-      } catch (error) {
+      } catch {
         callback(false, 'Error al iniciar partida');
       }
     });
@@ -315,12 +320,12 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
           });
 
           if (!estado.winnerJuego) {
-            autoSiguienteRonda(partida, estado.id);
+            autoSiguienteRonda(partida);
           }
         }
 
         callback(true, 'Carta jugada');
-      } catch (error) {
+      } catch {
         callback(false, 'Error al jugar carta');
       }
     });
@@ -352,7 +357,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
         });
 
         callback(true);
-      } catch (error) {
+      } catch {
         callback(false, 'Error al cantar truco');
       }
     });
@@ -402,12 +407,12 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
           });
 
           if (!estado.winnerJuego) {
-            autoSiguienteRonda(partida, estado.id);
+            autoSiguienteRonda(partida);
           }
         }
 
         callback(true);
-      } catch (error) {
+      } catch {
         callback(false, 'Error al responder');
       }
     });
@@ -439,7 +444,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
         });
 
         callback(true);
-      } catch (error) {
+      } catch {
         callback(false, 'Error al cantar envido');
       }
     });
@@ -479,7 +484,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
         }
 
         callback(true);
-      } catch (error) {
+      } catch {
         callback(false, 'Error al responder envido');
       }
     });
@@ -525,11 +530,11 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
         });
 
         if (!estado.winnerJuego) {
-          autoSiguienteRonda(partida, estado.id);
+          autoSiguienteRonda(partida);
         }
 
         callback(true);
-      } catch (error) {
+      } catch {
         callback(false, 'Error al irse al mazo');
       }
     });
@@ -574,7 +579,7 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
         });
 
         callback(true, 'Corte realizado');
-      } catch (error) {
+      } catch {
         callback(false, 'Error al realizar corte');
       }
     });

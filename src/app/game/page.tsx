@@ -96,6 +96,11 @@ interface Mesa {
   jugadoresConFlor: string[];
   floresCantadas: FlorDeclaracion[];
   florYaCantada: boolean;
+  // Sistema de alternancia de gritos
+  equipoQueCantoUltimo: number | null; // equipo que cantó el último grito aceptado
+  // Sistema de perros
+  perrosActivos?: boolean;
+  perrosConfig?: { contraFlor: boolean; faltaEnvido: boolean; truco: boolean } | null;
 }
 
 interface FlorDeclaracion {
@@ -326,6 +331,7 @@ function GamePage() {
   }[]>([]);
 
   // Función para mostrar un bocadillo
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const mostrarBocadillo = useCallback((
     jugadorId: string,
     tipo: 'envido' | 'flor' | 'truco' | 'quiero' | 'no-quiero',
@@ -687,6 +693,20 @@ function GamePage() {
           setTimeout(() => { if (mounted) setMensaje(null); }, 4000);
         });
 
+        // Perros pendientes - después de repartir, el receptor debe responder
+        socketService.onPerrosPendientes((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          setPerrosActivos(true);
+          setEquipoPerros(data.equipoQueEcha);
+          if (data.debeResponder) {
+            setMensaje('🐕 Te echaron los perros - mirá tus cartas y decidí');
+          } else {
+            setMensaje('🐕 Perros echados - esperando respuesta del rival');
+          }
+          setTimeout(() => { if (mounted) setMensaje(null); }, 5000);
+        });
+
         // Register auto-reconnect: if socket drops and reconnects, re-join the game room
         socketService.onAutoReconnect(() => {
           if (!mounted) return;
@@ -760,13 +780,21 @@ function GamePage() {
   const puedoCantarRetruco = (): boolean => {
     if (!mesa || !miEquipo) return false;
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
-    return mesa.nivelGritoAceptado === 'truco';
+    if (mesa.nivelGritoAceptado !== 'truco') return false;
+    // Solo el equipo que ACEPTÓ el truco tiene la palabra para retruco
+    // Es decir, el equipo contrario al que cantó el truco
+    if (mesa.equipoQueCantoUltimo === miEquipo) return false;
+    return true;
   };
 
   const puedoCantarVale4 = (): boolean => {
     if (!mesa || !miEquipo) return false;
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
-    return mesa.nivelGritoAceptado === 'retruco';
+    if (mesa.nivelGritoAceptado !== 'retruco') return false;
+    // Solo el equipo que ACEPTÓ el retruco tiene la palabra para vale4
+    // Es decir, el equipo contrario al que cantó el retruco
+    if (mesa.equipoQueCantoUltimo === miEquipo) return false;
+    return true;
   };
 
   const puedoCantarEnvido = (): boolean => {
@@ -960,6 +988,7 @@ function GamePage() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleCancelarPerros = async () => {
     setLoading(true);
     try {
@@ -1943,14 +1972,13 @@ function GamePage() {
                     const jugadorIndex = deal.jugadorIndex;
                     const miIndex = mesa.jugadores.findIndex(j => j.id === socketId);
                     const isMe = jugadorIndex === miIndex;
-                    const numJugadores = mesa.jugadores.length;
 
                     // Calcular destino extendido hacia el perímetro de la mesa
                     let targetX = 0;
                     let targetY = 0;
                     let rotation = 0;
                     let spinY = 0; // Rotación 3D en eje Y
-                    let scaleMid = 0.95;
+                    const scaleMid = 0.95;
                     let scaleEnd = 0.75;
 
                     if (isMe) {
@@ -2059,8 +2087,8 @@ function GamePage() {
               </div>
             )}
 
-            {/* Modal de responder a los Perros */}
-            {perrosActivos && equipoPerros !== miEquipo && (
+            {/* Modal de responder a los Perros - solo después de repartir */}
+            {perrosActivos && equipoPerros !== miEquipo && mesa?.fase === 'esperando_respuesta_perros' && (
               <PerrosResponseModal
                 tengoFlor={tengoFlor()}
                 loading={loading}
@@ -2068,13 +2096,24 @@ function GamePage() {
               />
             )}
 
-            {/* Indicador de que echaste los perros */}
-            {perrosActivos && equipoPerros === miEquipo && (
+            {/* Indicador de que echaste los perros - mientras se espera respuesta */}
+            {perrosActivos && equipoPerros === miEquipo && mesa?.fase === 'esperando_respuesta_perros' && (
               <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 animate-pulse">
                 <div className="glass rounded-xl px-6 py-3 border border-orange-500/50 flex items-center gap-3">
                   <span className="text-2xl">🐕</span>
                   <span className="text-orange-300 font-bold">¡Echaste los Perros!</span>
                   <span className="text-gold-400/70 text-sm">Esperando respuesta...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Indicador de perros echados - antes de repartir */}
+            {perrosActivos && mesa?.fase === 'cortando' && (
+              <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 animate-pulse">
+                <div className="glass rounded-xl px-6 py-3 border border-orange-500/50 flex items-center gap-3">
+                  <span className="text-2xl">🐕</span>
+                  <span className="text-orange-300 font-bold">¡Perros echados!</span>
+                  <span className="text-gold-400/70 text-sm">Esperando corte y reparto...</span>
                 </div>
               </div>
             )}

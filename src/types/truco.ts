@@ -91,4 +91,7 @@ export interface Mesa {
   winnerRonda: number | null;
   winnerJuego: number | null;
   mensajeRonda: string | null; // mensaje temporal para mostrar resultado
+  // Sistema de perros
+  perrosActivos?: boolean; // Si está activo el modo "echar los perros"
+  perrosConfig?: { contraFlor: boolean; faltaEnvido: boolean; truco: boolean } | null;
 }

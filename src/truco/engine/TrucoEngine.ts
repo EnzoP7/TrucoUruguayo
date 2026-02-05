@@ -1,4 +1,4 @@
-import { Mesa, Jugador, Carta, Equipo, GritoTipo, EnvidoTipo, EnvidoActivo, EnvidoResultado, FaseRonda } from '@/types/truco';
+import { Mesa, Jugador, Carta, Equipo, GritoTipo, EnvidoTipo, EnvidoResultado } from '@/types/truco';
 import { Mazo } from '../models/Mazo';
 
 // Motor de juego genérico que maneja cualquier configuración de equipos
@@ -221,10 +221,8 @@ export class TrucoEngine {
 
     // Contar victorias por equipo
     const victorias: Record<number, number> = { 1: 0, 2: 0 };
-    let empates = 0;
     ganadores.forEach(g => {
-      if (g === null) empates++;
-      else victorias[g]++;
+      if (g !== null) victorias[g]++;
     });
 
     // Determinar quién es mano (para desempates)

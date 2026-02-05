@@ -1,5 +1,5 @@
 import { TrucoEngine } from '../engine/TrucoEngine';
-import { Mesa, Jugador } from '@/types/truco';
+import { Jugador } from '@/types/truco';
 
 // Gestor de partidas que maneja múltiples juegos simultáneos
 export class GameManager {

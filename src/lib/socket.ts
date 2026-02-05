@@ -278,7 +278,9 @@ class SocketService {
     });
   }
 
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   // === EVENT LISTENERS ===
+  // Event data types are dynamic from server, using any for flexibility
 
   onPartidasDisponibles(callback: (partidas: any[]) => void): void {
     this.socket?.on('partidas-disponibles', callback);
@@ -391,6 +393,11 @@ class SocketService {
   onPerrosRespondidos(callback: (data: any) => void): void {
     this.socket?.on('perros-respondidos', callback);
   }
+
+  onPerrosPendientes(callback: (data: any) => void): void {
+    this.socket?.on('perros-pendientes', callback);
+  }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   off(event: keyof ServerToClientEvents): void {
     this.socket?.off(event);

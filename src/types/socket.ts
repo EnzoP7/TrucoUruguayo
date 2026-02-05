@@ -71,6 +71,7 @@ export interface ServerToClientEvents {
   'perros-echados': (data: { equipoQueEcha: number; estado: Mesa }) => void;
   'perros-cancelados': (data: { estado: Mesa }) => void;
   'perros-respondidos': (data: { respuesta: string; equipoGanador?: number; puntosGanados?: number; quiereContraFlor?: boolean; quiereFaltaEnvido?: boolean; quiereTruco?: boolean; estado: Mesa }) => void;
+  'perros-pendientes': (data: { equipoQueEcha: number; debeResponder: boolean; estado: Mesa }) => void;
 }
 
 // Types for step-by-step envido

@@ -15,20 +15,44 @@ const handle = app.getRequestHandler();
 // ============================================================
 
 // Mazo uruguayo (40 cartas)
+// Jerarquía completa del Truco Uruguayo (de menor a mayor poder):
+// Cartas comunes (sin palo especial): 4 < 5 < 6 < 7 < 10 < 11 < 12
+// Cartas especiales por palo: 1 copa/oro < 2s < 3s
+// Matas (siempre las mismas): 7 oro < 7 espada < 1 basto < 1 espada
 function crearMazo() {
   const palos = ['oro', 'copa', 'espada', 'basto'];
   const valores = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
-  const jerarquia = {
+
+  // Jerarquía de cartas especiales (las que tienen poder fijo alto)
+  const jerarquiaEspecial = {
     'espada-1': 14, 'basto-1': 13, 'espada-7': 12, 'oro-7': 11,
     'espada-3': 10, 'basto-3': 9, 'oro-3': 8, 'copa-3': 7,
     'espada-2': 6, 'basto-2': 5, 'oro-2': 4, 'copa-2': 3,
     'oro-1': 2, 'copa-1': 1,
   };
+
+  // Jerarquía de cartas comunes (las que NO tienen poder especial)
+  // 4 < 5 < 6 < 7 (falso) < 10 (sota) < 11 (caballo) < 12 (rey)
+  // Usamos valores negativos para que siempre pierdan contra las especiales
+  const jerarquiaComunes = {
+    4: -7,   // 4 es la más baja
+    5: -6,
+    6: -5,
+    7: -4,   // 7 falso (el que no es mata)
+    10: -3,  // sota
+    11: -2,  // caballo
+    12: -1,  // rey
+  };
+
   const cartas = [];
   for (const palo of palos) {
     for (const valor of valores) {
       const clave = `${palo}-${valor}`;
-      cartas.push({ palo, valor, poder: jerarquia[clave] || 0 });
+      // Primero buscar si es carta especial, si no usar jerarquía de comunes
+      const poder = jerarquiaEspecial[clave] !== undefined
+        ? jerarquiaEspecial[clave]
+        : (jerarquiaComunes[valor] || 0);
+      cartas.push({ palo, valor, poder });
     }
   }
   return cartas;
@@ -37,7 +61,8 @@ function crearMazo() {
 // Actualizar el poder de las cartas según la muestra
 // Las piezas (del palo de la muestra) van por encima de las matas
 // Jerarquía completa (de menor a mayor):
-// Comunes: 4,5,6,7,10,11,12 (poder 0) -> 1 copa/oro (1-2) -> 2s (3-6) -> 3s (7-10)
+// Comunes: 4(-7) < 5(-6) < 6(-5) < 7(-4) < 10(-3) < 11(-2) < 12(-1)
+// Especiales: 1 copa/oro (1-2) -> 2s (3-6) -> 3s (7-10)
 // Matas: 7 oro (11), 7 espada (12), 1 basto (13), 1 espada (14)
 // Piezas del palo de la muestra: 10 (15), 11 (16), 5 (17), 4 (18), 2 (19)
 function actualizarPoderConMuestra(cartas, muestra) {
@@ -163,7 +188,7 @@ function crearEstadoMesa(mesaId, jugadores, puntosLimite = 30) {
     perrosActivos: false, // Si está activo el modo "echar los perros"
     perrosConfig: null, // { contraFlor: true, faltaEnvido: true, truco: true }
     // Alternancia de gritos (quién puede gritar qué)
-    ultimoEquipoQueGrito: null, // Para validar alternancia de truco/retruco/vale4
+    equipoQueCantoUltimo: null, // Para validar alternancia de truco/retruco/vale4
   };
 }
 
@@ -185,7 +210,7 @@ function iniciarRondaFase1(mesa) {
   mesa.fase = 'cortando'; // New phase: waiting for cut
   // Reset nuevos campos
   mesa.cartasFlorReveladas = [];
-  mesa.ultimoEquipoQueGrito = null;
+  mesa.equipoQueCantoUltimo = null;
   // Mantener perrosActivos si está configurado (se resetea manualmente)
 
   // Shuffle the deck
@@ -270,7 +295,6 @@ function iniciarRondaFase2(mesa, posicionCorte) {
 function finalizarReparticion(mesa) {
   mesa.repartiendoCartas = false;
   mesa.cartasRepartidas = [];
-  mesa.fase = 'jugando';
 
   // Detect who has flor
   mesa.jugadoresConFlor = [];
@@ -281,6 +305,13 @@ function finalizarReparticion(mesa) {
       mesa.jugadoresConFlor.push(j.id);
     }
   });
+
+  // Si hay perros activos, esperar respuesta antes de jugar
+  if (mesa.perrosActivos) {
+    mesa.fase = 'esperando_respuesta_perros';
+  } else {
+    mesa.fase = 'jugando';
+  }
 }
 
 // Legacy wrapper for compatibility
@@ -319,6 +350,15 @@ function jugarCarta(mesa, jugadorId, carta) {
 
   const jugadorIndex = mesa.jugadores.findIndex(j => j.id === jugadorId);
   if (jugadorIndex !== mesa.turnoActual) return false;
+
+  // Validar que el jugador no haya tirado ya en esta mano
+  const inicio = (mesa.manoActual - 1) * mesa.jugadores.length;
+  const cartasEnEstaMano = mesa.cartasMesa.slice(inicio);
+  const yaJugoEnEstaMano = cartasEnEstaMano.some(c => c.jugadorId === jugadorId);
+  if (yaJugoEnEstaMano) {
+    console.log(`[jugarCarta] Jugador ${jugadorId} ya jugó en esta mano`);
+    return false;
+  }
 
   const cartaIdx = jugador.cartas.findIndex(c => c.palo === carta.palo && c.valor === carta.valor);
   if (cartaIdx === -1) return false;
@@ -480,10 +520,10 @@ function cantarTruco(mesa, jugadorId, tipo) {
   // Truco: cualquiera puede cantarlo inicialmente
   // Retruco: solo puede cantarlo el equipo que ACEPTÓ el truco (no el que lo cantó)
   // Vale4: solo puede cantarlo el equipo que ACEPTÓ el retruco
-  if (tipo === 'retruco' && mesa.ultimoEquipoQueGrito === jugador.equipo) {
+  if (tipo === 'retruco' && mesa.equipoQueCantoUltimo === jugador.equipo) {
     return false; // No puede subir su propio grito
   }
-  if (tipo === 'vale4' && mesa.ultimoEquipoQueGrito === jugador.equipo) {
+  if (tipo === 'vale4' && mesa.equipoQueCantoUltimo === jugador.equipo) {
     return false; // No puede subir su propio grito
   }
 
@@ -512,7 +552,7 @@ function responderTruco(mesa, jugadorId, acepta) {
     mesa.puntosEnJuego = mesa.gritoActivo.puntosEnJuego;
     mesa.nivelGritoAceptado = mesa.gritoActivo.tipo;
     // Guardar qué equipo gritó para validar alternancia
-    mesa.ultimoEquipoQueGrito = mesa.gritoActivo.equipoQueGrita;
+    mesa.equipoQueCantoUltimo = mesa.gritoActivo.equipoQueGrita;
     mesa.gritoActivo = null;
   } else {
     const puntos = mesa.gritoActivo.puntosSiNoQuiere;
@@ -1990,6 +2030,63 @@ app.prepare().then(() => {
         const mesa = engines.get(room.mesaId);
         if (!mesa) { callback(false, 'Motor no encontrado'); return; }
 
+        // FLOR siempre tiene prioridad - si hay flor pendiente, cantarla automáticamente
+        if (mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0 && !mesa.florYaCantada) {
+          const florResult = cantarFlorAutomatica(mesa);
+
+          // Emitir las flores cantadas
+          florResult.cantadas.forEach((declaracion, index) => {
+            setTimeout(() => {
+              room.jugadores.forEach(p => {
+                const pJugador = mesa.jugadores.find(j => j.id === p.socketId);
+                const mismoEquipo = pJugador && pJugador.equipo === declaracion.equipo;
+                io.to(p.socketId).emit('flor-cantada', {
+                  jugadorId: declaracion.jugadorId,
+                  declaracion: {
+                    ...declaracion,
+                    puntos: mismoEquipo ? declaracion.puntos : null,
+                  },
+                  estado: getEstadoParaJugador(mesa, p.socketId),
+                });
+              });
+            }, index * 1000);
+          });
+
+          // Emitir resultado de flor
+          setTimeout(() => {
+            if (florResult.resultado) {
+              room.jugadores.forEach(p => {
+                io.to(p.socketId).emit('flor-resuelta', {
+                  resultado: {
+                    ganador: florResult.resultado.ganador,
+                    puntosGanados: florResult.resultado.puntosGanados,
+                    floresCantadas: florResult.resultado.floresCantadas.map(f => ({
+                      ...f,
+                      puntos: null,
+                    })),
+                    mejorFlor: null,
+                  },
+                  estado: getEstadoParaJugador(mesa, p.socketId),
+                });
+              });
+
+              if (mesa.winnerJuego !== null) {
+                room.estado = 'terminado';
+                room.jugadores.forEach(p => {
+                  io.to(p.socketId).emit('juego-finalizado', {
+                    ganadorEquipo: mesa.winnerJuego,
+                    estado: getEstadoParaJugador(mesa, p.socketId),
+                  });
+                });
+                broadcastLobby(io);
+              }
+            }
+          }, florResult.cantadas.length * 1000 + 500);
+
+          callback(true, 'Hay flor en la mesa - envido anulado');
+          return;
+        }
+
         const result = responderEnvido(mesa, socket.id, acepta);
 
         // Notificar respuesta
@@ -2298,11 +2395,26 @@ app.prepare().then(() => {
                 if (!finalRoom || !finalMesa) return;
 
                 finalizarReparticion(finalMesa);
-                console.log(`[Socket.IO] realizar-corte: repartición finalizada, enviando estado-actualizado a ${finalRoom.jugadores.length} jugadores`);
-                finalRoom.jugadores.forEach(p => {
-                  console.log(`[Socket.IO] Sending estado-actualizado to ${p.nombre} (${p.socketId})`);
-                  io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(finalMesa, p.socketId));
-                });
+                console.log(`[Socket.IO] realizar-corte: repartición finalizada, fase=${finalMesa.fase}, perrosActivos=${finalMesa.perrosActivos}`);
+
+                // Si hay perros activos, emitir evento especial para que el equipo receptor responda
+                if (finalMesa.perrosActivos && finalMesa.perrosConfig) {
+                  console.log(`[Socket.IO] Perros pendientes - equipo que echó: ${finalMesa.perrosConfig.equipoQueEcha}`);
+                  finalRoom.jugadores.forEach(p => {
+                    const pJugador = finalMesa.jugadores.find(j => j.id === p.socketId);
+                    const debeResponder = pJugador && pJugador.equipo !== finalMesa.perrosConfig.equipoQueEcha;
+                    io.to(p.socketId).emit('perros-pendientes', {
+                      equipoQueEcha: finalMesa.perrosConfig.equipoQueEcha,
+                      debeResponder,
+                      estado: getEstadoParaJugador(finalMesa, p.socketId),
+                    });
+                  });
+                } else {
+                  finalRoom.jugadores.forEach(p => {
+                    console.log(`[Socket.IO] Sending estado-actualizado to ${p.nombre} (${p.socketId})`);
+                    io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(finalMesa, p.socketId));
+                  });
+                }
               }, 500);
             }
           }, dealDelay * (index + 1));
@@ -2736,6 +2848,7 @@ app.prepare().then(() => {
         }
 
         mesa.perrosActivos = false;
+        mesa.fase = 'jugando'; // Ahora sí se puede jugar
 
         // Build response description
         const partes = [];
