@@ -149,10 +149,12 @@ function getNombreEnvido(tipo: string): string {
 }
 
 // Componente para responder a los perros con opciones separadas
-function PerrosResponseModal({ tengoFlor, loading, onResponder }: {
+function PerrosResponseModal({ tengoFlor, loading, onResponder, misCartas, muestra }: {
   tengoFlor: boolean;
   loading: boolean;
   onResponder: (quiereContraFlor: boolean, quiereFaltaEnvido: boolean, quiereTruco: boolean) => void;
+  misCartas: { palo: string; valor: number; poder: number }[];
+  muestra: { palo: string; valor: number; poder: number } | null;
 }) {
   const [quiereEnvidoFlor, setQuiereEnvidoFlor] = useState<boolean | null>(null);
   const [quiereTruco, setQuiereTruco] = useState<boolean | null>(null);
@@ -171,8 +173,8 @@ function PerrosResponseModal({ tengoFlor, loading, onResponder }: {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="glass rounded-2xl p-6 max-w-md w-full border-2 border-orange-600/50 animate-slide-up">
-        <div className="text-center mb-5">
+      <div className="glass rounded-2xl p-6 max-w-lg w-full border-2 border-orange-600/50 animate-slide-up">
+        <div className="text-center mb-4">
           <span className="text-4xl">🐕</span>
           <h3 className="text-xl font-bold text-orange-300 mt-2">
             ¡Te echaron los Perros!
@@ -180,6 +182,48 @@ function PerrosResponseModal({ tengoFlor, loading, onResponder }: {
           <p className="text-gold-400/60 text-xs mt-1">
             {tengoFlor ? 'En Ley (tenés Flor)' : 'A Punto (sin Flor)'}
           </p>
+        </div>
+
+        {/* Muestra y Cartas del jugador */}
+        <div className="mb-4 p-3 bg-black/30 rounded-xl border border-gold-700/30">
+          {/* Muestra */}
+          {muestra && (
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <span className="text-gold-400/70 text-xs font-medium">Muestra:</span>
+              <div className="relative">
+                <img
+                  src={`/Cartasimg/${muestra.valor}-${muestra.palo}.png`}
+                  alt={`${muestra.valor} de ${muestra.palo}`}
+                  className="w-12 h-16 rounded shadow-lg ring-2 ring-yellow-500/60"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Mis cartas */}
+          <div className="flex items-center justify-center gap-1">
+            <span className="text-gold-400/70 text-xs font-medium mr-2">Tus cartas:</span>
+            <div className="flex gap-2">
+              {misCartas.map((carta, idx) => (
+                <div key={idx} className="relative">
+                  <img
+                    src={`/Cartasimg/${carta.valor}-${carta.palo}.png`}
+                    alt={`${carta.valor} de ${carta.palo}`}
+                    className={`w-14 h-20 rounded shadow-lg transition-all ${
+                      muestra && carta.palo === muestra.palo
+                        ? 'ring-2 ring-yellow-400/70'
+                        : ''
+                    }`}
+                  />
+                  {muestra && carta.palo === muestra.palo && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                      <span className="text-[8px]">⭐</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Opción 1: Contra Flor al Resto o Falta Envido */}
@@ -2093,6 +2137,8 @@ function GamePage() {
                 tengoFlor={tengoFlor()}
                 loading={loading}
                 onResponder={handleResponderPerros}
+                misCartas={misCartas()}
+                muestra={mesa?.muestra || null}
               />
             )}
 
