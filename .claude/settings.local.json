@@ -17,7 +17,8 @@
       "Bash(node server.js:*)",
       "Bash(node --check:*)",
       "Bash(netstat:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(set NODE_ENV=production)"
     ]
   }
 }
