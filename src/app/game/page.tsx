@@ -34,6 +34,24 @@ interface EnvidoActivo {
   puntosSiNoQuiere: number;
 }
 
+interface EnvidoDeclaracion {
+  jugadorId: string;
+  jugadorNombre: string;
+  equipo: number;
+  puntos: number | null;
+  sonBuenas: boolean;
+}
+
+interface EnvidoDeclaracionState {
+  puntosAcumulados: number;
+  declaraciones: EnvidoDeclaracion[];
+  turnoDeclarar: number;
+  equipoMano: number;
+  fase: 'declarando' | 'resuelto';
+  mejorPuntajeDeclarado: number | null;
+  equipoMejorPuntaje: number | null;
+}
+
 interface Equipo {
   id: number;
   jugadores: Jugador[];
@@ -44,6 +62,7 @@ interface Mesa {
   id: string;
   jugadores: Jugador[];
   equipos: [Equipo, Equipo];
+  puntosLimite: number;
   estado: string;
   fase: string;
   turnoActual: number;
@@ -52,16 +71,38 @@ interface Mesa {
   maxManos: number;
   ganadoresManos: (number | null)[];
   indiceMano: number;
+  muestra: Carta | null;
+  esperandoCorte: boolean;
+  indiceJugadorCorta: number;
+  corteRealizado: boolean;
+  posicionCorte: number | null;
   gritoActivo: GritoActivo | null;
   nivelGritoAceptado: string | null;
   puntosEnJuego: number;
   envidoActivo: EnvidoActivo | null;
   envidoYaCantado: boolean;
+  envidoDeclaracion: EnvidoDeclaracionState | null;
   primeraCartaJugada: boolean;
   winnerRonda: number | null;
   winnerJuego: number | null;
   mensajeRonda: string | null;
-  muestra: Carta | null;
+  cartaGanadoraMano: {
+    jugadorId: string;
+    carta: Carta;
+    indexEnMesa: number;
+    manoNumero: number;
+  } | null;
+  // Flor system
+  jugadoresConFlor: string[];
+  floresCantadas: FlorDeclaracion[];
+  florYaCantada: boolean;
+}
+
+interface FlorDeclaracion {
+  jugadorId: string;
+  jugadorNombre: string;
+  equipo: number;
+  puntos: number | null;
 }
 
 // Mapeo palo del modelo -> nombre en archivo de imagen
@@ -92,8 +133,135 @@ function getNombreEnvido(tipo: string): string {
     'envido': 'ENVIDO',
     'real_envido': 'REAL ENVIDO',
     'falta_envido': 'FALTA ENVIDO',
+    'envido_cargado': 'ENVIDO CARGADO',
   };
+  // Manejar tipos de envido cargado con cantidad específica (ej: "cargado_15")
+  if (tipo.startsWith('cargado_')) {
+    const puntos = tipo.split('_')[1];
+    return `ENVIDO CARGADO (${puntos} pts)`;
+  }
   return nombres[tipo] || tipo;
+}
+
+// Componente para responder a los perros con opciones separadas
+function PerrosResponseModal({ tengoFlor, loading, onResponder }: {
+  tengoFlor: boolean;
+  loading: boolean;
+  onResponder: (quiereContraFlor: boolean, quiereFaltaEnvido: boolean, quiereTruco: boolean) => void;
+}) {
+  const [quiereEnvidoFlor, setQuiereEnvidoFlor] = useState<boolean | null>(null);
+  const [quiereTruco, setQuiereTruco] = useState<boolean | null>(null);
+
+  const puedeConfirmar = quiereEnvidoFlor !== null && quiereTruco !== null;
+  const seVaAlMazo = quiereEnvidoFlor === false && quiereTruco === false;
+
+  const handleConfirmar = () => {
+    if (!puedeConfirmar) return;
+    onResponder(
+      tengoFlor ? (quiereEnvidoFlor || false) : false,
+      !tengoFlor ? (quiereEnvidoFlor || false) : false,
+      quiereTruco || false
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="glass rounded-2xl p-6 max-w-md w-full border-2 border-orange-600/50 animate-slide-up">
+        <div className="text-center mb-5">
+          <span className="text-4xl">🐕</span>
+          <h3 className="text-xl font-bold text-orange-300 mt-2">
+            ¡Te echaron los Perros!
+          </h3>
+          <p className="text-gold-400/60 text-xs mt-1">
+            {tengoFlor ? 'En Ley (tenés Flor)' : 'A Punto (sin Flor)'}
+          </p>
+        </div>
+
+        {/* Opción 1: Contra Flor al Resto o Falta Envido */}
+        <div className="mb-4">
+          <p className="text-gold-400/80 text-sm font-medium mb-2">
+            {tengoFlor ? '🌸 Contra Flor al Resto' : '🎯 Falta Envido'}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setQuiereEnvidoFlor(true)}
+              className={`py-2.5 rounded-xl font-bold text-sm transition-all ${
+                quiereEnvidoFlor === true
+                  ? 'bg-green-600 text-white ring-2 ring-green-400'
+                  : 'bg-green-900/30 text-green-400 border border-green-700/40 hover:bg-green-800/40'
+              }`}
+            >
+              Quiero
+            </button>
+            <button
+              onClick={() => setQuiereEnvidoFlor(false)}
+              className={`py-2.5 rounded-xl font-bold text-sm transition-all ${
+                quiereEnvidoFlor === false
+                  ? 'bg-red-600 text-white ring-2 ring-red-400'
+                  : 'bg-red-900/30 text-red-400 border border-red-700/40 hover:bg-red-800/40'
+              }`}
+            >
+              Paso
+            </button>
+          </div>
+        </div>
+
+        {/* Opción 2: Truco */}
+        <div className="mb-5">
+          <p className="text-gold-400/80 text-sm font-medium mb-2">
+            ⚔️ Truco
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setQuiereTruco(true)}
+              className={`py-2.5 rounded-xl font-bold text-sm transition-all ${
+                quiereTruco === true
+                  ? 'bg-green-600 text-white ring-2 ring-green-400'
+                  : 'bg-green-900/30 text-green-400 border border-green-700/40 hover:bg-green-800/40'
+              }`}
+            >
+              Quiero
+            </button>
+            <button
+              onClick={() => setQuiereTruco(false)}
+              className={`py-2.5 rounded-xl font-bold text-sm transition-all ${
+                quiereTruco === false
+                  ? 'bg-red-600 text-white ring-2 ring-red-400'
+                  : 'bg-red-900/30 text-red-400 border border-red-700/40 hover:bg-red-800/40'
+              }`}
+            >
+              Paso
+            </button>
+          </div>
+        </div>
+
+        {/* Confirmar */}
+        {seVaAlMazo && puedeConfirmar && (
+          <p className="text-red-400/80 text-xs text-center mb-2">
+            Si pasás todo, te vas al mazo.
+          </p>
+        )}
+        <button
+          onClick={handleConfirmar}
+          disabled={!puedeConfirmar || loading}
+          className={`w-full py-3 rounded-xl font-bold transition-all ${
+            !puedeConfirmar
+              ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
+              : seVaAlMazo
+                ? 'bg-gradient-to-r from-red-700 to-red-600 text-white hover:from-red-600 hover:to-red-500'
+                : 'bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400'
+          }`}
+        >
+          {!puedeConfirmar
+            ? 'Elegí para cada uno'
+            : seVaAlMazo
+              ? 'Me voy al mazo'
+              : `Confirmar${quiereEnvidoFlor && quiereTruco ? ' (todo)' : ''}`
+          }
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function GamePageWrapper() {
@@ -124,6 +292,53 @@ function GamePage() {
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [esperandoInicio, setEsperandoInicio] = useState(true);
+  const [cutAnimating, setCutAnimating] = useState(false);
+  const [cutPosition, setCutPosition] = useState<number | null>(null);
+  const [envidoDeclaraciones, setEnvidoDeclaraciones] = useState<EnvidoDeclaracion[]>([]);
+  const [envidoResultado, setEnvidoResultado] = useState<{ ganador: number; puntosGanados: number; mejorPuntaje: number | null } | null>(null);
+  const [dealingCards, setDealingCards] = useState<{ jugadorIndex: number; cartaIndex: number }[]>([]);
+  const [isDealing, setIsDealing] = useState(false);
+  const [florAnuncio, setFlorAnuncio] = useState<{ jugadorNombre: string } | null>(null);
+  const [florResultado, setFlorResultado] = useState<{ ganador: number; puntosGanados: number } | null>(null);
+  const [reyesAnimacion, setReyesAnimacion] = useState<{
+    jugadorId: string;
+    jugadorNombre: string;
+    carta: { palo: string; valor: number };
+    esRey: boolean;
+    equipo: number;
+  }[] | null>(null);
+  const [reyesAnimStep, setReyesAnimStep] = useState(0);
+  const [reyesAnimDone, setReyesAnimDone] = useState(false);
+  const [rondaBanner, setRondaBanner] = useState<{ mensaje: string; puntos: number; equipo: number; cartasFlor?: { jugadorNombre: string; cartas: Carta[] }[] } | null>(null);
+  // Envido Cargado
+  const [mostrarEnvidoCargado, setMostrarEnvidoCargado] = useState(false);
+  const [puntosEnvidoCargado, setPuntosEnvidoCargado] = useState(5);
+  // Echar los Perros
+  const [perrosActivos, setPerrosActivos] = useState(false);
+  const [equipoPerros, setEquipoPerros] = useState<number | null>(null);
+  // Bocadillos de diálogo (speech bubbles)
+  const [speechBubbles, setSpeechBubbles] = useState<{
+    id: string;
+    jugadorId: string;
+    tipo: 'envido' | 'flor' | 'truco' | 'quiero' | 'no-quiero';
+    texto: string;
+    puntos?: number;
+  }[]>([]);
+
+  // Función para mostrar un bocadillo
+  const mostrarBocadillo = useCallback((
+    jugadorId: string,
+    tipo: 'envido' | 'flor' | 'truco' | 'quiero' | 'no-quiero',
+    texto: string,
+    puntos?: number,
+    duracion = 3000
+  ) => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setSpeechBubbles(prev => [...prev, { id, jugadorId, tipo, texto, puntos }]);
+    setTimeout(() => {
+      setSpeechBubbles(prev => prev.filter(b => b.id !== id));
+    }, duracion);
+  }, []);
 
   const mostrarMensaje = useCallback((msg: string, duracion = 3000) => {
     setMensaje(msg);
@@ -155,6 +370,7 @@ function GamePage() {
         // Register ALL listeners BEFORE calling reconectar
         socketService.onReconectado((data) => {
           if (!mounted) return;
+          console.log('[Game] reconectado received, jugadores:', data.estado.jugadores?.length, data.estado.jugadores?.map((j: Jugador) => j.nombre));
           setSocketId(socketService.getSocketId());
           setMesa(data.estado);
           if (data.estado.estado === 'jugando') {
@@ -164,18 +380,21 @@ function GamePage() {
 
         socketService.onUnidoPartida((data) => {
           if (!mounted) return;
+          console.log('[Game] unido-partida received, jugadores:', data.estado.jugadores?.length);
           setSocketId(socketService.getSocketId());
           setMesa(data.estado);
         });
 
         socketService.onJugadorUnido((data) => {
           if (!mounted) return;
+          console.log('[Game] jugador-unido received:', data.jugador?.nombre);
           setMensaje(`${data.jugador.nombre} se unió`);
           setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
         });
 
         socketService.onPartidaIniciada((estado) => {
           if (!mounted) return;
+          console.log('[Game] partida-iniciada received');
           setMesa(estado);
           setEsperandoInicio(false);
           setSocketId(socketService.getSocketId());
@@ -183,6 +402,7 @@ function GamePage() {
 
         socketService.onEstadoActualizado((estado) => {
           if (!mounted) return;
+          console.log('[Game] estado-actualizado received, jugadores:', estado.jugadores?.length, estado.jugadores?.map((j: Jugador) => j.nombre));
           setMesa(estado);
         });
 
@@ -210,29 +430,105 @@ function GamePage() {
         socketService.onEnvidoCantado((data) => {
           if (!mounted) return;
           setMesa(data.estado);
-          const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
-          setMensaje(`${jugador?.nombre}: ¡${getNombreEnvido(data.tipo)}!`);
-          setTimeout(() => { if (mounted) setMensaje(null); }, 4000);
+          // Mostrar bocadillo de envido
+          const bubbleId = `envido-${Date.now()}`;
+          setSpeechBubbles(prev => [...prev, {
+            id: bubbleId,
+            jugadorId: data.jugadorId,
+            tipo: 'envido',
+            texto: getNombreEnvido(data.tipo),
+          }]);
+          setTimeout(() => {
+            if (mounted) setSpeechBubbles(prev => prev.filter(b => b.id !== bubbleId));
+          }, 3500);
         });
 
         socketService.onEnvidoRespondido((data) => {
           if (!mounted) return;
           setMesa(data.estado);
-          const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
-          if (data.acepta && data.resultado) {
-            setMensaje(`Envido: Eq.1: ${data.resultado.equipo1Puntos} vs Eq.2: ${data.resultado.equipo2Puntos} → Equipo ${data.resultado.ganador} +${data.resultado.puntosGanados}`);
-            setTimeout(() => { if (mounted) setMensaje(null); }, 5000);
-          } else {
-            setMensaje(`${jugador?.nombre}: ¡NO QUIERO!`);
-            setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
+          // Mostrar bocadillo de quiero/no quiero
+          const bubbleId = `envido-resp-${Date.now()}`;
+          setSpeechBubbles(prev => [...prev, {
+            id: bubbleId,
+            jugadorId: data.jugadorId,
+            tipo: data.acepta ? 'quiero' : 'no-quiero',
+            texto: data.acepta ? '¡QUIERO!' : '¡NO QUIERO!',
+          }]);
+          setTimeout(() => {
+            if (mounted) setSpeechBubbles(prev => prev.filter(b => b.id !== bubbleId));
+          }, 3000);
+
+          if (data.acepta) {
+            setEnvidoDeclaraciones([]);
+            setEnvidoResultado(null);
           }
+        });
+
+        // Envido declaration step-by-step
+        socketService.onEnvidoDeclarado((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          setEnvidoDeclaraciones(prev => [...prev, data.declaracion]);
+          // Mostrar bocadillo con los puntos
+          const bubbleId = `decl-${Date.now()}`;
+          setSpeechBubbles(prev => [...prev, {
+            id: bubbleId,
+            jugadorId: data.declaracion.jugadorId,
+            tipo: 'envido',
+            texto: data.declaracion.sonBuenas ? 'Son buenas...' : `${data.declaracion.puntos}`,
+            puntos: data.declaracion.sonBuenas ? undefined : data.declaracion.puntos,
+          }]);
+          setTimeout(() => {
+            if (mounted) setSpeechBubbles(prev => prev.filter(b => b.id !== bubbleId));
+          }, 3500);
+        });
+
+        socketService.onEnvidoResuelto((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          setEnvidoDeclaraciones(data.resultado.declaraciones);
+          setEnvidoResultado({
+            ganador: data.resultado.ganador,
+            puntosGanados: data.resultado.puntosGanados,
+            mejorPuntaje: data.resultado.mejorPuntaje
+          });
+          setMensaje(`¡Equipo ${data.resultado.ganador} gana el envido! (+${data.resultado.puntosGanados} pts)`);
+          // Clear envido state after showing result
+          setTimeout(() => {
+            if (mounted) {
+              setMensaje(null);
+              setEnvidoDeclaraciones([]);
+              setEnvidoResultado(null);
+            }
+          }, 5000);
+        });
+
+        socketService.onManoFinalizada((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          // Show message about who won the mano
+          if (data.ganadorEquipo !== null) {
+            setMensaje(`Mano ${data.manoNumero}: Equipo ${data.ganadorEquipo} gana`);
+          } else {
+            setMensaje(`Mano ${data.manoNumero}: Empate (parda)`);
+          }
+          // Don't clear message - let the next state update handle it
         });
 
         socketService.onRondaFinalizada((data) => {
           if (!mounted) return;
           setMesa(data.estado);
-          setMensaje(`Equipo ${data.ganadorEquipo} gana la ronda (+${data.puntosGanados})`);
-          setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
+          // Show floating banner instead of blocking modal
+          // Include flor cards if any were revealed
+          setRondaBanner({
+            mensaje: `Equipo ${data.ganadorEquipo} gana la ronda`,
+            puntos: data.puntosGanados,
+            equipo: data.ganadorEquipo,
+            cartasFlor: data.cartasFlorReveladas || [],
+          });
+          // Longer timeout if flor cards are shown
+          const timeout = data.cartasFlorReveladas?.length > 0 ? 7000 : 4000;
+          setTimeout(() => { if (mounted) setRondaBanner(null); }, timeout);
         });
 
         socketService.onJuegoFinalizado((data) => {
@@ -248,6 +544,155 @@ function GamePage() {
           const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
           setMensaje(`${jugador?.nombre} se fue al mazo`);
           setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
+        });
+
+        socketService.onCorteSolicitado((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
+          setMensaje(`${jugador?.nombre} debe cortar el mazo`);
+          setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
+        });
+
+        socketService.onCorteRealizado((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          // Reset cut animation states
+          setCutAnimating(false);
+          setCutPosition(null);
+          const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
+          setMensaje(`${jugador?.nombre} cortó en posición ${data.posicion}`);
+          setIsDealing(true);
+          setDealingCards([]);
+          setTimeout(() => { if (mounted) setMensaje(null); }, 2000);
+        });
+
+        socketService.onCartaRepartida((data) => {
+          if (!mounted) return;
+          setDealingCards(prev => [...prev, { jugadorIndex: data.jugadorIndex, cartaIndex: data.cartaIndex }]);
+          // When dealing is complete
+          if (data.actual === data.total) {
+            setTimeout(() => {
+              if (mounted) {
+                setIsDealing(false);
+                setDealingCards([]);
+              }
+            }, 500);
+          }
+        });
+
+        // Flor listeners
+        socketService.onFlorCantada((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          setFlorAnuncio({
+            jugadorNombre: data.declaracion.jugadorNombre,
+          });
+          // Mostrar bocadillo de flor
+          const bubbleId = `flor-${Date.now()}`;
+          setSpeechBubbles(prev => [...prev, {
+            id: bubbleId,
+            jugadorId: data.jugadorId,
+            tipo: 'flor',
+            texto: '🌸 ¡FLOR!',
+            puntos: data.declaracion.puntos,
+          }]);
+          setTimeout(() => {
+            if (mounted) {
+              setFlorAnuncio(null);
+              setSpeechBubbles(prev => prev.filter(b => b.id !== bubbleId));
+            }
+          }, 3500);
+        });
+
+        socketService.onFlorResuelta((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          setFlorResultado({
+            ganador: data.resultado.ganador,
+            puntosGanados: data.resultado.puntosGanados,
+          });
+          setMensaje(`¡Equipo ${data.resultado.ganador} gana la FLOR!`);
+          setTimeout(() => {
+            if (mounted) {
+              setFlorResultado(null);
+              setFlorAnuncio(null);
+              setMensaje(null);
+            }
+          }, 4000);
+        });
+
+        // Tirar Reyes listener
+        socketService.onTirarReyesResultado((data) => {
+          if (!mounted) return;
+          setReyesAnimacion(data.animacion);
+          setReyesAnimStep(0);
+          setReyesAnimDone(false);
+          // Animate step by step
+          data.animacion.forEach((_: unknown, index: number) => {
+            setTimeout(() => {
+              if (mounted) setReyesAnimStep(index + 1);
+            }, (index + 1) * 1200);
+          });
+          // After all reveals, show final state and update mesa
+          setTimeout(() => {
+            if (mounted) {
+              setReyesAnimDone(true);
+              setMesa(data.estado);
+              // If the game was reset to waiting (post-game tirar reyes), show waiting room
+              if (data.estado.estado === 'esperando') {
+                setEsperandoInicio(true);
+              }
+            }
+          }, (data.animacion.length + 1) * 1200);
+          // Clear animation after a bit
+          setTimeout(() => {
+            if (mounted) {
+              setReyesAnimacion(null);
+              setReyesAnimStep(0);
+              setReyesAnimDone(false);
+            }
+          }, (data.animacion.length + 3) * 1200);
+        });
+
+        // Echar los Perros listeners
+        socketService.onPerrosEchados((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          setPerrosActivos(true);
+          setEquipoPerros(data.equipoQueEcha);
+          setMensaje(`¡Equipo ${data.equipoQueEcha} echa los perros!`);
+          setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
+        });
+
+        socketService.onPerrosCancelados((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          setPerrosActivos(false);
+          setEquipoPerros(null);
+          setMensaje('Perros cancelados');
+          setTimeout(() => { if (mounted) setMensaje(null); }, 2000);
+        });
+
+        socketService.onPerrosRespondidos((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          setPerrosActivos(false);
+          setEquipoPerros(null);
+          if (data.equipoGanador) {
+            setMensaje(`¡Equipo ${data.equipoGanador} gana ${data.puntosGanados} pts por los perros!`);
+          } else {
+            setMensaje(`Perros respondidos: ${data.respuesta}`);
+          }
+          setTimeout(() => { if (mounted) setMensaje(null); }, 4000);
+        });
+
+        // Register auto-reconnect: if socket drops and reconnects, re-join the game room
+        socketService.onAutoReconnect(() => {
+          if (!mounted) return;
+          console.log('[Game] Auto-reconnected, re-joining game room');
+          setSocketId(socketService.getSocketId());
+          socketService.reconectarPartida(mesaId, nombre);
         });
 
         // NOW call reconectar after listeners are ready
@@ -267,9 +712,19 @@ function GamePage() {
 
     return () => {
       mounted = false;
+      socketService.clearAutoReconnect();
       socketService.removeAllListeners();
     };
   }, [mesaId]);
+
+  // Poll for state while in waiting room to catch missed events
+  useEffect(() => {
+    if (!esperandoInicio || !conectado) return;
+    const interval = setInterval(() => {
+      socketService.solicitarEstado();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [esperandoInicio, conectado]);
 
   // === HELPERS ===
   const miJugador = mesa?.jugadores.find(j => j.id === socketId);
@@ -278,7 +733,7 @@ function GamePage() {
   const esMiTurno = (): boolean => {
     if (!mesa || !socketId || mesa.estado !== 'jugando') return false;
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
-    if (mesa.fase === 'finalizada') return false;
+    if (mesa.fase !== 'jugando') return false;
     return mesa.jugadores[mesa.turnoActual]?.id === socketId;
   };
 
@@ -296,7 +751,7 @@ function GamePage() {
   const puedoCantarTruco = (): boolean => {
     if (!mesa || !socketId || mesa.estado !== 'jugando') return false;
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
-    if (mesa.fase === 'finalizada') return false;
+    if (mesa.fase !== 'jugando') return false;
     if (!miEquipo) return false;
     if (mesa.nivelGritoAceptado === null) return true;
     return false;
@@ -316,7 +771,13 @@ function GamePage() {
 
   const puedoCantarEnvido = (): boolean => {
     if (!mesa || !socketId || mesa.estado !== 'jugando') return false;
-    if (mesa.primeraCartaJugada) return false;
+    if (mesa.fase !== 'jugando') return false;
+    // El envido solo se puede cantar en la primera mano
+    if (mesa.manoActual !== 1) return false;
+    // Verificar si YO ya jugué mi carta en esta mano
+    const cartasManoActual = mesa.cartasMesa.slice(0, mesa.jugadores.length);
+    const yaJugueMiCarta = cartasManoActual.some(c => c.jugadorId === socketId);
+    if (yaJugueMiCarta) return false;
     if (mesa.envidoYaCantado && !mesa.envidoActivo) return false;
     if (mesa.gritoActivo) return false;
     if (mesa.envidoActivo && mesa.envidoActivo.equipoQueCanta === miEquipo) return false;
@@ -331,6 +792,32 @@ function GamePage() {
   const deboResponderEnvido = (): boolean => {
     if (!mesa || !miEquipo || !mesa.envidoActivo) return false;
     return mesa.envidoActivo.equipoQueCanta !== miEquipo;
+  };
+
+  const esMiTurnoDeCortar = (): boolean => {
+    if (!mesa || !socketId) return false;
+    if (mesa.fase !== 'cortando' || !mesa.esperandoCorte || mesa.corteRealizado) return false;
+    return mesa.jugadores[mesa.indiceJugadorCorta]?.id === socketId;
+  };
+
+  // Envido declarations are now automatic - no manual turn needed
+
+  // Flor helper - La flor ahora se canta automáticamente
+  const tengoFlor = (): boolean => {
+    if (!mesa || !socketId) return false;
+    return mesa.jugadoresConFlor?.includes(socketId) || false;
+  };
+
+  // Echar los Perros helper - solo el equipo que va perdiendo, cuando el rival está en buenas
+  const puedeEcharPerros = (): boolean => {
+    if (!mesa || !miEquipo) return false;
+    if (mesa.fase !== 'cortando') return false;
+    if (mesa.perrosActivos) return false;
+    const mitadPuntos = mesa.puntosLimite / 2;
+    const equipoRival = miEquipo === 1 ? 2 : 1;
+    const puntajeRival = mesa.equipos.find(e => e.id === equipoRival)?.puntaje || 0;
+    const puntajeMio = mesa.equipos.find(e => e.id === miEquipo)?.puntaje || 0;
+    return puntajeRival >= mitadPuntos && puntajeMio < puntajeRival;
   };
 
   // === HANDLERS ===
@@ -382,9 +869,23 @@ function GamePage() {
     }
   };
 
+  const handleCantarEnvidoCargado = async () => {
+    setLoading(true);
+    try {
+      await socketService.cantarEnvidoCargado(puntosEnvidoCargado);
+      setMostrarEnvidoCargado(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleResponderEnvido = async (acepta: boolean) => {
     setLoading(true);
     try {
+      if (acepta) {
+        setEnvidoDeclaraciones([]);
+        setEnvidoResultado(null);
+      }
       await socketService.responderEnvido(acepta);
     } finally {
       setLoading(false);
@@ -400,7 +901,213 @@ function GamePage() {
     }
   };
 
+  const handleRealizarCorte = async (posicion: number) => {
+    if (!mesa?.esperandoCorte || !socketId) return;
+    setLoading(true);
+    try {
+      await socketService.realizarCorte(posicion);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Envido declaration is now automatic - no manual handler needed
+
+  const handleCambiarEquipo = async (jugadorId: string, nuevoEquipo: number) => {
+    setLoading(true);
+    try {
+      await socketService.cambiarEquipo(jugadorId, nuevoEquipo);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTirarReyes = async () => {
+    setLoading(true);
+    try {
+      await socketService.tirarReyes();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfigurarPuntos = async (puntosLimite: number) => {
+    setLoading(true);
+    try {
+      await socketService.configurarPuntos(puntosLimite);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRevancha = async () => {
+    setLoading(true);
+    try {
+      const success = await socketService.revancha();
+      if (!success) mostrarMensaje('Error al iniciar revancha');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // === ECHAR LOS PERROS ===
+  const handleEcharPerros = async () => {
+    setLoading(true);
+    try {
+      await socketService.echarPerros();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelarPerros = async () => {
+    setLoading(true);
+    try {
+      await socketService.cancelarPerros();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResponderPerros = async (quiereContraFlor: boolean, quiereFaltaEnvido: boolean, quiereTruco: boolean) => {
+    setLoading(true);
+    try {
+      await socketService.responderPerros(quiereContraFlor, quiereFaltaEnvido, quiereTruco);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // === COMPONENTES ===
+
+  // Componente de moneda dorada para identificar al jugador mano
+  const MonedaMano = ({ isActive = false }: { isActive?: boolean }) => (
+    <div className={`relative inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full transition-all duration-500 ${
+      isActive
+        ? 'bg-gradient-to-br from-yellow-300 via-yellow-500 to-amber-600 shadow-lg shadow-yellow-500/40 animate-coin-flip'
+        : 'bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600 opacity-40'
+    } border-2 ${isActive ? 'border-yellow-300/70' : 'border-gray-500/50'}`}
+    title="Mano"
+    >
+      <span className={`font-bold text-xs sm:text-sm ${isActive ? 'text-yellow-950' : 'text-gray-300'}`}>M</span>
+      {isActive && (
+        <div className="absolute inset-0 rounded-full bg-gradient-to-t from-transparent to-white/20 pointer-events-none" />
+      )}
+    </div>
+  );
+
+  // Componente de mazo para el corte - abanico horizontal de cartas
+  // Cuando es tu turno: cartas GRANDES y prominentes
+  // Cuando no es tu turno: cartas más pequeñas
+  const MazoCorte = ({ onCorte, esperandoCorte, esMiTurnoCorte }: {
+    onCorte?: (posicion: number) => void;
+    esperandoCorte: boolean;
+    esMiTurnoCorte: boolean;
+  }) => {
+    if (!esperandoCorte) return null;
+
+    const TOTAL_CARTAS = 40; // 40 cartas en el mazo
+
+    const handleCartaClick = async (index: number) => {
+      if (!esMiTurnoCorte || !onCorte || cutAnimating) return;
+      const posicion = index + 1;
+      setCutPosition(index);
+      setCutAnimating(true);
+
+      await new Promise(resolve => setTimeout(resolve, 600));
+      onCorte(posicion);
+    };
+
+    // Tamaños diferentes según si es tu turno o no
+    const cardWidth = esMiTurnoCorte ? 'w-12 h-20 sm:w-16 sm:h-24' : 'w-6 h-10 sm:w-8 sm:h-12';
+    const containerWidth = esMiTurnoCorte ? '700px' : '500px';
+    const containerHeight = esMiTurnoCorte ? '220px' : '140px';
+    const spreadMultiplier = esMiTurnoCorte ? 15 : 11;
+    const arcMultiplier = esMiTurnoCorte ? 20 : 12;
+
+    return (
+      <div className={`flex flex-col items-center z-30 transition-all duration-500 ${
+        esMiTurnoCorte ? 'scale-100' : 'scale-90 opacity-70'
+      }`}>
+        <div className={`font-bold mb-4 uppercase tracking-wider ${
+          esMiTurnoCorte
+            ? 'text-xl sm:text-2xl text-gold-400 animate-pulse drop-shadow-lg'
+            : 'text-sm sm:text-base text-gold-500/60'
+        }`}>
+          {esMiTurnoCorte ? '¡CORTÁ EL MAZO!' : 'Esperando corte...'}
+        </div>
+
+        {esMiTurnoCorte && !cutAnimating && (
+          <div className="mb-4 text-gold-300/80 text-sm sm:text-base font-medium animate-bounce">
+            👇 Hacé click en una carta para cortar 👇
+          </div>
+        )}
+
+        {/* Abanico horizontal de 40 cartas */}
+        <div className={`relative ${cutAnimating ? '' : 'deck-shuffle-anim'}`}
+          style={{ width: containerWidth, height: containerHeight }}
+        >
+          {Array.from({ length: TOTAL_CARTAS }).map((_, i) => {
+            const isLeftPart = cutPosition !== null && i <= cutPosition;
+            const isRightPart = cutPosition !== null && i > cutPosition;
+
+            const spreadX = (i - TOTAL_CARTAS / 2) * spreadMultiplier;
+            const arcY = Math.pow((i - TOTAL_CARTAS / 2) / (TOTAL_CARTAS / 2), 2) * arcMultiplier;
+
+            return (
+              <div
+                key={i}
+                onClick={() => handleCartaClick(i)}
+                className={`absolute transition-all duration-500 ease-out origin-bottom
+                  ${esMiTurnoCorte && !cutAnimating ? 'cursor-pointer group' : 'cursor-default'}
+                `}
+                style={{
+                  left: '50%',
+                  bottom: '10px',
+                  zIndex: i + 1,
+                  transform: cutAnimating
+                    ? isLeftPart
+                      ? `translateX(calc(-50% + ${spreadX - 80}px)) translateY(${-arcY - 60}px) rotate(${-15}deg)`
+                      : isRightPart
+                        ? `translateX(calc(-50% + ${spreadX + 80}px)) translateY(${-arcY}px) rotate(${12}deg)`
+                        : `translateX(calc(-50% + ${spreadX}px)) translateY(${-arcY}px)`
+                    : `translateX(calc(-50% + ${spreadX}px)) translateY(${-arcY}px)`,
+                }}
+              >
+                <div
+                  className={`${cardWidth} card-back rounded-lg transition-all duration-200 border ${
+                    esMiTurnoCorte
+                      ? 'border-gold-600/70 shadow-lg shadow-gold-500/20'
+                      : 'border-amber-900/50'
+                  } ${esMiTurnoCorte && !cutAnimating
+                      ? 'group-hover:-translate-y-6 group-hover:shadow-xl group-hover:shadow-gold-500/50 group-hover:scale-125 group-hover:z-50 group-hover:border-gold-400'
+                      : ''
+                  }`}
+                  style={{
+                    boxShadow: esMiTurnoCorte
+                      ? `2px 4px 10px rgba(0,0,0,0.5), 0 0 15px rgba(202, 138, 4, 0.2)`
+                      : `1px 2px 4px rgba(0,0,0,0.4)`,
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        {esMiTurnoCorte && !cutAnimating && (
+          <div className="mt-4 text-sm text-gold-400/70 font-medium">
+            Posición 1-40 • Tu elección determina la muestra
+          </div>
+        )}
+
+        {cutAnimating && cutPosition !== null && (
+          <div className="mt-4 text-lg text-gold-400 font-bold animate-pulse">
+            ✂️ Cortando en posición {cutPosition + 1}...
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Componente de carta
   const CartaImg = ({ carta, size = 'normal', onClick, disabled, showGlow }: {
@@ -443,32 +1150,107 @@ function GamePage() {
     );
   };
 
-  // Marcador con fósforos
-  const ScoreBoard = ({ equipo, puntos, isMyTeam }: { equipo: number; puntos: number; isMyTeam: boolean }) => {
-    const grupos = Math.floor(puntos / 5);
-    const resto = puntos % 5;
+  // Casilla de fósforos tradicional
+  // 1-4 puntos: lados del cuadrado (arriba, derecha, abajo, izquierda)
+  // 5to punto: diagonal que cruza el cuadrado
+  const Casilla = ({ count }: { count: number }) => {
+    // count es 1-5
+    const size = 'w-7 h-7 sm:w-9 sm:h-9';
+    const matchColor = 'bg-amber-200';
+    const matchThick = 'rounded-sm';
 
     return (
-      <div className={`score-panel rounded-xl p-3 sm:p-4 ${isMyTeam ? 'ring-2 ring-gold-500/50' : ''}`}>
-        <div className="text-center mb-2">
+      <div className={`${size} relative`}>
+        {/* Lado arriba (punto 1) */}
+        {count >= 1 && (
+          <div className={`absolute top-0 left-0.5 right-0.5 h-[3px] ${matchColor} ${matchThick}`} />
+        )}
+        {/* Lado derecha (punto 2) */}
+        {count >= 2 && (
+          <div className={`absolute top-0.5 right-0 bottom-0.5 w-[3px] ${matchColor} ${matchThick}`} />
+        )}
+        {/* Lado abajo (punto 3) */}
+        {count >= 3 && (
+          <div className={`absolute bottom-0 left-0.5 right-0.5 h-[3px] ${matchColor} ${matchThick}`} />
+        )}
+        {/* Lado izquierda (punto 4) */}
+        {count >= 4 && (
+          <div className={`absolute top-0.5 left-0 bottom-0.5 w-[3px] ${matchColor} ${matchThick}`} />
+        )}
+        {/* Diagonal (punto 5) */}
+        {count >= 5 && (
+          <div
+            className={`absolute top-0 left-0 w-full h-full`}
+            style={{
+              background: 'linear-gradient(to bottom right, transparent calc(50% - 1.5px), #fde68a calc(50% - 1.5px), #fde68a calc(50% + 1.5px), transparent calc(50% + 1.5px))',
+            }}
+          />
+        )}
+      </div>
+    );
+  };
+
+  // Marcador con casillas de fósforos tradicionales
+  const ScoreBoard = ({ equipo, puntos, isMyTeam }: { equipo: number; puntos: number; isMyTeam: boolean }) => {
+    const limite = mesa?.puntosLimite || 30;
+    const mitad = Math.floor(limite / 2);
+    const enBuenas = puntos >= mitad;
+
+    // Separar en "malos" (0 to mitad-1) y "buenos" (mitad to limite)
+    const malos = Math.min(puntos, mitad);
+    const buenos = Math.max(puntos - mitad, 0);
+
+    const malosGrupos = Math.floor(malos / 5);
+    const malosResto = malos % 5;
+    const buenosGrupos = Math.floor(buenos / 5);
+    const buenosResto = buenos % 5;
+
+    return (
+      <div className={`score-panel rounded-xl p-2 sm:p-3 ${isMyTeam ? 'ring-2 ring-gold-500/50' : ''}`}>
+        <div className="text-center mb-1">
           <span className={`text-xs uppercase tracking-wider ${equipo === 1 ? 'text-blue-400' : 'text-red-400'}`}>
             Equipo {equipo}
           </span>
-          {isMyTeam && <span className="ml-2 text-gold-500 text-xs">(Tú)</span>}
+          {isMyTeam && <span className="ml-1 text-gold-500 text-[10px]">(Tú)</span>}
         </div>
-        <div className="text-3xl sm:text-4xl font-bold text-center text-white mb-2">{puntos}</div>
-        <div className="flex flex-wrap justify-center gap-1">
-          {Array.from({ length: grupos }).map((_, i) => (
-            <div key={`g-${i}`} className="flex gap-0.5">
-              {Array.from({ length: 5 }).map((_, j) => (
-                <div key={j} className="matchstick w-4 sm:w-5" />
-              ))}
-            </div>
-          ))}
-          {Array.from({ length: resto }).map((_, i) => (
-            <div key={`r-${i}`} className="matchstick w-4 sm:w-5" />
-          ))}
+        <div className="text-2xl sm:text-3xl font-bold text-center text-white mb-1">{puntos}</div>
+
+        {/* "BUENAS" indicator when crossing threshold */}
+        {enBuenas && (
+          <div className="text-center mb-1">
+            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-600/30 text-green-400 border border-green-500/40 animate-pulse">
+              BUENAS
+            </span>
+          </div>
+        )}
+
+        {/* Malos (0 to mitad) */}
+        <div className="mb-1">
+          <div className="text-[9px] sm:text-[10px] text-gold-500/50 text-center uppercase tracking-wider">Malos</div>
+          <div className="flex flex-wrap justify-center gap-1 min-h-[28px] sm:min-h-[36px]">
+            {Array.from({ length: malosGrupos }).map((_, i) => (
+              <Casilla key={`m-${i}`} count={5} />
+            ))}
+            {malosResto > 0 && <Casilla count={malosResto} />}
+          </div>
         </div>
+
+        {/* Línea divisoria */}
+        <div className="border-t border-gold-700/30 my-1" />
+
+        {/* Buenos (mitad to limite) */}
+        <div>
+          <div className="text-[9px] sm:text-[10px] text-gold-500/50 text-center uppercase tracking-wider">Buenos</div>
+          <div className="flex flex-wrap justify-center gap-1 min-h-[28px] sm:min-h-[36px]">
+            {buenosGrupos > 0 && Array.from({ length: buenosGrupos }).map((_, i) => (
+              <Casilla key={`b-${i}`} count={5} />
+            ))}
+            {buenosResto > 0 && <Casilla count={buenosResto} />}
+          </div>
+        </div>
+
+        {/* Limit indicator */}
+        <div className="text-[8px] text-gold-600/30 text-center mt-1">a {limite} pts</div>
       </div>
     );
   };
@@ -492,30 +1274,303 @@ function GamePage() {
 
   // Pantalla de espera
   if (!mesa || (mesa.estado === 'esperando' && esperandoInicio)) {
+    const equiposBalanceados = mesa ? (() => {
+      const eq1 = mesa.jugadores.filter(j => j.equipo === 1).length;
+      const eq2 = mesa.jugadores.filter(j => j.equipo === 2).length;
+      return Math.abs(eq1 - eq2) <= 1 && eq1 > 0 && eq2 > 0;
+    })() : false;
+
     return (
       <div className="min-h-screen bg-table-wood p-4 sm:p-8">
-        <div className="max-w-lg mx-auto">
+        {/* Tirar Reyes Animation Overlay */}
+        {reyesAnimacion && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="glass rounded-2xl p-6 sm:p-8 max-w-2xl w-full border border-gold-600/40 animate-slide-up">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gold-400 text-center mb-2">
+                Tirando Reyes
+              </h2>
+              <p className="text-gold-500/60 text-center text-sm mb-6">
+                Los que sacan un Rey van al Equipo 1
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+                {reyesAnimacion.map((item, i) => {
+                  const revealed = reyesAnimStep > i;
+                  const paloArchivo: Record<string, string> = { 'oro': 'oros', 'copa': 'copas', 'espada': 'espadas', 'basto': 'bastos' };
+
+                  return (
+                    <div key={item.jugadorId} className="flex flex-col items-center gap-2">
+                      <span className={`text-sm font-medium ${
+                        revealed
+                          ? item.esRey ? 'text-blue-300' : 'text-red-300'
+                          : 'text-gold-400/70'
+                      }`}>
+                        {item.jugadorNombre}
+                      </span>
+
+                      <div className={`relative w-16 h-24 sm:w-20 sm:h-[7.5rem] transition-all duration-700 ${
+                        revealed ? 'scale-110' : ''
+                      }`} style={{ perspective: '600px' }}>
+                        <div className={`w-full h-full transition-all duration-700 relative`}
+                          style={{
+                            transformStyle: 'preserve-3d',
+                            transform: revealed ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                          }}>
+                          {/* Back of card */}
+                          <div className="absolute inset-0 card-back rounded-lg" style={{ backfaceVisibility: 'hidden' }} />
+                          {/* Front of card */}
+                          <div className="absolute inset-0 rounded-lg overflow-hidden" style={{
+                            backfaceVisibility: 'hidden',
+                            transform: 'rotateY(180deg)',
+                          }}>
+                            <img
+                              src={`/Cartasimg/${item.carta.valor.toString().padStart(2, '0')}-${paloArchivo[item.carta.palo] || item.carta.palo}.png`}
+                              alt={`${item.carta.valor} de ${item.carta.palo}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        </div>
+
+                        {/* King crown indicator */}
+                        {revealed && item.esRey && (
+                          <div className="absolute -top-3 -right-2 text-xl animate-bounce">
+                            👑
+                          </div>
+                        )}
+                      </div>
+
+                      {revealed && (
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full animate-slide-up ${
+                          item.esRey
+                            ? 'bg-blue-600/40 text-blue-300 border border-blue-500/40'
+                            : 'bg-red-600/40 text-red-300 border border-red-500/40'
+                        }`}>
+                          Equipo {item.equipo}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {reyesAnimDone && (
+                <div className="text-center animate-slide-up">
+                  <p className="text-gold-300 font-bold text-lg mb-2">¡Equipos formados!</p>
+                  <div className="flex justify-center gap-6">
+                    <div>
+                      <span className="text-blue-400 font-medium text-sm">Equipo 1: </span>
+                      <span className="text-white text-sm">
+                        {reyesAnimacion.filter(a => a.equipo === 1).map(a => a.jugadorNombre).join(', ')}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-red-400 font-medium text-sm">Equipo 2: </span>
+                      <span className="text-white text-sm">
+                        {reyesAnimacion.filter(a => a.equipo === 2).map(a => a.jugadorNombre).join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="max-w-2xl mx-auto">
           <div className="glass rounded-2xl p-6 sm:p-8 border border-gold-800/30">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gold-400 text-center mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gold-400 text-center mb-2">
               Mesa de Truco
             </h1>
 
             {mesa && (
               <>
-                <div className="mb-6">
-                  <p className="text-gold-300/60 text-center mb-4">
-                    {mesa.jugadores.length} jugador{mesa.jugadores.length !== 1 ? 'es' : ''} en la mesa
-                  </p>
-                  <div className="space-y-2">
+                <p className="text-gold-300/60 text-center mb-6">
+                  {mesa.jugadores.length} jugador{mesa.jugadores.length !== 1 ? 'es' : ''} en la mesa
+                </p>
+
+                {/* Point Limit Selector */}
+                {esAnfitrion() && (
+                  <div className="mb-6">
+                    <label className="block text-gold-400/80 text-sm font-medium mb-3 uppercase tracking-wider">
+                      Puntos para ganar
+                    </label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {[30, 40].map(pts => (
+                        <button
+                          key={pts}
+                          onClick={() => handleConfigurarPuntos(pts)}
+                          disabled={loading}
+                          className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 ${
+                            mesa.puntosLimite === pts
+                              ? 'bg-gradient-to-br from-gold-600 to-gold-700 text-wood-950 shadow-lg shadow-gold-600/20 border-2 border-gold-400/50'
+                              : 'glass text-gold-300/70 hover:text-gold-200 hover:bg-white/5 border border-gold-800/30'
+                          }`}
+                        >
+                          {pts} pts
+                        </button>
+                      ))}
+                      {/* Debug/test mode options */}
+                      <div className="flex items-center gap-1 ml-2">
+                        <span className="text-gold-600/40 text-[10px] uppercase tracking-wider mr-1">Test:</span>
+                        {[10, 15, 20].map(pts => (
+                          <button
+                            key={pts}
+                            onClick={() => handleConfigurarPuntos(pts)}
+                            disabled={loading}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                              mesa.puntosLimite === pts
+                                ? 'bg-amber-700/50 text-amber-300 border border-amber-500/50'
+                                : 'glass text-gold-500/50 hover:text-gold-400 border border-gold-800/20'
+                            }`}
+                          >
+                            {pts}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-gold-500/40 text-xs">
+                      Malos: 0-{Math.floor(mesa.puntosLimite / 2)} | Buenos: {Math.floor(mesa.puntosLimite / 2)}-{mesa.puntosLimite}
+                    </div>
+                  </div>
+                )}
+                {!esAnfitrion() && (
+                  <div className="mb-4 text-center">
+                    <span className="text-gold-500/60 text-sm">Partida a <span className="text-gold-400 font-bold">{mesa.puntosLimite} puntos</span></span>
+                  </div>
+                )}
+
+                {/* Team configuration for 2v2 and 3v3 */}
+                {mesa.jugadores.length > 2 ? (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-gold-400/80 font-medium text-sm uppercase tracking-wider">
+                        Configurar Equipos
+                      </h2>
+                      {esAnfitrion() && (
+                        <button
+                          onClick={handleTirarReyes}
+                          disabled={loading || mesa.jugadores.length < 4}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-amber-700 to-amber-600 text-white text-sm font-bold hover:from-amber-600 hover:to-amber-500 transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-amber-800/30"
+                          title="Asignar equipos al azar con animación de Reyes"
+                        >
+                          👑 Tirar Reyes
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Two-column team layout */}
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Equipo 1 */}
+                      <div className="rounded-xl border-2 border-blue-600/40 bg-blue-950/20 p-3 sm:p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-3 h-3 rounded-full bg-blue-500" />
+                          <span className="text-blue-400 font-bold text-sm uppercase tracking-wider">Equipo 1</span>
+                          <span className="text-blue-400/50 text-xs ml-auto">
+                            {mesa.jugadores.filter(j => j.equipo === 1).length} jugadores
+                          </span>
+                        </div>
+                        <div className="space-y-2 min-h-[60px]">
+                          {mesa.jugadores.filter(j => j.equipo === 1).map((j, i) => (
+                            <div
+                              key={j.id || `eq1-${i}`}
+                              className="glass rounded-lg p-2.5 flex items-center justify-between border border-blue-700/30 group"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-white text-sm font-medium">
+                                  {j.nombre}
+                                </span>
+                                {j.id === socketId && (
+                                  <span className="text-gold-400 text-[10px]">(tú)</span>
+                                )}
+                                {j.id === mesa.jugadores[0]?.id && (
+                                  <span className="text-[10px] bg-gold-600/30 text-gold-400 px-1.5 py-0.5 rounded">Host</span>
+                                )}
+                              </div>
+                              {esAnfitrion() && (
+                                <button
+                                  onClick={() => handleCambiarEquipo(j.id, 2)}
+                                  disabled={loading}
+                                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-800/40 transition-all"
+                                  title="Mover al Equipo 2"
+                                >
+                                  → Eq.2
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          {mesa.jugadores.filter(j => j.equipo === 1).length === 0 && (
+                            <div className="text-blue-500/30 text-xs text-center py-3 italic">Sin jugadores</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Equipo 2 */}
+                      <div className="rounded-xl border-2 border-red-600/40 bg-red-950/20 p-3 sm:p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-3 h-3 rounded-full bg-red-500" />
+                          <span className="text-red-400 font-bold text-sm uppercase tracking-wider">Equipo 2</span>
+                          <span className="text-red-400/50 text-xs ml-auto">
+                            {mesa.jugadores.filter(j => j.equipo === 2).length} jugadores
+                          </span>
+                        </div>
+                        <div className="space-y-2 min-h-[60px]">
+                          {mesa.jugadores.filter(j => j.equipo === 2).map((j, i) => (
+                            <div
+                              key={j.id || `eq2-${i}`}
+                              className="glass rounded-lg p-2.5 flex items-center justify-between border border-red-700/30 group"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-white text-sm font-medium">
+                                  {j.nombre}
+                                </span>
+                                {j.id === socketId && (
+                                  <span className="text-gold-400 text-[10px]">(tú)</span>
+                                )}
+                                {j.id === mesa.jugadores[0]?.id && (
+                                  <span className="text-[10px] bg-gold-600/30 text-gold-400 px-1.5 py-0.5 rounded">Host</span>
+                                )}
+                              </div>
+                              {esAnfitrion() && (
+                                <button
+                                  onClick={() => handleCambiarEquipo(j.id, 1)}
+                                  disabled={loading}
+                                  className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-800/40 transition-all"
+                                  title="Mover al Equipo 1"
+                                >
+                                  → Eq.1
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          {mesa.jugadores.filter(j => j.equipo === 2).length === 0 && (
+                            <div className="text-red-500/30 text-xs text-center py-3 italic">Sin jugadores</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Balance warning */}
+                    {!equiposBalanceados && mesa.jugadores.length >= 2 && (
+                      <div className="mt-3 text-center text-amber-400/70 text-xs flex items-center justify-center gap-1.5">
+                        <span>⚠️</span> Los equipos deben estar balanceados para iniciar
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Simple player list for 1v1 or less than 3 players */
+                  <div className="mb-6 space-y-2">
                     {mesa.jugadores.map((j, i) => (
                       <div
                         key={j.id || i}
                         className="glass rounded-lg p-3 flex justify-between items-center border border-gold-800/20"
                       >
-                        <span className="text-white font-medium">
-                          {j.nombre}
-                          {j.id === socketId && <span className="text-gold-400 ml-2">(tú)</span>}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2.5 h-2.5 rounded-full ${j.equipo === 1 ? 'bg-blue-500' : 'bg-red-500'}`} />
+                          <span className="text-white font-medium">
+                            {j.nombre}
+                            {j.id === socketId && <span className="text-gold-400 ml-2">(tú)</span>}
+                          </span>
+                        </div>
                         {i === 0 && (
                           <span className="text-xs bg-gold-600/30 text-gold-400 px-2 py-1 rounded">
                             Anfitrión
@@ -524,12 +1579,12 @@ function GamePage() {
                       </div>
                     ))}
                   </div>
-                </div>
+                )}
 
                 {esAnfitrion() ? (
                   <button
                     onClick={handleIniciarPartida}
-                    disabled={loading || mesa.jugadores.length < 2}
+                    disabled={loading || mesa.jugadores.length < 2 || (mesa.jugadores.length > 2 && !equiposBalanceados)}
                     className="btn-primary w-full text-white py-4 rounded-xl text-lg disabled:opacity-40"
                   >
                     {loading ? 'Iniciando...' : `Iniciar Partida (${mesa.jugadores.length} jugadores)`}
@@ -559,6 +1614,12 @@ function GamePage() {
   const cartasManoActual = mesa.cartasMesa.slice((mesa.manoActual - 1) * mesa.jugadores.length);
   const jugadorDelTurno = mesa.jugadores[mesa.turnoActual];
   const oponentes = mesa.jugadores.filter(j => j.id !== socketId);
+  // Teammates (same team, excluding me) - their cards are now visible from the server
+  const companeros = mesa.jugadores.filter(j => j.id !== socketId && j.equipo === miEquipo);
+  // Cards that each teammate has played in the current mano
+  const cartasJugadasPorJugador = (jugadorId: string) => {
+    return cartasManoActual.filter(c => c.jugadorId === jugadorId).map(c => c.carta);
+  };
 
   return (
     <div className="min-h-screen bg-table-wood p-2 sm:p-4 overflow-hidden">
@@ -574,51 +1635,216 @@ function GamePage() {
         </div>
       )}
 
-      {/* Modal de fin de ronda/juego */}
-      {mesa.mensajeRonda && mesa.fase === 'finalizada' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40 p-4">
-          <div className="glass-light rounded-2xl p-8 shadow-2xl text-center max-w-md animate-slide-up">
-            <p className="text-2xl font-bold text-wood-900 mb-2">{mesa.mensajeRonda}</p>
-            {!mesa.winnerJuego && (
-              <p className="text-wood-600 text-sm">Siguiente ronda en unos segundos...</p>
-            )}
-            {mesa.winnerJuego && (
-              <button
-                onClick={() => window.location.href = '/lobby'}
-                className="mt-4 btn-primary text-white py-3 px-8 rounded-xl"
-              >
-                Volver al Lobby
-              </button>
+      {/* Panel de cartas de compañeros (bottom-left) */}
+      {companeros.length > 0 && mesa.estado === 'jugando' && mesa.fase !== 'cortando' && mesa.fase !== 'repartiendo' && (
+        <div className="fixed bottom-4 left-2 sm:left-4 z-30 animate-slide-up">
+          <div className="glass rounded-xl p-2 sm:p-3 border border-gold-800/30 backdrop-blur-md" style={{ minWidth: '100px' }}>
+            <div className="text-[9px] sm:text-[10px] text-gold-500/60 uppercase tracking-wider mb-1.5 text-center font-medium">
+              Compañero{companeros.length > 1 ? 's' : ''}
+            </div>
+            <div className="space-y-2">
+              {companeros.map(comp => {
+                const cartasJugadas = cartasJugadasPorJugador(comp.id);
+                return (
+                  <div key={comp.id} className="flex flex-col items-center gap-1">
+                    <span className={`text-[10px] sm:text-xs font-medium ${
+                      comp.equipo === 1 ? 'text-blue-300' : 'text-red-300'
+                    }`}>
+                      {comp.nombre}
+                    </span>
+                    <div className="flex gap-0.5 sm:gap-1">
+                      {comp.cartas.filter(c => c.valor !== 0).map((carta, ci) => {
+                        // Check if this card was already played
+                        const yaJugada = cartasJugadas.some(cj =>
+                          cj.palo === carta.palo && cj.valor === carta.valor
+                        );
+                        return (
+                          <div key={`${carta.palo}-${carta.valor}-${ci}`}
+                            className={`transition-all duration-300 ${yaJugada ? 'opacity-25 grayscale scale-90' : ''}`}>
+                            <CartaImg carta={carta} size="small" />
+                          </div>
+                        );
+                      })}
+                      {comp.cartas.filter(c => c.valor !== 0).length === 0 && (
+                        <span className="text-gold-600/30 text-[10px] italic">Sin cartas</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Anuncio de FLOR */}
+      {florAnuncio && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 pointer-events-none">
+          <div className="flor-announcement flor-glow rounded-2xl px-10 py-6 text-center">
+            <div className="text-5xl mb-2">🌸</div>
+            <div className="text-3xl font-bold text-white drop-shadow-lg mb-2">¡FLOR!</div>
+            <div className="text-xl text-pink-100 font-medium">{florAnuncio.jugadorNombre}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Resultado de FLOR */}
+      {florResultado && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 pointer-events-none">
+          <div className="glass-gold rounded-2xl px-10 py-6 text-center animate-slide-up">
+            <div className="text-4xl mb-2">🏆🌸</div>
+            <div className="text-2xl font-bold text-gold-300 mb-2">
+              ¡Equipo {florResultado.ganador} gana la FLOR!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating banner for end-of-round (non-blocking) - Estilo Rústico */}
+      {rondaBanner && !mesa.winnerJuego && (
+        <div className="fixed top-16 left-1/2 z-40 banner-flotante pointer-events-none">
+          <div className={`rounded-2xl px-10 py-5 backdrop-blur-md border-2 shadow-2xl text-center boliche-panel esquina-decorativa ${
+            rondaBanner.equipo === 1
+              ? 'border-blue-500/50 shadow-blue-500/30'
+              : 'border-red-500/50 shadow-red-500/30'
+          }`}>
+            {/* Decoración superior */}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-wood-900 border border-gold-600/40">
+              <span className="text-gold-400 text-xs font-bold uppercase tracking-wider">Ronda</span>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-white mb-2 titulo-rustico mt-2">
+              {rondaBanner.mensaje}
+            </div>
+            <div className="separador-uy mb-2" />
+            <div className={`text-lg font-bold ${
+              rondaBanner.equipo === 1 ? 'text-blue-300' : 'text-red-300'
+            }`}>
+              +{rondaBanner.puntos} puntos 🧉
+            </div>
+
+            {/* Mostrar cartas de FLOR al final de la ronda */}
+            {rondaBanner.cartasFlor && rondaBanner.cartasFlor.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gold-600/30">
+                <div className="text-pink-400 text-base sm:text-lg font-bold mb-4">🌸 Cartas de FLOR reveladas:</div>
+                <div className="flex flex-col gap-4">
+                  {rondaBanner.cartasFlor.map((florInfo, idx) => (
+                    <div key={idx} className="flex flex-col items-center gap-2">
+                      <span className="text-gold-300 text-sm sm:text-base font-semibold">{florInfo.jugadorNombre}</span>
+                      <div className="flex gap-2 justify-center">
+                        {florInfo.cartas.map((carta, cIdx) => (
+                          <div key={cIdx} className="w-16 h-24 sm:w-20 sm:h-28 rounded-lg overflow-hidden shadow-lg border border-gold-600/30">
+                            <img
+                              src={getCartaImageUrl(carta)}
+                              alt={`${carta.valor} de ${carta.palo}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
       )}
 
+      {/* Post-game panel (game over) - Estilo Pulpería */}
+      {mesa.winnerJuego && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-40 p-4">
+          <div className="boliche-panel rounded-2xl p-8 shadow-2xl text-center max-w-md animate-slide-up border-2 border-gold-600/50 esquina-decorativa luz-lampara">
+            {/* Corona de trofeo con Sol de Mayo */}
+            <div className="relative mb-4">
+              <div className="text-5xl brillo-dorado">🏆</div>
+              <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-2xl animate-pulse">☀️</div>
+            </div>
+
+            <p className="text-3xl font-bold text-gold-300 mb-2 titulo-rustico">
+              ¡Equipo {mesa.winnerJuego} gana!
+            </p>
+
+            <div className="separador-uy my-4" />
+
+            <div className="flex justify-center gap-6 mb-6">
+              <div className={`px-4 py-2 rounded-lg ${mesa.winnerJuego === 1 ? 'bg-blue-600/30 border border-blue-500/50' : 'bg-wood-800/50 border border-gold-800/30'}`}>
+                <div className="text-xs text-gold-500/60 uppercase">Equipo 1</div>
+                <div className={`text-2xl font-bold ${mesa.winnerJuego === 1 ? 'text-blue-300' : 'text-gold-400/70'}`}>
+                  {mesa.equipos[0].puntaje}
+                </div>
+              </div>
+              <div className="text-gold-600/50 self-center text-xl">vs</div>
+              <div className={`px-4 py-2 rounded-lg ${mesa.winnerJuego === 2 ? 'bg-red-600/30 border border-red-500/50' : 'bg-wood-800/50 border border-gold-800/30'}`}>
+                <div className="text-xs text-gold-500/60 uppercase">Equipo 2</div>
+                <div className={`text-2xl font-bold ${mesa.winnerJuego === 2 ? 'text-red-300' : 'text-gold-400/70'}`}>
+                  {mesa.equipos[1].puntaje}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {esAnfitrion() && (
+                <>
+                  <button
+                    onClick={handleRevancha}
+                    disabled={loading}
+                    className="btn-primary btn-campo text-white py-3 px-8 rounded-xl text-lg font-bold w-full"
+                  >
+                    🔄 Revancha Directa
+                  </button>
+                  <button
+                    onClick={handleTirarReyes}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-2 py-3 px-8 rounded-xl font-bold bg-gradient-to-r from-amber-700 to-amber-600 text-white hover:from-amber-600 hover:to-amber-500 transition-all w-full btn-campo"
+                  >
+                    👑 Tirar Reyes (mezclar equipos)
+                  </button>
+                </>
+              )}
+              {!esAnfitrion() && (
+                <p className="text-gold-500/60 text-sm italic mb-2">🧉 Esperando al anfitrión...</p>
+              )}
+              <button
+                onClick={() => window.location.href = '/lobby'}
+                className="py-3 px-8 rounded-xl font-medium glass text-gold-300/70 hover:text-gold-200 hover:bg-white/5 border border-gold-800/30 w-full btn-campo"
+              >
+                🚪 Salir al Lobby
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 max-w-6xl mx-auto h-[calc(100vh-1rem)] sm:h-[calc(100vh-2rem)] flex flex-col">
-        {/* Header: Marcadores */}
+        {/* Header: Marcadores - Estilo Rústico */}
         <div className="flex justify-between items-stretch gap-2 sm:gap-4 mb-2 sm:mb-4">
           <ScoreBoard equipo={1} puntos={mesa.equipos[0].puntaje} isMyTeam={miEquipo === 1} />
 
-          {/* Info central */}
-          <div className="flex-1 flex flex-col items-center justify-center glass rounded-xl px-2 sm:px-4 py-2 border border-gold-800/20">
-            <div className="text-gold-400/60 text-xs sm:text-sm">Mano {mesa.manoActual}/3</div>
+          {/* Info central - Panel Boliche */}
+          <div className="flex-1 flex flex-col items-center justify-center boliche-panel rounded-xl px-2 sm:px-4 py-2 border-gold-700/30 relative">
+            {/* Decoración de mate */}
+            <div className="absolute -top-1 -right-1 text-lg opacity-30">🧉</div>
+
+            <div className="text-gold-400/70 text-xs sm:text-sm font-medium uppercase tracking-wider">
+              Mano {mesa.manoActual}/3
+            </div>
             {mesa.puntosEnJuego > 1 && (
-              <div className="text-gold-300 font-bold text-sm sm:text-base">
+              <div className="text-gold-300 font-bold text-sm sm:text-base titulo-rustico">
                 {mesa.nivelGritoAceptado ? getNombreGrito(mesa.nivelGritoAceptado) : ''} ({mesa.puntosEnJuego} pts)
               </div>
             )}
-            {/* Indicadores de manos ganadas */}
-            <div className="flex gap-1 mt-1">
+            {/* Indicadores de manos ganadas - Estilo fósforos */}
+            <div className="flex gap-1.5 mt-1.5">
               {[1, 2, 3].map(m => {
                 const ganador = mesa.ganadoresManos[m - 1];
                 return (
                   <div
                     key={m}
-                    className={`w-3 h-3 rounded-full border-2 ${
-                      ganador === null ? 'bg-gray-500 border-gray-400' :
-                      ganador === 1 ? 'bg-blue-500 border-blue-400' :
-                      ganador === 2 ? 'bg-red-500 border-red-400' :
-                      'border-gold-700/50 bg-transparent'
+                    className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-300 ${
+                      ganador === null ? 'bg-gray-500/80 border-gray-400/60 shadow-inner' :
+                      ganador === 1 ? 'bg-blue-500 border-blue-400 shadow-lg shadow-blue-500/40' :
+                      ganador === 2 ? 'bg-red-500 border-red-400 shadow-lg shadow-red-500/40' :
+                      'border-gold-700/40 bg-wood-800/50'
                     }`}
                   />
                 );
@@ -635,12 +1861,30 @@ function GamePage() {
           <div className="flex justify-center gap-4 sm:gap-8 mb-2 sm:mb-4">
             {oponentes.map(j => {
               const esSuTurno = jugadorDelTurno?.id === j.id;
+              const bubble = speechBubbles.find(b => b.jugadorId === j.id);
               return (
-                <div key={j.id} className="text-center">
-                  <div className={`inline-block px-3 py-1 rounded-lg text-sm font-medium mb-2 ${
+                <div key={j.id} className="text-center relative">
+                  {/* Bocadillo de diálogo */}
+                  {bubble && (
+                    <div className={`absolute -top-16 left-1/2 z-50 speech-bubble ${
+                      bubble.tipo === 'envido' ? 'speech-bubble-envido' :
+                      bubble.tipo === 'flor' ? 'speech-bubble-flor' :
+                      bubble.tipo === 'truco' ? 'speech-bubble-truco' :
+                      bubble.tipo === 'quiero' ? 'speech-bubble-quiero' :
+                      bubble.tipo === 'no-quiero' ? 'speech-bubble-no-quiero' : ''
+                    }`}>
+                      {bubble.puntos !== undefined ? (
+                        <span className="bubble-number text-2xl font-bold">{bubble.puntos}</span>
+                      ) : (
+                        <span className="font-bold text-sm whitespace-nowrap">{bubble.texto}</span>
+                      )}
+                    </div>
+                  )}
+                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium mb-2 ${
                     j.equipo === 1 ? 'equipo-1-light text-blue-300' : 'equipo-2-light text-red-300'
                   } ${esSuTurno ? 'turn-glow' : ''}`}>
-                    {j.nombre} {j.esMano && '(M)'}
+                    {j.nombre}
+                    {j.esMano && <MonedaMano isActive={true} />}
                   </div>
                   <div className="flex gap-1 justify-center">
                     {j.cartas.map((_, i) => (
@@ -658,38 +1902,255 @@ function GamePage() {
             <div className="lampara-glow" />
             <div className="pulperia-light rounded-[2rem] sm:rounded-[3rem]" />
 
-            {/* Muestra - carta boca arriba en el centro */}
-            {mesa.muestra && (
-              <div className="absolute top-3 right-4 sm:top-4 sm:right-6 z-20 flex flex-col items-center">
-                <div className="text-[10px] sm:text-xs text-gold-400/70 font-medium mb-1 uppercase tracking-wider">Muestra</div>
-                <div className="relative">
-                  <div className="absolute -inset-1 bg-gold-500/20 rounded-lg blur-sm" />
-                  <CartaImg carta={mesa.muestra} size="small" />
+            {/* Muestra y Mazo - en el centro de la mesa */}
+            {mesa.muestra && mesa.fase !== 'cortando' && (
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-5 flex flex-row items-center gap-4">
+                {/* Mazo (dorso) - a la izquierda */}
+                <div className="flex flex-col items-center">
+                  <div className="text-[10px] sm:text-xs text-gold-400/40 font-medium mb-1.5 uppercase tracking-wider">Mazo</div>
+                  <div className="relative">
+                    <div className="w-20 h-[7.5rem] sm:w-24 sm:h-36 card-back rounded-lg shadow-lg" />
+                  </div>
+                </div>
+                {/* Muestra - a la derecha (más cerca del jugador mano) */}
+                <div className="flex flex-col items-center">
+                  <div className="text-[10px] sm:text-xs text-gold-400/60 font-medium mb-1.5 uppercase tracking-wider">Muestra</div>
+                  <div className="relative muestra-highlight">
+                    <div className="absolute -inset-3 bg-gold-500/30 rounded-xl blur-lg animate-pulse" />
+                    <div className="absolute -inset-1.5 border-2 border-gold-400/40 rounded-lg" />
+                    <CartaImg carta={mesa.muestra} size="large" />
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Cartas jugadas en el centro */}
-            <div className="relative z-10 flex flex-wrap justify-center items-end gap-2 sm:gap-4">
-              {cartasManoActual.map((jugada, i) => {
-                const jugador = mesa.jugadores.find(j => j.id === jugada.jugadorId);
-                const esEquipo1 = jugador?.equipo === 1;
-                return (
-                  <div key={i} className="text-center card-played-anim" style={{ animationDelay: `${i * 0.1}s` }}>
-                    <CartaImg carta={jugada.carta} size="normal" />
-                    <div className={`text-xs mt-1 font-medium ${esEquipo1 ? 'text-blue-300' : 'text-red-300'}`}>
-                      {jugador?.nombre}
-                    </div>
+            {/* Phase: Repartiendo - show dealing animation */}
+            {(mesa.fase === 'repartiendo' || isDealing) && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ perspective: '1200px' }}>
+                <div className="text-gold-400 font-bold text-xl sm:text-2xl mb-6 animate-pulse drop-shadow-lg">
+                  🃏 Repartiendo cartas... 🃏
+                </div>
+
+                {/* Mazo central grande desde donde salen las cartas */}
+                <div className="relative" style={{ transformStyle: 'preserve-3d' }}>
+                  {/* Stack effect - multiple backs con efecto 3D */}
+                  <div className="absolute -top-2 -left-1 w-20 h-32 sm:w-28 sm:h-40 card-back rounded-lg opacity-50" style={{ transform: 'translateZ(-6px)' }} />
+                  <div className="absolute -top-1 -left-0.5 w-20 h-32 sm:w-28 sm:h-40 card-back rounded-lg opacity-70" style={{ transform: 'translateZ(-3px)' }} />
+                  <div className={`relative w-20 h-32 sm:w-28 sm:h-40 card-back rounded-lg shadow-2xl ${dealingCards.length > 0 ? 'mazo-dealing' : ''}`} />
+
+                  {/* Cartas volando hacia cada jugador - trayectoria extendida con perspectiva */}
+                  {dealingCards.map((deal, idx) => {
+                    const jugadorIndex = deal.jugadorIndex;
+                    const miIndex = mesa.jugadores.findIndex(j => j.id === socketId);
+                    const isMe = jugadorIndex === miIndex;
+                    const numJugadores = mesa.jugadores.length;
+
+                    // Calcular destino extendido hacia el perímetro de la mesa
+                    let targetX = 0;
+                    let targetY = 0;
+                    let rotation = 0;
+                    let spinY = 0; // Rotación 3D en eje Y
+                    let scaleMid = 0.95;
+                    let scaleEnd = 0.75;
+
+                    if (isMe) {
+                      // Hacia abajo (mis cartas) - trayectoria larga hacia el borde inferior
+                      targetY = 320; // Extendido
+                      targetX = (deal.cartaIndex - 1) * 60;
+                      rotation = (deal.cartaIndex - 1) * 3; // Ligera rotación por carta
+                      spinY = -5;
+                      scaleEnd = 0.7;
+                    } else {
+                      // Hacia arriba/lados (oponentes) - distribuir en arco amplio
+                      const oponentesOrdenados = mesa.jugadores.filter((_, i) => i !== miIndex);
+                      const oponenteIndex = oponentesOrdenados.findIndex(j => {
+                        const realIndex = mesa.jugadores.findIndex(p => p.id === j.id);
+                        return realIndex === jugadorIndex;
+                      });
+                      const numOponentes = oponentesOrdenados.length;
+
+                      if (numOponentes === 1) {
+                        // Solo un oponente - arriba centro con trayectoria extendida
+                        targetX = (deal.cartaIndex - 1) * 50;
+                        targetY = -300;
+                        rotation = (deal.cartaIndex - 1) * -2;
+                        spinY = 5;
+                        scaleEnd = 0.6; // Más pequeño en la distancia
+                      } else {
+                        // Múltiples oponentes - distribuir en arco extendido
+                        const angle = ((oponenteIndex / (numOponentes - 1)) - 0.5) * Math.PI * 0.9;
+                        targetX = Math.sin(angle) * 350 + (deal.cartaIndex - 1) * 35;
+                        targetY = -Math.cos(angle) * 280 - 60;
+                        rotation = angle * 15 + (deal.cartaIndex - 1) * 2;
+                        spinY = Math.sin(angle) * 10;
+                        scaleEnd = 0.55;
+                      }
+                    }
+
+                    // Timing secuencial: 0.85s por carta con 150ms de delay entre cada una
+                    const duration = 0.85; // segundos
+                    const delay = idx * 150; // milisegundos entre cartas
+
+                    return (
+                      <div
+                        key={`deal-${idx}`}
+                        className="absolute top-0 left-0 w-16 h-24 sm:w-20 sm:h-28 card-back rounded-lg shadow-xl animate-deal-card dealing-card"
+                        style={{
+                          '--deal-x': `${targetX}px`,
+                          '--deal-y': `${targetY}px`,
+                          '--deal-rotation': `${rotation}deg`,
+                          '--deal-spin': `${spinY}deg`,
+                          '--deal-scale-mid': scaleMid,
+                          '--deal-scale-end': scaleEnd,
+                          '--deal-duration': `${duration}s`,
+                          '--deal-delay': `${delay}ms`,
+                        } as React.CSSProperties}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Indicador de progreso mejorado */}
+                <div className="mt-8 flex flex-col items-center gap-3">
+                  <div className="text-gold-500/70 text-sm font-medium">
+                    Vuelta {Math.floor(dealingCards.length / mesa.jugadores.length) + 1} de 3
                   </div>
-                );
-              })}
-              {cartasManoActual.length === 0 && mesa.estado === 'jugando' && (
-                <div className="text-green-300/40 text-sm">Esperando cartas...</div>
-              )}
-            </div>
+                  <div className="flex gap-2">
+                    {[1, 2, 3].map(v => (
+                      <div
+                        key={v}
+                        className={`w-4 h-4 rounded-full transition-all duration-500 ${
+                          Math.floor(dealingCards.length / mesa.jugadores.length) >= v
+                            ? 'bg-gradient-to-br from-gold-300 to-gold-500 shadow-lg shadow-gold-500/50 scale-110'
+                            : 'bg-gold-900/40 border border-gold-700/30'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-gold-600/40 text-xs">
+                    {dealingCards.length} / {mesa.jugadores.length * 3} cartas
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Phase: Cortando - show deck to cut */}
+            {mesa.fase === 'cortando' && mesa.esperandoCorte && (
+              <div className="relative z-10">
+                <MazoCorte
+                  onCorte={handleRealizarCorte}
+                  esperandoCorte={true}
+                  esMiTurnoCorte={esMiTurnoDeCortar()}
+                />
+
+                {/* Botón Echar los Perros - solo visible si cumple condiciones */}
+                {puedeEcharPerros() && (
+                  <div className="mt-6 flex justify-center">
+                    <button
+                      onClick={handleEcharPerros}
+                      disabled={loading}
+                      className="px-6 py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-orange-700 to-red-700 text-white hover:from-orange-600 hover:to-red-600 transition-all shadow-lg hover:shadow-orange-500/30 disabled:opacity-50 flex items-center gap-2"
+                      title="Contra Flor al Resto + Falta Envido + Truco"
+                    >
+                      🐕 Echar los Perros
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal de responder a los Perros */}
+            {perrosActivos && equipoPerros !== miEquipo && (
+              <PerrosResponseModal
+                tengoFlor={tengoFlor()}
+                loading={loading}
+                onResponder={handleResponderPerros}
+              />
+            )}
+
+            {/* Indicador de que echaste los perros */}
+            {perrosActivos && equipoPerros === miEquipo && (
+              <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 animate-pulse">
+                <div className="glass rounded-xl px-6 py-3 border border-orange-500/50 flex items-center gap-3">
+                  <span className="text-2xl">🐕</span>
+                  <span className="text-orange-300 font-bold">¡Echaste los Perros!</span>
+                  <span className="text-gold-400/70 text-sm">Esperando respuesta...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Phase: Jugando - show played cards near each player position */}
+            {mesa.fase !== 'cortando' && (
+              <>
+                {/* Cartas jugadas - posicionadas cerca de cada jugador */}
+                {cartasManoActual.map((jugada, i) => {
+                  const jugador = mesa.jugadores.find(j => j.id === jugada.jugadorId);
+                  const esMiCarta = jugada.jugadorId === socketId;
+                  const esEquipo1 = jugador?.equipo === 1;
+
+                  // Check if this card is the winner of the current mano
+                  const inicio = (mesa.manoActual - 1) * mesa.jugadores.length;
+                  const realIndex = inicio + i;
+                  const esCartaGanadora = mesa.cartaGanadoraMano &&
+                    mesa.cartaGanadoraMano.indexEnMesa === realIndex &&
+                    cartasManoActual.length === mesa.jugadores.length; // Only highlight when all cards are played
+
+                  // Calcular posición basada en el índice del jugador
+                  // Mi jugador está abajo, oponentes arriba distribuidos
+                  let posicionStyle: React.CSSProperties = {};
+
+                  if (esMiCarta) {
+                    // Mi carta: abajo centro, un poco arriba del área de mis cartas
+                    posicionStyle = {
+                      position: 'absolute',
+                      bottom: '15%',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      zIndex: esCartaGanadora ? 50 : 15 + i,
+                    };
+                  } else {
+                    // Cartas de oponentes: arriba, distribuidas horizontalmente
+                    const oponentesOrdenados = mesa.jugadores.filter(j => j.id !== socketId);
+                    const oponenteIndex = oponentesOrdenados.findIndex(j => j.id === jugada.jugadorId);
+                    const numOponentes = oponentesOrdenados.length;
+
+                    // Distribuir horizontalmente en la parte superior-media de la mesa
+                    const espaciado = 100 / (numOponentes + 1);
+                    const posX = espaciado * (oponenteIndex + 1);
+
+                    posicionStyle = {
+                      position: 'absolute',
+                      top: '20%',
+                      left: `${posX}%`,
+                      transform: 'translateX(-50%)',
+                      zIndex: esCartaGanadora ? 50 : 15 + i,
+                    };
+                  }
+
+                  return (
+                    <div
+                      key={i}
+                      className={`text-center card-played-anim ${esCartaGanadora ? 'card-winner card-winner-glow' : ''}`}
+                      style={{ ...posicionStyle, animationDelay: `${i * 0.1}s` }}
+                    >
+                      <CartaImg carta={jugada.carta} size="large" showGlow={!!esCartaGanadora} />
+                      <div className={`text-xs mt-1 font-medium ${esCartaGanadora ? 'text-yellow-400 font-bold' : esEquipo1 ? 'text-blue-300' : 'text-red-300'}`}>
+                        {jugador?.nombre}
+                        {esCartaGanadora && ' 🏆'}
+                      </div>
+                    </div>
+                  );
+                })}
+                {cartasManoActual.length === 0 && mesa.estado === 'jugando' && mesa.fase === 'jugando' && (
+                  <div className="absolute inset-0 flex items-center justify-center z-10">
+                    <div className="text-green-300/40 text-sm">Esperando cartas...</div>
+                  </div>
+                )}
+              </>
+            )}
 
             {/* Indicador de turno */}
-            {mesa.estado === 'jugando' && mesa.fase !== 'finalizada' && !mesa.gritoActivo && !mesa.envidoActivo && (
+            {mesa.estado === 'jugando' && mesa.fase === 'jugando' && !mesa.gritoActivo && !mesa.envidoActivo && (
               <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-20">
                 <div className={`text-sm font-bold px-4 py-2 rounded-full ${
                   esMiTurno()
@@ -747,43 +2208,215 @@ function GamePage() {
             </div>
           )}
 
+          {/* Panel de declaración automática de Envido */}
+          {envidoDeclaraciones.length > 0 && !envidoResultado && (
+            <div className="glass rounded-xl p-4 my-3 border border-purple-600/40 animate-slide-up">
+              <p className="text-lg font-bold text-purple-300 mb-3 text-center">
+                Declarando Envido
+              </p>
+              <div className="space-y-2">
+                {envidoDeclaraciones.map((decl, i) => (
+                  <div key={i} className={`text-center py-2 px-4 rounded-lg animate-slide-up ${
+                    decl.equipo === 1 ? 'bg-blue-900/30' : 'bg-red-900/30'
+                  }`}>
+                    <span className={`font-medium ${decl.equipo === 1 ? 'text-blue-300' : 'text-red-300'}`}>
+                      {decl.jugadorNombre}:
+                    </span>
+                    <span className="text-white ml-2">
+                      {decl.sonBuenas ? '"Son buenas..."' : `"Tengo ${decl.puntos}"`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Resultado del Envido */}
+          {envidoResultado && (
+            <div className="glass rounded-xl p-4 my-3 border border-green-600/40 animate-slide-up">
+              <p className="text-lg font-bold text-green-300 mb-2 text-center">
+                ¡Equipo {envidoResultado.ganador} gana el envido!
+              </p>
+              <p className="text-center text-green-200">+{envidoResultado.puntosGanados} puntos</p>
+              {envidoResultado.mejorPuntaje !== null && (
+                <p className="text-center text-green-400/70 text-sm mt-1">
+                  Mejor puntaje: {envidoResultado.mejorPuntaje}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Modal de Envido Cargado */}
+          {mostrarEnvidoCargado && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="glass rounded-2xl p-6 max-w-sm w-full border border-purple-600/50 animate-slide-up">
+                <h3 className="text-xl font-bold text-purple-300 text-center mb-4">
+                  Cargar Envido
+                </h3>
+                <p className="text-gold-400/70 text-sm text-center mb-4">
+                  Elegí cuántos puntos querés cargar
+                </p>
+
+                <div className="flex items-center justify-center gap-4 mb-6">
+                  <button
+                    onClick={() => setPuntosEnvidoCargado(Math.max(1, puntosEnvidoCargado - 1))}
+                    className="w-12 h-12 rounded-full bg-purple-800/50 text-purple-300 text-2xl font-bold hover:bg-purple-700/50 transition-all"
+                  >
+                    -
+                  </button>
+                  <div className="w-20 h-16 flex items-center justify-center rounded-xl bg-purple-900/50 border-2 border-purple-500/50">
+                    <span className="text-3xl font-bold text-white">{puntosEnvidoCargado}</span>
+                  </div>
+                  <button
+                    onClick={() => setPuntosEnvidoCargado(Math.min(99, puntosEnvidoCargado + 1))}
+                    className="w-12 h-12 rounded-full bg-purple-800/50 text-purple-300 text-2xl font-bold hover:bg-purple-700/50 transition-all"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Presets rápidos */}
+                <div className="flex justify-center gap-2 mb-6">
+                  {[5, 10, 15, 20].map(pts => (
+                    <button
+                      key={pts}
+                      onClick={() => setPuntosEnvidoCargado(pts)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        puntosEnvidoCargado === pts
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-purple-900/30 text-purple-300 hover:bg-purple-800/40'
+                      }`}
+                    >
+                      {pts}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setMostrarEnvidoCargado(false)}
+                    className="flex-1 py-3 rounded-xl font-bold bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCantarEnvidoCargado}
+                    disabled={loading}
+                    className="flex-1 py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 text-white hover:from-purple-500 hover:to-purple-400 transition-all disabled:opacity-50"
+                  >
+                    ¡Cargar {puntosEnvidoCargado}!
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Mis cartas y controles */}
-          <div className="glass rounded-xl p-3 sm:p-4 mt-2 sm:mt-4 border border-gold-800/20">
+          <div className="glass rounded-xl p-3 sm:p-4 mt-2 sm:mt-4 border border-gold-800/20 relative">
+            {/* Bocadillo de diálogo para mí */}
+            {socketId && speechBubbles.find(b => b.jugadorId === socketId) && (() => {
+              const bubble = speechBubbles.find(b => b.jugadorId === socketId)!;
+              return (
+                <div className={`absolute -top-14 left-1/2 z-50 speech-bubble speech-bubble-up ${
+                  bubble.tipo === 'envido' ? 'speech-bubble-envido' :
+                  bubble.tipo === 'flor' ? 'speech-bubble-flor' :
+                  bubble.tipo === 'truco' ? 'speech-bubble-truco' :
+                  bubble.tipo === 'quiero' ? 'speech-bubble-quiero' :
+                  bubble.tipo === 'no-quiero' ? 'speech-bubble-no-quiero' : ''
+                }`}>
+                  {bubble.puntos !== undefined ? (
+                    <span className="bubble-number text-2xl font-bold">{bubble.puntos}</span>
+                  ) : (
+                    <span className="font-bold text-sm whitespace-nowrap">{bubble.texto}</span>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Barra superior con info y botones de cantos */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <div className={`px-3 py-1.5 rounded-lg font-medium text-sm ${
-                miEquipo === 1 ? 'equipo-1 text-white' : 'equipo-2 text-white'
-              }`}>
-                {miJugador?.nombre} {miJugador?.esMano && '(Mano)'}
-              </div>
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm ${
+              miEquipo === 1 ? 'equipo-1 text-white' : 'equipo-2 text-white'
+            }`}>
+              {miJugador?.nombre}
+              {miJugador?.esMano && <MonedaMano isActive={true} />}
+            </div>
 
-              {/* Botones de cantos */}
-              <div className="flex gap-2 flex-wrap">
-                {puedoCantarEnvido() && !mesa.envidoActivo && (
+              {/* Botones de cantos - Solo activos cuando es tu turno o puedes responder */}
+              <div className="flex gap-2 flex-wrap items-center">
+                {/* Indicador de FLOR - La flor se canta automáticamente cuando alguien dice envido */}
+                {tengoFlor() && !mesa.florYaCantada && (
+                  <div
+                    className="btn-flor text-white text-xs sm:text-sm animate-pulse cursor-default"
+                    title="¡Tenés FLOR! Se cantará automáticamente si alguien dice envido"
+                  >
+                    🌸 FLOR
+                  </div>
+                )}
+                {puedoCantarEnvido() && !mesa.envidoActivo && !mesa.florYaCantada && (
                   <>
-                    <button onClick={() => handleCantarEnvido('envido')} disabled={loading} className="btn-envido text-white text-xs sm:text-sm">
+                    <button
+                      onClick={() => handleCantarEnvido('envido')}
+                      disabled={loading || !esMiTurno()}
+                      className={`btn-envido text-white text-xs sm:text-sm ${!esMiTurno() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      title={!esMiTurno() ? 'Esperá tu turno' : 'Cantar Envido'}
+                    >
                       Envido
                     </button>
-                    <button onClick={() => handleCantarEnvido('real_envido')} disabled={loading} className="btn-envido text-white text-xs sm:text-sm hidden sm:inline-flex">
+                    <button
+                      onClick={() => handleCantarEnvido('real_envido')}
+                      disabled={loading || !esMiTurno()}
+                      className={`btn-envido text-white text-xs sm:text-sm hidden sm:inline-flex ${!esMiTurno() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      title={!esMiTurno() ? 'Esperá tu turno' : 'Cantar Real Envido'}
+                    >
                       Real Envido
                     </button>
-                    <button onClick={() => handleCantarEnvido('falta_envido')} disabled={loading} className="btn-envido text-white text-xs sm:text-sm hidden sm:inline-flex">
+                    <button
+                      onClick={() => handleCantarEnvido('falta_envido')}
+                      disabled={loading || !esMiTurno()}
+                      className={`btn-envido text-white text-xs sm:text-sm hidden sm:inline-flex ${!esMiTurno() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      title={!esMiTurno() ? 'Esperá tu turno' : 'Cantar Falta Envido'}
+                    >
                       Falta Envido
+                    </button>
+                    {/* Botón para envido cargado personalizado */}
+                    <button
+                      onClick={() => setMostrarEnvidoCargado(true)}
+                      disabled={loading || !esMiTurno()}
+                      className={`btn-envido text-white text-xs sm:text-sm bg-gradient-to-r from-purple-700 to-purple-600 hover:from-purple-600 hover:to-purple-500 ${!esMiTurno() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      title={!esMiTurno() ? 'Esperá tu turno' : 'Cargar puntos de envido'}
+                    >
+                      +Cargar
                     </button>
                   </>
                 )}
                 {puedoCantarTruco() && (
-                  <button onClick={() => handleCantarTruco('truco')} disabled={loading} className="btn-truco text-white">
+                  <button
+                    onClick={() => handleCantarTruco('truco')}
+                    disabled={loading || !esMiTurno()}
+                    className={`btn-truco text-white ${!esMiTurno() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={!esMiTurno() ? 'Esperá tu turno' : 'Cantar Truco'}
+                  >
                     Truco
                   </button>
                 )}
                 {puedoCantarRetruco() && (
-                  <button onClick={() => handleCantarTruco('retruco')} disabled={loading} className="btn-truco text-white">
+                  <button
+                    onClick={() => handleCantarTruco('retruco')}
+                    disabled={loading || !esMiTurno()}
+                    className={`btn-truco text-white ${!esMiTurno() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={!esMiTurno() ? 'Esperá tu turno' : 'Cantar Retruco'}
+                  >
                     Retruco
                   </button>
                 )}
                 {puedoCantarVale4() && (
-                  <button onClick={() => handleCantarTruco('vale4')} disabled={loading} className="btn-truco text-white">
+                  <button
+                    onClick={() => handleCantarTruco('vale4')}
+                    disabled={loading || !esMiTurno()}
+                    className={`btn-truco text-white ${!esMiTurno() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={!esMiTurno() ? 'Esperá tu turno' : 'Cantar Vale 4'}
+                  >
                     Vale 4
                   </button>
                 )}

@@ -4,29 +4,39 @@
 
 /*
    TRUCO URUGUAYO - DESIGN SYSTEM
-   Theme: Pulpería / Tradición Oriental / Boliche de Campaña
-   Materiales: madera, cuero, fieltro verde
+   Theme: Rústico Moderno / Pulpería Uruguaya / Boliche de Campaña
+   Materiales: madera, cuero, fieltro verde, metal oxidado
+   Inspiración: Bandera uruguaya, mate, campo oriental
 */
 
 :root {
-  /* Colores nacionales */
+  /* Colores nacionales uruguayos */
   --celeste-uy: #00A1DE;
+  --celeste-oscuro: #0077B6;
   --sol-amarillo: #FFD700;
+  --blanco-puro: #FFFFFF;
 
-  /* Materiales */
+  /* Materiales de pulpería */
   --madera-oscura: #1a0f0a;
   --madera-media: #3d2817;
   --madera-clara: #6d4830;
   --fieltro-verde: #064e3b;
   --fieltro-claro: #166534;
   --oro-viejo: #ca8a04;
+  --oro-brillante: #f59e0b;
   --cuero: #8b5a2b;
+  --cuero-claro: #a67c52;
   --white-card: #fdfbf7;
+  --metal-oxidado: #8b6914;
 
   /* Sombras */
   --shadow-deep: rgba(0, 0, 0, 0.8);
   --shadow-medium: rgba(0, 0, 0, 0.5);
   --shadow-soft: rgba(0, 0, 0, 0.3);
+
+  /* Gradientes uruguayos */
+  --gradiente-celeste: linear-gradient(135deg, #0077B6 0%, #00A1DE 50%, #48CAE4 100%);
+  --gradiente-sol: linear-gradient(135deg, #ca8a04 0%, #f59e0b 50%, #fbbf24 100%);
 }
 
 @layer base {
@@ -132,7 +142,7 @@
     inset: 0;
     pointer-events: none;
     background: radial-gradient(circle at 50% 30%, transparent 10%, rgba(0,0,0,0.5) 80%);
-    z-index: 45;
+    z-index: 1;
   }
 
   .lampara-glow {
@@ -358,6 +368,22 @@
       0 6px 20px rgba(75, 85, 99, 0.4);
   }
 
+  .btn-flor {
+    @apply btn-canto;
+    background: linear-gradient(135deg, #db2777 0%, #ec4899 50%, #f472b6 100%);
+    box-shadow:
+      0 4px 0 #9d174d,
+      0 6px 20px rgba(236, 72, 153, 0.5),
+      0 0 30px rgba(236, 72, 153, 0.3);
+  }
+
+  .btn-flor:hover:not(:disabled) {
+    box-shadow:
+      0 4px 0 #9d174d,
+      0 8px 30px rgba(236, 72, 153, 0.6),
+      0 0 50px rgba(236, 72, 153, 0.5);
+  }
+
   /* Botón Uruguay (celeste con sombra) */
   .btn-uruguay {
     @apply btn-canto text-lg px-10 py-4;
@@ -461,6 +487,47 @@
     50% { transform: scale(1.08); opacity: 1; }
   }
 
+  /* === ANIMACIONES DE BARAJA Y CORTE === */
+
+  /* Deck shuffle wiggle */
+  .deck-shuffle-anim {
+    animation: deckShuffle 1.5s ease-in-out;
+  }
+
+  @keyframes deckShuffle {
+    0% { transform: rotate(0deg); }
+    10% { transform: rotate(-3deg) translateX(-4px); }
+    20% { transform: rotate(3deg) translateX(4px); }
+    30% { transform: rotate(-2deg) translateX(-3px); }
+    40% { transform: rotate(2deg) translateX(3px); }
+    50% { transform: rotate(-1deg) translateX(-2px); }
+    60% { transform: rotate(1deg) translateX(2px); }
+    70% { transform: rotate(-0.5deg); }
+    100% { transform: rotate(0deg); }
+  }
+
+  /* Cut animation: lift top portion */
+  .cut-lift {
+    animation: cutLift 0.6s ease-out forwards;
+  }
+
+  @keyframes cutLift {
+    0% { transform: translateY(0) translateX(0); }
+    40% { transform: translateY(-40px) translateX(30px) rotate(3deg); }
+    100% { transform: translateY(10px) translateX(0) rotate(0deg); }
+  }
+
+  /* Cut animation: bottom stays */
+  .cut-stay {
+    animation: cutStay 0.6s ease-out forwards;
+  }
+
+  @keyframes cutStay {
+    0% { transform: translateY(0); }
+    40% { transform: translateY(0); }
+    100% { transform: translateY(0); }
+  }
+
   /* === ANIMACIONES DE TURNO === */
 
   .turn-glow {
@@ -536,6 +603,15 @@
     to { transform: translateY(0); opacity: 1; }
   }
 
+  .animate-slide-down {
+    animation: slideDown 0.4s ease-out forwards;
+  }
+
+  @keyframes slideDown {
+    from { transform: translateY(-30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.6s ease-out forwards;
   }
@@ -552,6 +628,198 @@
   @keyframes pulseGlow {
     0%, 100% { box-shadow: 0 0 10px rgba(202,138,4,0.4); }
     50% { box-shadow: 0 0 30px rgba(202,138,4,0.8), 0 0 60px rgba(202,138,4,0.3); }
+  }
+
+  /* === ANIMACIÓN DE REPARTICIÓN DE CARTAS MEJORADA === */
+
+  .animate-deal-card {
+    animation: dealCard var(--deal-duration, 0.85s) cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    animation-delay: var(--deal-delay, 0ms);
+    z-index: 100;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+  }
+
+  @keyframes dealCard {
+    0% {
+      transform:
+        translate(0, 0)
+        rotate(0deg)
+        rotateX(0deg)
+        scale(1);
+      opacity: 1;
+      filter: brightness(1);
+    }
+    15% {
+      /* Lift up slightly before flying out */
+      transform:
+        translate(0, -20px)
+        rotate(calc(var(--deal-rotation, 0deg) * 0.2))
+        rotateX(-10deg)
+        scale(1.05);
+      opacity: 1;
+      filter: brightness(1.1);
+    }
+    40% {
+      /* Mid-flight - extended trajectory with arc */
+      transform:
+        translate(
+          calc(var(--deal-x, 0) * 0.4),
+          calc(var(--deal-y, 0) * 0.35 - 40px)
+        )
+        rotate(calc(var(--deal-rotation, 0deg) * 0.6))
+        rotateX(-5deg)
+        rotateY(calc(var(--deal-spin, 0deg) * 0.5))
+        scale(var(--deal-scale-mid, 0.95));
+      opacity: 1;
+      filter: brightness(1.05);
+    }
+    75% {
+      /* Approaching destination with deceleration */
+      transform:
+        translate(
+          calc(var(--deal-x, 0) * 0.85),
+          calc(var(--deal-y, 0) * 0.85)
+        )
+        rotate(calc(var(--deal-rotation, 0deg) * 0.9))
+        rotateX(2deg)
+        rotateY(var(--deal-spin, 0deg))
+        scale(var(--deal-scale-end, 0.85));
+      opacity: 0.9;
+    }
+    100% {
+      /* Final position with slight settle */
+      transform:
+        translate(var(--deal-x, 0), var(--deal-y, 0))
+        rotate(var(--deal-rotation, 0deg))
+        rotateX(0deg)
+        rotateY(var(--deal-spin, 0deg))
+        scale(var(--deal-scale-end, 0.8));
+      opacity: 0;
+      filter: brightness(0.95);
+    }
+  }
+
+  /* Dealing card visual styling with enhanced shadows */
+  .dealing-card {
+    position: absolute;
+    border-radius: 8px;
+    box-shadow:
+      0 8px 25px rgba(0, 0, 0, 0.6),
+      0 0 30px rgba(202, 138, 4, 0.4),
+      0 2px 8px rgba(0, 0, 0, 0.8);
+    transition: box-shadow 0.2s ease-out;
+  }
+
+  /* Glow trail effect during dealing */
+  .dealing-card::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    background: radial-gradient(
+      ellipse at center,
+      rgba(202, 138, 4, 0.3) 0%,
+      transparent 70%
+    );
+    border-radius: 12px;
+    opacity: 0.6;
+    animation: trailGlow 0.85s ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes trailGlow {
+    0% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(0.9); }
+  }
+
+  /* Mazo (deck) subtle animation during dealing */
+  .mazo-dealing {
+    animation: mazoPulse 0.4s ease-in-out;
+  }
+
+  @keyframes mazoPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(0.98) translateY(2px); }
+  }
+
+  /* === ANIMACIÓN DE FLOR === */
+
+  .flor-announcement {
+    animation: florAppear 0.8s ease-out forwards;
+  }
+
+  @keyframes florAppear {
+    0% {
+      transform: scale(0) rotate(-10deg);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.2) rotate(5deg);
+    }
+    100% {
+      transform: scale(1) rotate(0deg);
+      opacity: 1;
+    }
+  }
+
+  .flor-glow {
+    animation: florGlow 1.5s ease-in-out infinite;
+    background: linear-gradient(135deg, #ec4899 0%, #f472b6 50%, #a855f7 100%);
+    box-shadow: 0 0 30px rgba(236, 72, 153, 0.6), 0 0 60px rgba(168, 85, 247, 0.4);
+  }
+
+  @keyframes florGlow {
+    0%, 100% {
+      box-shadow: 0 0 30px rgba(236, 72, 153, 0.6), 0 0 60px rgba(168, 85, 247, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 50px rgba(236, 72, 153, 0.8), 0 0 80px rgba(168, 85, 247, 0.6);
+    }
+  }
+
+  /* === CARTA GANADORA === */
+
+  .card-winner {
+    animation: cardWinner 0.5s ease-out forwards;
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.8), 0 0 40px rgba(234, 179, 8, 0.5);
+  }
+
+  @keyframes cardWinner {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.1) translateY(-10px);
+    }
+    100% {
+      transform: scale(1.05) translateY(-5px);
+    }
+  }
+
+  .card-winner-glow {
+    position: relative;
+  }
+
+  .card-winner-glow::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.6), rgba(251, 191, 36, 0.4));
+    border-radius: 12px;
+    z-index: -1;
+    animation: winnerGlow 1.5s ease-in-out infinite;
+  }
+
+  @keyframes winnerGlow {
+    0%, 100% {
+      opacity: 0.6;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05);
+    }
   }
 
   /* === EQUIPO COLORES === */
@@ -574,6 +842,389 @@
   .equipo-2-light {
     background: rgba(239, 68, 68, 0.2);
     border: 1px solid rgba(239, 68, 68, 0.4);
+  }
+
+  /* === RÚSTICO MODERNO - ELEMENTOS URUGUAYOS === */
+
+  /* Borde con motivo de Sol de Mayo */
+  .border-sol-mayo {
+    border: 3px solid transparent;
+    background:
+      linear-gradient(var(--madera-oscura), var(--madera-oscura)) padding-box,
+      linear-gradient(135deg, var(--oro-viejo), var(--sol-amarillo), var(--oro-viejo)) border-box;
+    box-shadow:
+      0 0 20px rgba(202, 138, 4, 0.2),
+      inset 0 0 30px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Textura de cuero para paneles */
+  .leather-texture {
+    background:
+      radial-gradient(ellipse at 20% 30%, rgba(166, 124, 82, 0.1) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 70%, rgba(139, 90, 43, 0.1) 0%, transparent 50%),
+      linear-gradient(180deg, rgba(139, 90, 43, 0.05) 0%, rgba(26, 15, 10, 0.9) 100%);
+  }
+
+  /* Efecto de metal oxidado (para elementos decorativos) */
+  .metal-oxidado {
+    background: linear-gradient(135deg, #8b6914 0%, #a67c52 30%, #6d4830 70%, #8b6914 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+      0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Ícono de mate (decorativo) */
+  .mate-icon::before {
+    content: '🧉';
+    font-size: 1.2em;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  }
+
+  /* Panel estilo boliche */
+  .boliche-panel {
+    background:
+      linear-gradient(180deg, rgba(61, 40, 23, 0.95) 0%, rgba(26, 15, 10, 0.98) 100%);
+    border: 2px solid var(--madera-clara);
+    box-shadow:
+      inset 0 0 40px rgba(0, 0, 0, 0.5),
+      0 8px 32px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(212, 165, 116, 0.1);
+    position: relative;
+  }
+
+  .boliche-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(202, 138, 4, 0.3), transparent);
+  }
+
+  /* Título estilo rústico */
+  .titulo-rustico {
+    text-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.8),
+      0 0 20px rgba(202, 138, 4, 0.3);
+    letter-spacing: 0.05em;
+  }
+
+  /* Separador decorativo */
+  .separador-uy {
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent,
+      var(--celeste-uy) 20%,
+      var(--sol-amarillo) 50%,
+      var(--celeste-uy) 80%,
+      transparent
+    );
+    opacity: 0.6;
+  }
+
+  /* Badge estilo tradicional */
+  .badge-tradicional {
+    background: linear-gradient(135deg, var(--madera-clara) 0%, var(--madera-media) 100%);
+    border: 1px solid var(--oro-viejo);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 2px 4px rgba(0, 0, 0, 0.4);
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Esquina decorativa */
+  .esquina-decorativa {
+    position: relative;
+  }
+
+  .esquina-decorativa::before,
+  .esquina-decorativa::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--oro-viejo);
+    opacity: 0.4;
+  }
+
+  .esquina-decorativa::before {
+    top: -2px;
+    left: -2px;
+    border-right: none;
+    border-bottom: none;
+  }
+
+  .esquina-decorativa::after {
+    bottom: -2px;
+    right: -2px;
+    border-left: none;
+    border-top: none;
+  }
+
+  /* Efecto de luz de lámpara (para ambiente pulpería) */
+  .luz-lampara {
+    position: relative;
+  }
+
+  .luz-lampara::before {
+    content: '';
+    position: absolute;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 200px;
+    background: radial-gradient(ellipse at center top,
+      rgba(255, 215, 0, 0.08) 0%,
+      rgba(255, 180, 0, 0.04) 30%,
+      transparent 70%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Animación de brillo dorado sutil */
+  .brillo-dorado {
+    animation: brilloDorado 3s ease-in-out infinite;
+  }
+
+  @keyframes brilloDorado {
+    0%, 100% {
+      filter: brightness(1) drop-shadow(0 0 2px rgba(202, 138, 4, 0.3));
+    }
+    50% {
+      filter: brightness(1.1) drop-shadow(0 0 8px rgba(202, 138, 4, 0.5));
+    }
+  }
+
+  /* Hover de botón estilo campo */
+  .btn-campo {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-campo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .btn-campo:hover::after {
+    opacity: 1;
+  }
+
+  .btn-campo:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.4),
+      0 0 30px rgba(202, 138, 4, 0.2);
+  }
+
+  /* === BOCADILLOS DE DIÁLOGO (SPEECH BUBBLES) === */
+
+  .speech-bubble {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 245, 245, 0.95) 100%);
+    border-radius: 20px;
+    padding: 12px 18px;
+    box-shadow:
+      0 4px 20px rgba(0, 0, 0, 0.3),
+      0 0 0 2px rgba(255, 255, 255, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    animation: bubbleAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    transform-origin: bottom center;
+  }
+
+  .speech-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-top: 12px solid rgba(255, 255, 255, 0.95);
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
+  }
+
+  /* Variante: flecha apuntando hacia arriba (para jugador abajo) */
+  .speech-bubble-up::after {
+    bottom: auto;
+    top: -10px;
+    border-top: none;
+    border-bottom: 12px solid rgba(255, 255, 255, 0.95);
+  }
+
+  /* Variantes de color para envido */
+  .speech-bubble-envido {
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: white;
+  }
+
+  .speech-bubble-envido::after {
+    border-top-color: #7c3aed;
+  }
+
+  .speech-bubble-envido.speech-bubble-up::after {
+    border-top-color: transparent;
+    border-bottom-color: #a855f7;
+  }
+
+  /* Variantes de color para flor */
+  .speech-bubble-flor {
+    background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+    color: white;
+    box-shadow:
+      0 4px 20px rgba(236, 72, 153, 0.4),
+      0 0 30px rgba(236, 72, 153, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+
+  .speech-bubble-flor::after {
+    border-top-color: #db2777;
+  }
+
+  .speech-bubble-flor.speech-bubble-up::after {
+    border-top-color: transparent;
+    border-bottom-color: #ec4899;
+  }
+
+  /* Variantes de color para truco */
+  .speech-bubble-truco {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+  }
+
+  .speech-bubble-truco::after {
+    border-top-color: #d97706;
+  }
+
+  /* Variante quiero/no quiero */
+  .speech-bubble-quiero {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+  }
+
+  .speech-bubble-quiero::after {
+    border-top-color: #16a34a;
+  }
+
+  .speech-bubble-no-quiero {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+  }
+
+  .speech-bubble-no-quiero::after {
+    border-top-color: #dc2626;
+  }
+
+  /* Animación de aparición */
+  @keyframes bubbleAppear {
+    0% {
+      transform: translateX(-50%) scale(0) translateY(10px);
+      opacity: 0;
+    }
+    50% {
+      transform: translateX(-50%) scale(1.1) translateY(-5px);
+    }
+    100% {
+      transform: translateX(-50%) scale(1) translateY(0);
+      opacity: 1;
+    }
+  }
+
+  /* Animación de desaparición */
+  .speech-bubble-exit {
+    animation: bubbleExit 0.3s ease-in forwards;
+  }
+
+  @keyframes bubbleExit {
+    0% {
+      transform: translateX(-50%) scale(1) translateY(0);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(-50%) scale(0.8) translateY(-10px);
+      opacity: 0;
+    }
+  }
+
+  /* Animación de rebote para números */
+  .bubble-number {
+    display: inline-block;
+    animation: numberPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  @keyframes numberPop {
+    0% {
+      transform: scale(0);
+    }
+    60% {
+      transform: scale(1.3);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  /* Brillo en números grandes */
+  .bubble-number-shine {
+    background: linear-gradient(135deg, #fff 0%, #f0f0f0 50%, #fff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: numberShine 1.5s ease-in-out infinite;
+  }
+
+  @keyframes numberShine {
+    0%, 100% {
+      filter: brightness(1);
+    }
+    50% {
+      filter: brightness(1.2);
+    }
+  }
+
+  /* Banner flotante mejorado */
+  .banner-flotante {
+    animation: bannerAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  @keyframes bannerAppear {
+    0% {
+      transform: translateX(-50%) translateY(-100%) scale(0.8);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(-50%) translateY(0) scale(1);
+      opacity: 1;
+    }
+  }
+
+  .banner-saliente {
+    animation: bannerSalir 0.5s ease-in forwards;
+  }
+
+  @keyframes bannerSalir {
+    0% {
+      transform: translateX(-50%) translateY(0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(-50%) translateY(-30px) scale(0.9);
+      opacity: 0;
+    }
   }
 }
 

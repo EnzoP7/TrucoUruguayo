@@ -534,6 +534,51 @@ const SocketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
       }
     });
 
+    // === REALIZAR CORTE ===
+
+    socket.on('realizar-corte', (data: { posicion: number }, callback: (success: boolean, message?: string) => void) => {
+      try {
+        const partida = gameManager.getPartidaDeJugador(socket.id);
+        if (!partida) {
+          callback(false, 'No estás en ninguna partida');
+          return;
+        }
+
+        const estado = partida.getEstado();
+        if (!estado.esperandoCorte) {
+          callback(false, 'No se está esperando un corte');
+          return;
+        }
+
+        if (estado.jugadores[estado.indiceJugadorCorta]?.id !== socket.id) {
+          callback(false, 'No te toca cortar');
+          return;
+        }
+
+        const success = partida.realizarCorte(socket.id, data.posicion);
+        if (!success) {
+          callback(false, 'No se pudo realizar el corte');
+          return;
+        }
+
+        const nuevoEstado = partida.getEstado();
+        
+        // Notificar a todos que el corte fue realizado
+        nuevoEstado.jugadores.forEach((j: Jugador) => {
+          const estadoParaJugador = partida.getEstadoParaJugador(j.id);
+          io.to(j.id).emit('corte-realizado', {
+            jugadorId: socket.id,
+            posicion: data.posicion,
+            estado: estadoParaJugador
+          });
+        });
+
+        callback(true, 'Corte realizado');
+      } catch (error) {
+        callback(false, 'Error al realizar corte');
+      }
+    });
+
     // === DESCONEXIÓN ===
 
     socket.on('disconnect', () => {

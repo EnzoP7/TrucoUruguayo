@@ -25,13 +25,13 @@ export interface Equipo {
 export type EstadoJuego = 'esperando' | 'jugando' | 'terminado';
 
 // Fases de una ronda
-export type FaseRonda = 'esperando_cantos' | 'jugando' | 'esperando_respuesta' | 'finalizada';
+export type FaseRonda = 'esperando_cantos' | 'cortando' | 'jugando' | 'esperando_respuesta' | 'finalizada';
 
 // Tipos de gritos (truco)
 export type GritoTipo = 'truco' | 'retruco' | 'vale4';
 
 // Tipos de envido
-export type EnvidoTipo = 'envido' | 'real_envido' | 'falta_envido';
+export type EnvidoTipo = 'envido' | 'real_envido' | 'falta_envido' | 'envido_cargado';
 
 // Estado de un grito activo
 export interface GritoActivo {
@@ -72,9 +72,16 @@ export interface Mesa {
   maxManos: number;
   ganadoresManos: (number | null)[]; // equipo ganador de cada mano (null = empate)
   indiceMano: number; // indice del jugador que es "mano" (rota entre rondas)
+  muestra: Carta | null; // carta de muestra boca arriba
+  // Sistema de corte
+  esperandoCorte: boolean; // true cuando se debe esperar el corte
+  indiceJugadorCorta: number; // indice del jugador que debe cortar
+  corteRealizado: boolean; // true cuando el corte fue realizado
+  posicionCorte: number | null; // posición donde se cortó el mazo
   // Gritos (Truco/Retruco/Vale4)
   gritoActivo: GritoActivo | null;
   nivelGritoAceptado: GritoTipo | null; // último grito aceptado
+  equipoQueCantoUltimo: number | null; // equipo que cantó el último grito aceptado (la palabra la tiene el contrario)
   puntosEnJuego: number; // puntos que vale ganar esta ronda (default 1)
   // Envido
   envidoActivo: EnvidoActivo | null;

@@ -7,6 +7,8 @@ class SocketService {
   private isConnected = false;
   private navigating = false;
   private connectPromise: Promise<void> | null = null;
+  private reconnectCallback: (() => void) | null = null;
+  private hasConnectedOnce = false;
 
   connect(): Promise<void> {
     // If already connected, resolve immediately
@@ -53,6 +55,12 @@ class SocketService {
       this.socket.on('connect', () => {
         this.isConnected = true;
         this.connectPromise = null;
+        // On automatic reconnect (not first connect), re-run the callback
+        if (this.hasConnectedOnce && this.reconnectCallback) {
+          console.log('[SocketService] Auto-reconnected, re-running reconnect callback');
+          this.reconnectCallback();
+        }
+        this.hasConnectedOnce = true;
         resolve();
       });
 
@@ -69,6 +77,15 @@ class SocketService {
     return this.connectPromise;
   }
 
+  // Register a callback that runs every time the socket auto-reconnects
+  onAutoReconnect(callback: () => void): void {
+    this.reconnectCallback = callback;
+  }
+
+  clearAutoReconnect(): void {
+    this.reconnectCallback = null;
+  }
+
   disconnect(): void {
     if (this.navigating) return;
     if (this.socket) {
@@ -76,6 +93,8 @@ class SocketService {
       this.socket = null;
       this.isConnected = false;
       this.connectPromise = null;
+      this.hasConnectedOnce = false;
+      this.reconnectCallback = null;
     }
   }
 
@@ -153,11 +172,15 @@ class SocketService {
     });
   }
 
-  async cantarEnvido(tipo: EnvidoTipo): Promise<boolean> {
+  async cantarEnvido(tipo: EnvidoTipo, puntosCustom?: number): Promise<boolean> {
     if (!this.socket) return false;
     return new Promise((resolve) => {
-      this.socket!.emit('cantar-envido', { tipo }, (success) => resolve(success));
+      this.socket!.emit('cantar-envido', { tipo, puntosCustom }, (success) => resolve(success));
     });
+  }
+
+  async cantarEnvidoCargado(puntos: number): Promise<boolean> {
+    return this.cantarEnvido('envido_cargado' as EnvidoTipo, puntos);
   }
 
   async responderEnvido(acepta: boolean): Promise<boolean> {
@@ -171,6 +194,87 @@ class SocketService {
     if (!this.socket) return false;
     return new Promise((resolve) => {
       this.socket!.emit('irse-al-mazo', (success) => resolve(success));
+    });
+  }
+
+  async realizarCorte(posicion: number): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('realizar-corte', { posicion }, (success) => resolve(success));
+    });
+  }
+
+  async declararEnvido(sonBuenas: boolean = false): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('declarar-envido', { puntos: 0, sonBuenas }, (success) => resolve(success));
+    });
+  }
+
+  async cantarFlor(): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('cantar-flor', (success) => resolve(success));
+    });
+  }
+
+  async cambiarEquipo(jugadorId: string, nuevoEquipo: number): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('cambiar-equipo', { jugadorId, nuevoEquipo }, (success) => resolve(success));
+    });
+  }
+
+  async tirarReyes(): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('tirar-reyes', (success) => resolve(success));
+    });
+  }
+
+  async configurarPuntos(puntosLimite: number): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('configurar-puntos', { puntosLimite }, (success) => resolve(success));
+    });
+  }
+
+  async revancha(): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('revancha', (success) => resolve(success));
+    });
+  }
+
+  // === SOLICITAR ESTADO ===
+
+  async solicitarEstado(): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('solicitar-estado', (success: boolean) => resolve(success));
+    });
+  }
+
+  // === ECHAR LOS PERROS ===
+
+  async echarPerros(): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('echar-perros', {}, (success) => resolve(success));
+    });
+  }
+
+  async cancelarPerros(): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('cancelar-perros', (success) => resolve(success));
+    });
+  }
+
+  async responderPerros(quiereContraFlor: boolean, quiereFaltaEnvido: boolean, quiereTruco: boolean): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('responder-perros', { quiereContraFlor, quiereFaltaEnvido, quiereTruco }, (success) => resolve(success));
     });
   }
 
@@ -228,6 +332,10 @@ class SocketService {
     this.socket?.on('envido-respondido', callback);
   }
 
+  onManoFinalizada(callback: (data: any) => void): void {
+    this.socket?.on('mano-finalizada', callback);
+  }
+
   onRondaFinalizada(callback: (data: any) => void): void {
     this.socket?.on('ronda-finalizada', callback);
   }
@@ -240,6 +348,50 @@ class SocketService {
     this.socket?.on('jugador-al-mazo', callback);
   }
 
+  onCorteSolicitado(callback: (data: any) => void): void {
+    this.socket?.on('corte-solicitado', callback);
+  }
+
+  onCorteRealizado(callback: (data: any) => void): void {
+    this.socket?.on('corte-realizado', callback);
+  }
+
+  onCartaRepartida(callback: (data: any) => void): void {
+    this.socket?.on('carta-repartida', callback);
+  }
+
+  onEnvidoDeclarado(callback: (data: any) => void): void {
+    this.socket?.on('envido-declarado', callback);
+  }
+
+  onEnvidoResuelto(callback: (data: any) => void): void {
+    this.socket?.on('envido-resuelto', callback);
+  }
+
+  onFlorCantada(callback: (data: any) => void): void {
+    this.socket?.on('flor-cantada', callback);
+  }
+
+  onFlorResuelta(callback: (data: any) => void): void {
+    this.socket?.on('flor-resuelta', callback);
+  }
+
+  onTirarReyesResultado(callback: (data: any) => void): void {
+    this.socket?.on('tirar-reyes-resultado', callback);
+  }
+
+  onPerrosEchados(callback: (data: any) => void): void {
+    this.socket?.on('perros-echados', callback);
+  }
+
+  onPerrosCancelados(callback: (data: any) => void): void {
+    this.socket?.on('perros-cancelados', callback);
+  }
+
+  onPerrosRespondidos(callback: (data: any) => void): void {
+    this.socket?.on('perros-respondidos', callback);
+  }
+
   off(event: keyof ServerToClientEvents): void {
     this.socket?.off(event);
   }
@@ -248,10 +400,15 @@ class SocketService {
     const events: (keyof ServerToClientEvents)[] = [
       'partidas-disponibles', 'partida-nueva', 'partida-creada',
       'unido-partida', 'jugador-unido', 'partida-iniciada', 'reconectado',
-      'estado-actualizado', 'carta-jugada',
+      'estado-actualizado', 'carta-jugada', 'mano-finalizada',
       'ronda-finalizada', 'juego-finalizado',
       'truco-cantado', 'truco-respondido',
-      'envido-cantado', 'envido-respondido', 'jugador-al-mazo'
+      'envido-cantado', 'envido-respondido', 'jugador-al-mazo',
+      'corte-solicitado', 'corte-realizado', 'carta-repartida',
+      'envido-declarado', 'envido-resuelto',
+      'flor-cantada', 'flor-resuelta',
+      'tirar-reyes-resultado',
+      'perros-echados', 'perros-cancelados', 'perros-respondidos'
     ];
     events.forEach(e => this.socket?.off(e));
   }

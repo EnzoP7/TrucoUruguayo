@@ -35,8 +35,14 @@ export class TrucoEngine {
       maxManos: 3,
       ganadoresManos: [],
       indiceMano: 0,
+      muestra: null,
+      esperandoCorte: false,
+      indiceJugadorCorta: 0,
+      corteRealizado: false,
+      posicionCorte: null,
       gritoActivo: null,
       nivelGritoAceptado: null,
+      equipoQueCantoUltimo: null,
       puntosEnJuego: 1,
       envidoActivo: null,
       envidoYaCantado: false,
@@ -47,7 +53,7 @@ export class TrucoEngine {
     };
   }
 
-  // Iniciar nueva ronda (reparte cartas, resetea estado de ronda)
+  // Iniciar nueva ronda con sistema de corte
   iniciarRonda(): void {
     this.mesa.estado = 'jugando';
     this.mazo.reiniciar();
@@ -61,25 +67,66 @@ export class TrucoEngine {
     this.mesa.mensajeRonda = null;
     this.mesa.gritoActivo = null;
     this.mesa.nivelGritoAceptado = null;
+    this.mesa.equipoQueCantoUltimo = null;
     this.mesa.puntosEnJuego = 1;
     this.mesa.envidoActivo = null;
     this.mesa.envidoYaCantado = false;
     this.mesa.primeraCartaJugada = false;
     this.mesa.fase = 'jugando';
 
-    // Repartir 3 cartas a cada jugador
-    const manos = this.mazo.repartir(this.mesa.jugadores.length);
-    this.mesa.jugadores.forEach((jugador, index) => {
-      jugador.cartas = manos[index];
-    });
+    // Determinar quién corta (siguiente a la izquierda del mano)
+    this.mesa.indiceJugadorCorta = (this.mesa.indiceMano + 1) % this.mesa.jugadores.length;
+    this.mesa.esperandoCorte = true;
+    this.mesa.corteRealizado = false;
+    this.mesa.posicionCorte = null;
 
     // Marcar quien es mano
     this.mesa.jugadores.forEach((jugador, index) => {
       jugador.esMano = index === this.mesa.indiceMano;
     });
 
-    // El mano comienza
+    // El mano comienza después del corte
     this.mesa.turnoActual = this.mesa.indiceMano;
+  }
+
+  // Realizar corte del mazo
+  realizarCorte(jugadorId: string, posicionCorte: number): boolean {
+    if (!this.mesa.esperandoCorte || this.mesa.corteRealizado) return false;
+    
+    const jugadorIndex = this.mesa.jugadores.findIndex(j => j.id === jugadorId);
+    if (jugadorIndex !== this.mesa.indiceJugadorCorta) return false;
+
+    if (posicionCorte < 1 || posicionCorte >= this.mazo.getCartas().length) return false;
+
+    // Realizar corte: mover las cartas desde la posición de corte al principio
+    const cartas = this.mazo.getCartas();
+    const cartasARotar = cartas.slice(0, posicionCorte);
+    const restoCartas = cartas.slice(posicionCorte);
+    this.mazo.establecerCartas([...restoCartas, ...cartasARotar]);
+
+    this.mesa.posicionCorte = posicionCorte;
+    this.mesa.corteRealizado = true;
+    this.mesa.esperandoCorte = false;
+
+    // Ahora repartir y definir muestra
+    this.repartirCartasYDefinirMuestra();
+
+    return true;
+  }
+
+  // Repartir cartas y definir muestra después del corte
+  private repartirCartasYDefinirMuestra(): void {
+    // La primera carta del mazo es la muestra
+    const cartas = this.mazo.getCartas();
+    if (cartas.length > 0) {
+      this.mesa.muestra = cartas[0];
+      
+      // Repartir las siguientes cartas (empezando desde la posición 1, después de la muestra)
+      const manos = this.mazo.repartirConMuestra(this.mesa.jugadores.length);
+      this.mesa.jugadores.forEach((jugador, index) => {
+        jugador.cartas = manos[index];
+      });
+    }
   }
 
   // Jugar una carta
@@ -282,14 +329,19 @@ export class TrucoEngine {
     if (this.mesa.envidoActivo) return false; // hay envido pendiente
 
     // Validar progresión: truco -> retruco -> vale4
-    // Cada nivel solo puede ser cantado por el equipo contrario al que cantó el anterior
+    // La palabra la tiene el equipo contrario al que cantó el último grito
+    // Es decir: A canta truco → B acepta → B tiene la palabra para retruco
+    //           B canta retruco → A acepta → A tiene la palabra para vale4
     if (tipo === 'truco') {
       if (this.mesa.nivelGritoAceptado !== null) return false; // ya se cantó truco
     } else if (tipo === 'retruco') {
       if (this.mesa.nivelGritoAceptado !== 'truco') return false;
-      // Solo puede cantar retruco el equipo que ACEPTÓ el truco (el contrario al que lo cantó)
+      // Solo puede cantar retruco el equipo que ACEPTÓ el truco (contrario al que lo cantó)
+      if (this.mesa.equipoQueCantoUltimo === jugador.equipo) return false;
     } else if (tipo === 'vale4') {
       if (this.mesa.nivelGritoAceptado !== 'retruco') return false;
+      // Solo puede cantar vale4 el equipo que ACEPTÓ el retruco (contrario al que lo cantó)
+      if (this.mesa.equipoQueCantoUltimo === jugador.equipo) return false;
     }
 
     const puntosMap: Record<GritoTipo, { enJuego: number; siNoQuiere: number }> = {
@@ -322,6 +374,7 @@ export class TrucoEngine {
     if (acepta) {
       this.mesa.puntosEnJuego = this.mesa.gritoActivo.puntosEnJuego;
       this.mesa.nivelGritoAceptado = this.mesa.gritoActivo.tipo;
+      this.mesa.equipoQueCantoUltimo = this.mesa.gritoActivo.equipoQueGrita; // guardar quién cantó para validar la palabra
       this.mesa.gritoActivo = null;
     } else {
       // No quiere: el equipo que gritó gana los puntos del nivel anterior

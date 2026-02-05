@@ -104,4 +104,13 @@ export class GameManager {
       }
     }
   }
+
+  // Realizar corte en una partida
+  realizarCorte(jugadorId: string, posicionCorte: number): boolean {
+    const partida = this.getPartidaDeJugador(jugadorId);
+    if (!partida) {
+      return false;
+    }
+    return partida.realizarCorte(jugadorId, posicionCorte);
+  }
 }

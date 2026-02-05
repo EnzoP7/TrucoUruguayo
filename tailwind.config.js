@@ -99,6 +99,12 @@ module.exports = {
         'sun-pulse': 'sunPulse 4s ease-in-out infinite',
         'turn-pulse': 'turnPulse 2s ease-in-out infinite',
         'card-fly': 'cardFly 0.5s cubic-bezier(0.23, 1, 0.32, 1)',
+        'spin-slow': 'rotateSlow 8s linear infinite',
+        'shuffle': 'shuffle 1.2s ease-in-out',
+        'cut-top': 'cutTop 0.6s ease-out forwards',
+        'cut-bottom': 'cutBottom 0.6s ease-out forwards',
+        'deal-out': 'dealOut 0.4s ease-out forwards',
+        'coin-flip': 'coinFlip 0.6s ease-out',
       },
       keyframes: {
         float: {
@@ -172,6 +178,34 @@ module.exports = {
         turnPulse: {
           '0%, 100%': { boxShadow: '0 0 10px rgba(0,161,222,0.4), 0 0 20px rgba(0,161,222,0.2)' },
           '50%': { boxShadow: '0 0 20px rgba(0,161,222,0.6), 0 0 40px rgba(0,161,222,0.4)' },
+        },
+        shuffle: {
+          '0%': { transform: 'translateX(0) rotate(0deg)' },
+          '15%': { transform: 'translateX(-8px) rotate(-2deg)' },
+          '30%': { transform: 'translateX(8px) rotate(2deg)' },
+          '45%': { transform: 'translateX(-5px) rotate(-1deg)' },
+          '60%': { transform: 'translateX(5px) rotate(1deg)' },
+          '75%': { transform: 'translateX(-3px) rotate(-0.5deg)' },
+          '100%': { transform: 'translateX(0) rotate(0deg)' },
+        },
+        cutTop: {
+          '0%': { transform: 'translateY(0) translateX(0)' },
+          '50%': { transform: 'translateY(-30px) translateX(20px)' },
+          '100%': { transform: 'translateY(8px) translateX(0)' },
+        },
+        cutBottom: {
+          '0%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-4px)' },
+          '100%': { transform: 'translateY(-8px)' },
+        },
+        dealOut: {
+          '0%': { transform: 'translateX(0) translateY(0) scale(1)', opacity: '1' },
+          '100%': { transform: 'translateX(var(--deal-x, 80px)) translateY(var(--deal-y, -40px)) scale(0.8)', opacity: '0' },
+        },
+        coinFlip: {
+          '0%': { transform: 'rotateY(0deg) scale(0.5)', opacity: '0' },
+          '50%': { transform: 'rotateY(180deg) scale(1.2)' },
+          '100%': { transform: 'rotateY(360deg) scale(1)', opacity: '1' },
         },
       },
       backgroundImage: {

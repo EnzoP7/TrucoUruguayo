@@ -15,9 +15,21 @@ export interface ClientToServerEvents {
   'jugar-carta': (data: { carta: Carta }, callback: (success: boolean, message?: string) => void) => void;
   'cantar-truco': (data: { tipo: GritoTipo }, callback: (success: boolean, message?: string) => void) => void;
   'responder-truco': (data: { acepta: boolean }, callback: (success: boolean, message?: string) => void) => void;
-  'cantar-envido': (data: { tipo: EnvidoTipo }, callback: (success: boolean, message?: string) => void) => void;
+  'cantar-envido': (data: { tipo: EnvidoTipo; puntosCustom?: number }, callback: (success: boolean, message?: string) => void) => void;
   'responder-envido': (data: { acepta: boolean }, callback: (success: boolean, message?: string) => void) => void;
   'irse-al-mazo': (callback: (success: boolean, message?: string) => void) => void;
+  'realizar-corte': (data: { posicion: number }, callback: (success: boolean, message?: string) => void) => void;
+  'declarar-envido': (data: { puntos: number; sonBuenas: boolean }, callback: (success: boolean, message?: string) => void) => void;
+  'cantar-flor': (callback: (success: boolean, message?: string) => void) => void;
+  'cambiar-equipo': (data: { jugadorId: string; nuevoEquipo: number }, callback: (success: boolean, message?: string) => void) => void;
+  'tirar-reyes': (callback: (success: boolean, message?: string) => void) => void;
+  'configurar-puntos': (data: { puntosLimite: number }, callback: (success: boolean, message?: string) => void) => void;
+  'revancha': (callback: (success: boolean, message?: string) => void) => void;
+  // Echar los perros
+  'echar-perros': (data: Record<string, never>, callback: (success: boolean, message?: string) => void) => void;
+  'cancelar-perros': (callback: (success: boolean, message?: string) => void) => void;
+  'responder-perros': (data: { quiereContraFlor: boolean; quiereFaltaEnvido: boolean; quiereTruco: boolean }, callback: (success: boolean, message?: string) => void) => void;
+  'solicitar-estado': (callback: (success: boolean) => void) => void;
 }
 
 // Eventos del servidor al cliente
@@ -37,8 +49,8 @@ export interface ServerToClientEvents {
   'estado-actualizado': (estado: Mesa) => void;
   'carta-jugada': (data: { jugadorId: string; carta: Carta; estado: Mesa }) => void;
   'turno-cambiado': (data: { jugadorId: string; estado: Mesa }) => void;
-  'mano-finalizada': (data: { ganadorEquipo: number | null; manoNumero: number; estado: Mesa }) => void;
-  'ronda-finalizada': (data: { ganadorEquipo: number; puntosGanados: number; estado: Mesa }) => void;
+  'mano-finalizada': (data: { ganadorEquipo: number | null; manoNumero: number; estado: Mesa }) => void;  // Emitted when a mano ends, before the 3.5s delay
+  'ronda-finalizada': (data: { ganadorEquipo: number; puntosGanados: number; cartasFlorReveladas?: CartaFlorRevelada[]; estado: Mesa }) => void;
   'juego-finalizado': (data: { ganadorEquipo: number; estado: Mesa }) => void;
 
   // Cantos
@@ -47,6 +59,66 @@ export interface ServerToClientEvents {
   'envido-cantado': (data: { jugadorId: string; tipo: EnvidoTipo; estado: Mesa }) => void;
   'envido-respondido': (data: { jugadorId: string; acepta: boolean; resultado?: EnvidoResultado; estado: Mesa }) => void;
   'jugador-al-mazo': (data: { jugadorId: string; equipoQueSeVa: number; estado: Mesa }) => void;
+  'corte-solicitado': (data: { jugadorId: string; estado: Mesa }) => void;
+  'corte-realizado': (data: { jugadorId: string; posicion: number; estado: Mesa }) => void;
+  'carta-repartida': (data: { jugadorIndex: number; cartaIndex: number; vuelta: number; total: number; actual: number }) => void;
+  'envido-declarado': (data: { jugadorId: string; declaracion: EnvidoDeclaracion; turnoDeclarar: number; estado: Mesa }) => void;
+  'envido-resuelto': (data: { resultado: EnvidoResultadoFinal; estado: Mesa }) => void;
+  'flor-cantada': (data: { jugadorId: string; declaracion: FlorDeclaracion; estado: Mesa }) => void;
+  'flor-resuelta': (data: { resultado: FlorResultadoFinal; estado: Mesa }) => void;
+  'tirar-reyes-resultado': (data: { animacion: TirarReyesAnimacion[]; estado: Mesa }) => void;
+  // Echar los perros
+  'perros-echados': (data: { equipoQueEcha: number; estado: Mesa }) => void;
+  'perros-cancelados': (data: { estado: Mesa }) => void;
+  'perros-respondidos': (data: { respuesta: string; equipoGanador?: number; puntosGanados?: number; quiereContraFlor?: boolean; quiereFaltaEnvido?: boolean; quiereTruco?: boolean; estado: Mesa }) => void;
+}
+
+// Types for step-by-step envido
+export interface EnvidoDeclaracion {
+  jugadorId: string;
+  jugadorNombre: string;
+  equipo: number;
+  puntos: number | null;
+  sonBuenas: boolean;
+}
+
+export interface EnvidoResultadoFinal {
+  ganador: number;
+  puntosGanados: number;
+  declaraciones: EnvidoDeclaracion[];
+  mejorPuntaje: number | null;
+}
+
+// Types for flor
+export interface FlorDeclaracion {
+  jugadorId: string;
+  jugadorNombre: string;
+  equipo: number;
+  puntos: number | null;
+}
+
+// Type for revealed flor cards at end of round
+export interface CartaFlorRevelada {
+  jugadorId: string;
+  jugadorNombre: string;
+  equipo: number;
+  cartas: Carta[];
+}
+
+export interface FlorResultadoFinal {
+  ganador: number;
+  puntosGanados: number;
+  floresCantadas: FlorDeclaracion[];
+  mejorFlor: null;
+}
+
+// Type for Tirar Reyes animation
+export interface TirarReyesAnimacion {
+  jugadorId: string;
+  jugadorNombre: string;
+  carta: { palo: string; valor: number };
+  esRey: boolean;
+  equipo: number;
 }
 
 // Tipos para datos de conexión

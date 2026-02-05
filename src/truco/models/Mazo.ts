@@ -93,4 +93,29 @@ export class Mazo {
   getCartas(): Carta[] {
     return [...this.cartas];
   }
+
+  // Establecer cartas (para el corte)
+  establecerCartas(cartas: Carta[]): void {
+    this.cartas = [...cartas];
+  }
+
+  // Repartir cartas con muestra (la primera carta es muestra, no se reparte)
+  repartirConMuestra(cantidadPorJugador: number): Carta[][] {
+    const manos: Carta[][] = [];
+    let cartaIndex = 1; // Empezar desde 1, omitiendo la muestra (posición 0)
+
+    for (let i = 0; i < cantidadPorJugador; i++) {
+      manos.push([]);
+    }
+
+    for (let i = 0; i < 3; i++) { // 3 cartas por jugador
+      for (let j = 0; j < cantidadPorJugador; j++) {
+        if (cartaIndex < this.cartas.length) {
+          manos[j].push(this.cartas[cartaIndex++]);
+        }
+      }
+    }
+
+    return manos;
+  }
 }
