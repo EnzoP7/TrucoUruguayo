@@ -96,11 +96,17 @@ interface Mesa {
   jugadoresConFlor: string[];
   floresCantadas: FlorDeclaracion[];
   florYaCantada: boolean;
+  esperandoRespuestaFlor?: boolean;
+  florPendiente?: { equipoQueCanta: number; equipoQueResponde: number } | null;
   // Sistema de alternancia de gritos
   equipoQueCantoUltimo: number | null; // equipo que cantó el último grito aceptado
   // Sistema de perros
   perrosActivos?: boolean;
   perrosConfig?: { contraFlor: boolean; faltaEnvido: boolean; truco: boolean } | null;
+  // Pico a Pico y Modo Ayuda
+  modoAlternadoHabilitado?: boolean;
+  modoRondaActual?: 'normal' | '1v1';
+  modoAyudaHabilitado?: boolean;
 }
 
 interface FlorDeclaracion {
@@ -146,6 +152,174 @@ function getNombreEnvido(tipo: string): string {
     return `ENVIDO CARGADO (${puntos} pts)`;
   }
   return nombres[tipo] || tipo;
+}
+
+// === FUNCIONES DE AYUDA PARA PRINCIPIANTES ===
+
+// Obtener el valor de envido de una carta
+function getValorEnvidoCarta(carta: Carta): number {
+  // 10, 11, 12 valen 0 para envido
+  if (carta.valor >= 10) return 0;
+  return carta.valor;
+}
+
+// Calcular puntos de envido de un conjunto de cartas
+function calcularEnvido(cartas: Carta[]): { puntos: number; explicacion: string; cartasUsadas: Carta[] } {
+  if (!cartas || cartas.length === 0) {
+    return { puntos: 0, explicacion: 'Sin cartas', cartasUsadas: [] };
+  }
+
+  // Agrupar cartas por palo
+  const porPalo: Record<string, Carta[]> = {};
+  cartas.forEach(c => {
+    if (!porPalo[c.palo]) porPalo[c.palo] = [];
+    porPalo[c.palo].push(c);
+  });
+
+  let mejorPuntos = 0;
+  let mejorExplicacion = '';
+  let mejorCartas: Carta[] = [];
+
+  // Buscar el mejor envido
+  for (const [palo, cartasPalo] of Object.entries(porPalo)) {
+    if (cartasPalo.length >= 2) {
+      // Dos o más cartas del mismo palo: 20 + suma de los dos mejores valores
+      const valores = cartasPalo.map(c => getValorEnvidoCarta(c)).sort((a, b) => b - a);
+      const puntos = 20 + valores[0] + valores[1];
+      if (puntos > mejorPuntos) {
+        mejorPuntos = puntos;
+        const cartasOrdenadas = [...cartasPalo].sort((a, b) => getValorEnvidoCarta(b) - getValorEnvidoCarta(a));
+        mejorCartas = cartasOrdenadas.slice(0, 2);
+        mejorExplicacion = `20 base + ${valores[0]} + ${valores[1]} = ${puntos} (${palo})`;
+      }
+    } else if (cartasPalo.length === 1) {
+      // Una sola carta de ese palo
+      const puntos = getValorEnvidoCarta(cartasPalo[0]);
+      if (puntos > mejorPuntos) {
+        mejorPuntos = puntos;
+        mejorCartas = [cartasPalo[0]];
+        mejorExplicacion = `Carta suelta: ${puntos} puntos`;
+      }
+    }
+  }
+
+  // Si no hay cartas del mismo palo, tomar la carta más alta
+  if (mejorPuntos === 0 && cartas.length > 0) {
+    const cartaOrdenadas = [...cartas].sort((a, b) => getValorEnvidoCarta(b) - getValorEnvidoCarta(a));
+    mejorPuntos = getValorEnvidoCarta(cartaOrdenadas[0]);
+    mejorCartas = [cartaOrdenadas[0]];
+    mejorExplicacion = `Carta más alta: ${mejorPuntos} puntos`;
+  }
+
+  return { puntos: mejorPuntos, explicacion: mejorExplicacion, cartasUsadas: mejorCartas };
+}
+
+// Ordenar cartas por poder (de mayor a menor)
+function ordenarCartasPorPoder(cartas: Carta[]): Carta[] {
+  return [...cartas].sort((a, b) => b.poder - a.poder);
+}
+
+// Obtener nombre legible del poder de una carta
+function getNombrePoderCarta(carta: Carta): string {
+  const poderes: Record<number, string> = {
+    14: '1° (Espada 1)',
+    13: '2° (Basto 1)',
+    12: '3° (Espada 7)',
+    11: '4° (Oro 7)',
+    10: '5° (Tres)',
+    9: '6° (Dos)',
+    8: '7° (Oro/Copa 1)',
+    7: '8° (Doce)',
+    6: '9° (Once)',
+    5: '10° (Diez)',
+    4: '11° (Copa/Basto 7)',
+    3: '12° (Seis)',
+    2: '13° (Cinco)',
+    1: '14° (Cuatro)',
+  };
+  return poderes[carta.poder] || `Poder ${carta.poder}`;
+}
+
+// Componente del panel de ayuda
+function PanelAyuda({ cartas, muestra }: { cartas: Carta[]; muestra: Carta | null }) {
+  const cartasOrdenadas = ordenarCartasPorPoder(cartas);
+  const envido = calcularEnvido(cartas);
+  const cartaMasAlta = cartasOrdenadas[0];
+
+  // Verificar si tiene flor (3 cartas del mismo palo)
+  const tieneFlor = cartas.length === 3 && cartas.every(c => c.palo === cartas[0].palo);
+
+  return (
+    <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40 w-48 sm:w-56">
+      <div className="glass rounded-xl p-3 border border-blue-500/30 bg-blue-950/40 shadow-lg">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-500/20">
+          <span className="text-lg">📚</span>
+          <h3 className="text-blue-300 font-bold text-sm">Ayuda</h3>
+        </div>
+
+        {/* Carta más alta */}
+        {cartaMasAlta && (
+          <div className="mb-3">
+            <div className="text-blue-400/70 text-xs font-medium mb-1">🃏 Tu carta más fuerte:</div>
+            <div className="flex items-center gap-2 bg-blue-900/30 rounded-lg p-2">
+              <img
+                src={getCartaImageUrl(cartaMasAlta)}
+                alt={`${cartaMasAlta.valor} de ${cartaMasAlta.palo}`}
+                className="w-8 h-12 rounded shadow"
+              />
+              <div className="text-xs">
+                <div className="text-white font-medium">{cartaMasAlta.valor} de {cartaMasAlta.palo}</div>
+                <div className="text-blue-300/60">{getNombrePoderCarta(cartaMasAlta)}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Envido */}
+        <div className="mb-3">
+          <div className="text-blue-400/70 text-xs font-medium mb-1">🎯 Tu envido:</div>
+          <div className="bg-blue-900/30 rounded-lg p-2">
+            <div className="text-2xl font-bold text-green-400 mb-1">{envido.puntos}</div>
+            <div className="text-blue-300/60 text-[10px] leading-tight">{envido.explicacion}</div>
+          </div>
+        </div>
+
+        {/* Flor */}
+        {tieneFlor && (
+          <div className="mb-3">
+            <div className="text-pink-400/70 text-xs font-medium mb-1">🌸 ¡Tenés FLOR!</div>
+            <div className="bg-pink-900/30 rounded-lg p-2 text-[10px] text-pink-300/70">
+              Las 3 cartas son del mismo palo. ¡Cantala!
+            </div>
+          </div>
+        )}
+
+        {/* Orden de cartas */}
+        <div className="mb-2">
+          <div className="text-blue-400/70 text-xs font-medium mb-1">📊 Tus cartas (de + a -):</div>
+          <div className="space-y-1">
+            {cartasOrdenadas.map((carta, idx) => (
+              <div key={idx} className="flex items-center gap-2 text-[10px] bg-blue-900/20 rounded px-2 py-1">
+                <span className="text-blue-300 font-bold">{idx + 1}.</span>
+                <span className="text-white">{carta.valor} {carta.palo}</span>
+                <span className="text-blue-400/50 ml-auto">P:{carta.poder}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Muestra */}
+        {muestra && (
+          <div className="pt-2 border-t border-blue-500/20">
+            <div className="text-yellow-400/70 text-xs font-medium mb-1">⭐ Muestra: {muestra.valor} de {muestra.palo}</div>
+            <div className="text-[10px] text-yellow-300/50">
+              Las cartas de {muestra.palo} son más fuertes (piezas)
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // Componente para responder a los perros con opciones separadas
@@ -373,6 +547,8 @@ function GamePage() {
   // Echar los Perros
   const [perrosActivos, setPerrosActivos] = useState(false);
   const [equipoPerros, setEquipoPerros] = useState<number | null>(null);
+  // Contra Flor al Resto
+  const [florPendiente, setFlorPendiente] = useState<{ equipoQueCanta: number; equipoQueResponde: number } | null>(null);
   // Bocadillos de diálogo (speech bubbles)
   const [speechBubbles, setSpeechBubbles] = useState<{
     id: string;
@@ -485,6 +661,18 @@ function GamePage() {
           setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
         });
 
+        // Respuesta parcial de truco (en equipos, cuando falta la respuesta de compañeros)
+        socketService.onTrucoRespuestaParcial((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
+          const faltanNombres = data.faltanResponder.map((id: string) =>
+            data.estado.jugadores.find((j: Jugador) => j.id === id)?.nombre || id
+          ).join(', ');
+          setMensaje(`${jugador?.nombre}: ${data.acepta ? 'Quiero' : 'No quiero'} - Esperando: ${faltanNombres}`);
+          setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
+        });
+
         socketService.onEnvidoCantado((data) => {
           if (!mounted) return;
           setMesa(data.estado);
@@ -520,6 +708,28 @@ function GamePage() {
             setEnvidoDeclaraciones([]);
             setEnvidoResultado(null);
           }
+        });
+
+        // Respuesta parcial de envido (en equipos, cuando falta la respuesta de compañeros)
+        socketService.onEnvidoRespuestaParcial((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          const faltanNombres = data.faltanResponder.map((id: string) =>
+            data.estado.jugadores.find((j: Jugador) => j.id === id)?.nombre || id
+          ).join(', ');
+          // Mostrar bocadillo de respuesta parcial
+          const bubbleId = `envido-parcial-${Date.now()}`;
+          setSpeechBubbles(prev => [...prev, {
+            id: bubbleId,
+            jugadorId: data.jugadorId,
+            tipo: data.acepta ? 'quiero' : 'no-quiero',
+            texto: data.acepta ? 'Quiero...' : 'No quiero...',
+          }]);
+          setTimeout(() => {
+            if (mounted) setSpeechBubbles(prev => prev.filter(b => b.id !== bubbleId));
+          }, 3000);
+          setMensaje(`Esperando: ${faltanNombres}`);
+          setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
         });
 
         // Envido declaration step-by-step
@@ -666,11 +876,15 @@ function GamePage() {
         socketService.onFlorResuelta((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          setFlorPendiente(null); // Limpiar flor pendiente cuando se resuelve
           setFlorResultado({
             ganador: data.resultado.ganador,
             puntosGanados: data.resultado.puntosGanados,
           });
-          setMensaje(`¡Equipo ${data.resultado.ganador} gana la FLOR!`);
+          const esContraFlor = data.resultado.esContraFlor;
+          const esConFlorEnvido = data.resultado.esConFlorEnvido;
+          const tipoMensaje = esContraFlor ? 'CONTRA FLOR AL RESTO' : esConFlorEnvido ? 'CON FLOR ENVIDO' : 'la FLOR';
+          setMensaje(`¡Equipo ${data.resultado.ganador} gana ${tipoMensaje}!`);
           setTimeout(() => {
             if (mounted) {
               setFlorResultado(null);
@@ -678,6 +892,16 @@ function GamePage() {
               setMensaje(null);
             }
           }, 4000);
+        });
+
+        // Flor pendiente - ambos equipos tienen flor, esperando respuesta
+        socketService.onFlorPendiente((data) => {
+          if (!mounted) return;
+          setMesa(data.estado);
+          setFlorPendiente({
+            equipoQueCanta: data.equipoQueCanta,
+            equipoQueResponde: data.equipoQueResponde,
+          });
         });
 
         // Tirar Reyes listener
@@ -812,7 +1036,12 @@ function GamePage() {
   const misCartas = (): Carta[] => {
     if (!mesa || !socketId) return [];
     const jugador = mesa.jugadores.find(j => j.id === socketId);
-    return jugador?.cartas.filter(c => c.valor !== 0) || [];
+    const cartas = jugador?.cartas.filter(c => c.valor !== 0) || [];
+    // Si el modo ayuda está activo, ordenar las cartas de mayor a menor poder
+    if (mesa.modoAyudaHabilitado) {
+      return ordenarCartasPorPoder(cartas);
+    }
+    return cartas;
   };
 
   const esAnfitrion = (): boolean => {
@@ -861,6 +1090,10 @@ function GamePage() {
     if (mesa.envidoYaCantado && !mesa.envidoActivo) return false;
     if (mesa.gritoActivo) return false;
     if (mesa.envidoActivo && mesa.envidoActivo.equipoQueCanta === miEquipo) return false;
+    // No se puede cantar envido si hay flor (flor mata envido)
+    if (mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0) return false;
+    // No se puede cantar si hay flor pendiente de respuesta
+    if (mesa.esperandoRespuestaFlor || florPendiente) return false;
     return true;
   };
 
@@ -972,6 +1205,16 @@ function GamePage() {
     }
   };
 
+  const handleResponderFlor = async (tipoRespuesta: 'quiero' | 'no_quiero' | 'contra_flor' | 'con_flor_envido') => {
+    setLoading(true);
+    try {
+      await socketService.responderFlor(tipoRespuesta);
+      setFlorPendiente(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleIrseAlMazo = async () => {
     setLoading(true);
     try {
@@ -1040,7 +1283,6 @@ function GamePage() {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleCancelarPerros = async () => {
     setLoading(true);
     try {
@@ -1713,9 +1955,19 @@ function GamePage() {
   // === JUEGO PRINCIPAL ===
   const cartasManoActual = mesa.cartasMesa.slice((mesa.manoActual - 1) * mesa.jugadores.length);
   const jugadorDelTurno = mesa.jugadores[mesa.turnoActual];
-  const oponentes = mesa.jugadores.filter(j => j.id !== socketId);
+
+  // === DISTRIBUCIÓN VISUAL DE JUGADORES ===
+  // Organizar jugadores según su posición en la mesa visual
+  // - Yo siempre estoy abajo (centro en 3v3)
+  // - Rivales a mis lados (izquierda y derecha)
+  // - Compañeros enfrente (arriba)
+  const rivales = mesa.jugadores.filter(j => j.id !== socketId && j.equipo !== miEquipo);
+  const companerosEquipo = mesa.jugadores.filter(j => j.id !== socketId && j.equipo === miEquipo);
+
+  // Compatibilidad: oponentes ahora solo incluye rivales (no compañeros)
+  const oponentes = rivales;
   // Teammates (same team, excluding me) - their cards are now visible from the server
-  const companeros = mesa.jugadores.filter(j => j.id !== socketId && j.equipo === miEquipo);
+  const companeros = companerosEquipo;
   // Cards that each teammate has played in the current mano
   const cartasJugadasPorJugador = (jugadorId: string) => {
     return cartasManoActual.filter(c => c.jugadorId === jugadorId).map(c => c.carta);
@@ -1734,6 +1986,23 @@ function GamePage() {
       {mensaje && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 toast px-6 py-3 rounded-xl animate-slide-down">
           <span className="text-gold-300 font-bold text-lg">{mensaje}</span>
+        </div>
+      )}
+
+      {/* Panel de ayuda para principiantes */}
+      {mesa.modoAyudaHabilitado && mesa.estado === 'jugando' && mesa.fase === 'jugando' && misCartas().length > 0 && (
+        <PanelAyuda cartas={misCartas()} muestra={mesa.muestra} />
+      )}
+
+      {/* Banner de Pico a Pico */}
+      {mesa.modoRondaActual === '1v1' && mesa.modoAlternadoHabilitado && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-40">
+          <div className="glass rounded-xl px-4 py-2 border border-yellow-500/40 bg-yellow-950/40">
+            <span className="text-yellow-300 font-bold text-sm flex items-center gap-2">
+              🐔 Pico a Pico
+              <span className="text-yellow-400/60 text-xs font-normal">(1v1 en malas)</span>
+            </span>
+          </div>
         </div>
       )}
 
@@ -2235,6 +2504,15 @@ function GamePage() {
                   <span className="text-2xl">🐕</span>
                   <span className="text-orange-300 font-bold">¡Perros echados!</span>
                   <span className="text-gold-400/70 text-sm">Esperando corte y reparto...</span>
+                  {equipoPerros === miEquipo && (
+                    <button
+                      onClick={handleCancelarPerros}
+                      disabled={loading}
+                      className="ml-2 px-3 py-1 rounded-lg text-sm font-bold bg-red-600/80 text-white hover:bg-red-500 transition-all"
+                    >
+                      Cancelar
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -2432,6 +2710,12 @@ function GamePage() {
                 </button>
                 {!mesa.envidoActivo.tipos.includes('falta_envido') && (
                   <>
+                    {/* Solo mostrar Envido si el último cantado fue Envido (para revirar envido-envido) */}
+                    {mesa.envidoActivo.tipos[mesa.envidoActivo.tipos.length - 1] === 'envido' && (
+                      <button onClick={() => handleCantarEnvido('envido')} disabled={loading} className="btn-envido text-white">
+                        Envido
+                      </button>
+                    )}
                     <button onClick={() => handleCantarEnvido('real_envido')} disabled={loading} className="btn-envido text-white">
                       Real Envido
                     </button>
@@ -2440,6 +2724,30 @@ function GamePage() {
                     </button>
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Panel de respuesta a Flor - Contra Flor al Resto */}
+          {florPendiente && miEquipo === florPendiente.equipoQueResponde && (
+            <div className="glass rounded-xl p-4 my-3 text-center border border-pink-600/40 animate-slide-up">
+              <p className="text-lg font-bold text-pink-300 mb-1">
+                🌸 El equipo rival cantó FLOR
+              </p>
+              <p className="text-sm text-pink-400/70 mb-3">¡Vos también tenés flor! ¿Qué querés hacer?</p>
+              <div className="flex justify-center gap-2 flex-wrap">
+                <button onClick={() => handleResponderFlor('quiero')} disabled={loading} className="btn-quiero text-white">
+                  ¡QUIERO! (3 pts c/flor)
+                </button>
+                <button onClick={() => handleResponderFlor('no_quiero')} disabled={loading} className="btn-no-quiero text-white">
+                  NO QUIERO
+                </button>
+                <button onClick={() => handleResponderFlor('contra_flor')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-pink-600 to-purple-600 text-white hover:from-pink-500 hover:to-purple-500 transition-all shadow-lg">
+                  🔥 CONTRA FLOR AL RESTO
+                </button>
+                <button onClick={() => handleResponderFlor('con_flor_envido')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-500 hover:to-blue-500 transition-all shadow-lg">
+                  🌸 CON FLOR ENVIDO
+                </button>
               </div>
             </div>
           )}

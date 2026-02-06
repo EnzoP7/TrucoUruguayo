@@ -65,6 +65,8 @@ export default function LobbyPage() {
   const [conectado, setConectado] = useState(false);
   const [loading, setLoading] = useState(false);
   const [tamañoSala, setTamañoSala] = useState<'1v1' | '2v2' | '3v3'>('2v2');
+  const [modoAlternado, setModoAlternado] = useState(true); // Pico a Pico - Por defecto habilitado
+  const [modoAyuda, setModoAyuda] = useState(false); // Modo ayuda para principiantes
 
   useEffect(() => {
     const savedNombre = sessionStorage.getItem('truco_nombre');
@@ -119,7 +121,7 @@ export default function LobbyPage() {
 
     setLoading(true);
     try {
-      const mesaId = await socketService.crearPartida(nombre.trim(), tamañoSala);
+      const mesaId = await socketService.crearPartida(nombre.trim(), tamañoSala, modoAlternado, modoAyuda);
       if (mesaId) {
         navigateToGame(mesaId);
       } else {
@@ -305,6 +307,54 @@ export default function LobbyPage() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Pico a Pico (solo visible para 3v3) */}
+          {tamañoSala === '3v3' && (
+            <div className="mb-6">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={modoAlternado}
+                    onChange={(e) => setModoAlternado(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-wood-800 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-gold-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold-600"></div>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-gold-300 font-medium group-hover:text-gold-200 transition-colors">
+                    🐔 Pico a Pico
+                  </span>
+                  <span className="text-gold-400/60 text-xs">
+                    En malas: alterna rondas 3v3 y 1v1 (cada uno contra su rival de enfrente)
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
+
+          {/* Modo Ayuda para principiantes */}
+          <div className="mb-6">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={modoAyuda}
+                  onChange={(e) => setModoAyuda(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-wood-800 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-gold-300 font-medium group-hover:text-gold-200 transition-colors">
+                  📚 Modo Ayuda
+                </span>
+                <span className="text-gold-400/60 text-xs">
+                  Ideal para aprender: muestra consejos, ordena cartas por valor y explica el envido
+                </span>
+              </div>
+            </label>
           </div>
 
           {/* Botón crear */}

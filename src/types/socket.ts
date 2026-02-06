@@ -6,7 +6,7 @@ export interface ClientToServerEvents {
   'join-lobby': (callback: (success: boolean, message?: string) => void) => void;
 
   // Partidas
-  'crear-partida': (data: { nombre: string; tamañoSala?: '1v1' | '2v2' | '3v3' }, callback: (success: boolean, mesaId?: string) => void) => void;
+  'crear-partida': (data: { nombre: string; tamañoSala?: '1v1' | '2v2' | '3v3'; modoAlternado?: boolean; modoAyuda?: boolean }, callback: (success: boolean, mesaId?: string) => void) => void;
   'unirse-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
   'iniciar-partida': (callback: (success: boolean, message?: string) => void) => void;
   'reconectar-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
@@ -22,6 +22,7 @@ export interface ClientToServerEvents {
   'realizar-corte': (data: { posicion: number }, callback: (success: boolean, message?: string) => void) => void;
   'declarar-envido': (data: { puntos: number; sonBuenas: boolean }, callback: (success: boolean, message?: string) => void) => void;
   'cantar-flor': (callback: (success: boolean, message?: string) => void) => void;
+  'responder-flor': (data: { tipoRespuesta: 'quiero' | 'no_quiero' | 'contra_flor' | 'con_flor_envido' }, callback: (success: boolean, message?: string) => void) => void;
   'cambiar-equipo': (data: { jugadorId: string; nuevoEquipo: number }, callback: (success: boolean, message?: string) => void) => void;
   'tirar-reyes': (callback: (success: boolean, message?: string) => void) => void;
   'configurar-puntos': (data: { puntosLimite: number }, callback: (success: boolean, message?: string) => void) => void;
@@ -36,8 +37,8 @@ export interface ClientToServerEvents {
 // Eventos del servidor al cliente
 export interface ServerToClientEvents {
   // Lobby
-  'partidas-disponibles': (partidas: Array<{ mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string; creadorNombre?: string; jugadoresNombres?: string[] }>) => void;
-  'partida-nueva': (data: { mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string; creadorNombre?: string; jugadoresNombres?: string[] }) => void;
+  'partidas-disponibles': (partidas: Array<{ mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string; creadorNombre?: string; jugadoresNombres?: string[]; modoAlternado?: boolean; modoAyuda?: boolean }>) => void;
+  'partida-nueva': (data: { mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string; creadorNombre?: string; jugadoresNombres?: string[]; modoAlternado?: boolean; modoAyuda?: boolean }) => void;
   'partida-eliminada': (data: { mesaId: string; mensaje: string }) => void;
 
   // Partidas
@@ -58,8 +59,10 @@ export interface ServerToClientEvents {
   // Cantos
   'truco-cantado': (data: { jugadorId: string; tipo: GritoTipo; estado: Mesa }) => void;
   'truco-respondido': (data: { jugadorId: string; acepta: boolean; estado: Mesa }) => void;
+  'truco-respuesta-parcial': (data: { jugadorId: string; acepta: boolean; faltanResponder: string[]; estado: Mesa }) => void;
   'envido-cantado': (data: { jugadorId: string; tipo: EnvidoTipo; estado: Mesa }) => void;
   'envido-respondido': (data: { jugadorId: string; acepta: boolean; resultado?: EnvidoResultado; estado: Mesa }) => void;
+  'envido-respuesta-parcial': (data: { jugadorId: string; acepta: boolean; faltanResponder: string[]; estado: Mesa }) => void;
   'jugador-al-mazo': (data: { jugadorId: string; equipoQueSeVa: number; estado: Mesa }) => void;
   'corte-solicitado': (data: { jugadorId: string; estado: Mesa }) => void;
   'corte-realizado': (data: { jugadorId: string; posicion: number; estado: Mesa }) => void;
@@ -68,6 +71,7 @@ export interface ServerToClientEvents {
   'envido-resuelto': (data: { resultado: EnvidoResultadoFinal; estado: Mesa }) => void;
   'flor-cantada': (data: { jugadorId: string; declaracion: FlorDeclaracion; estado: Mesa }) => void;
   'flor-resuelta': (data: { resultado: FlorResultadoFinal; estado: Mesa }) => void;
+  'flor-pendiente': (data: { equipoQueCanta: number; equipoQueResponde: number; estado: Mesa }) => void;
   'tirar-reyes-resultado': (data: { animacion: TirarReyesAnimacion[]; estado: Mesa }) => void;
   // Echar los perros
   'perros-echados': (data: { equipoQueEcha: number; estado: Mesa }) => void;

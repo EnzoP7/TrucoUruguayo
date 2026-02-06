@@ -119,10 +119,10 @@ class SocketService {
     });
   }
 
-  async crearPartida(nombre: string, tamañoSala?: '1v1' | '2v2' | '3v3'): Promise<string | null> {
+  async crearPartida(nombre: string, tamañoSala?: '1v1' | '2v2' | '3v3', modoAlternado?: boolean, modoAyuda?: boolean): Promise<string | null> {
     if (!this.socket) return null;
     return new Promise((resolve) => {
-      this.socket!.emit('crear-partida', { nombre, tamañoSala }, (success, mesaId) => {
+      this.socket!.emit('crear-partida', { nombre, tamañoSala, modoAlternado, modoAyuda }, (success, mesaId) => {
         resolve(success ? mesaId || null : null);
       });
     });
@@ -222,6 +222,13 @@ class SocketService {
     if (!this.socket) return false;
     return new Promise((resolve) => {
       this.socket!.emit('cantar-flor', (success) => resolve(success));
+    });
+  }
+
+  async responderFlor(tipoRespuesta: 'quiero' | 'no_quiero' | 'contra_flor' | 'con_flor_envido'): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('responder-flor', { tipoRespuesta }, (success) => resolve(success));
     });
   }
 
@@ -333,12 +340,20 @@ class SocketService {
     this.socket?.on('truco-respondido', callback);
   }
 
+  onTrucoRespuestaParcial(callback: (data: any) => void): void {
+    this.socket?.on('truco-respuesta-parcial', callback);
+  }
+
   onEnvidoCantado(callback: (data: any) => void): void {
     this.socket?.on('envido-cantado', callback);
   }
 
   onEnvidoRespondido(callback: (data: any) => void): void {
     this.socket?.on('envido-respondido', callback);
+  }
+
+  onEnvidoRespuestaParcial(callback: (data: any) => void): void {
+    this.socket?.on('envido-respuesta-parcial', callback);
   }
 
   onManoFinalizada(callback: (data: any) => void): void {
@@ -385,6 +400,10 @@ class SocketService {
     this.socket?.on('flor-resuelta', callback);
   }
 
+  onFlorPendiente(callback: (data: { equipoQueCanta: number; equipoQueResponde: number; estado: any }) => void): void {
+    this.socket?.on('flor-pendiente', callback);
+  }
+
   onTirarReyesResultado(callback: (data: any) => void): void {
     this.socket?.on('tirar-reyes-resultado', callback);
   }
@@ -420,8 +439,8 @@ class SocketService {
       'unido-partida', 'jugador-unido', 'partida-iniciada', 'reconectado',
       'estado-actualizado', 'carta-jugada', 'mano-finalizada',
       'ronda-finalizada', 'juego-finalizado',
-      'truco-cantado', 'truco-respondido',
-      'envido-cantado', 'envido-respondido', 'jugador-al-mazo',
+      'truco-cantado', 'truco-respondido', 'truco-respuesta-parcial',
+      'envido-cantado', 'envido-respondido', 'envido-respuesta-parcial', 'jugador-al-mazo',
       'corte-solicitado', 'corte-realizado', 'carta-repartida',
       'envido-declarado', 'envido-resuelto',
       'flor-cantada', 'flor-resuelta',
