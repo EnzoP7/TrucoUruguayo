@@ -187,41 +187,49 @@ function PerrosResponseModal({ tengoFlor, loading, onResponder, misCartas, muest
         {/* Muestra y Cartas del jugador */}
         <div className="mb-4 p-3 bg-black/30 rounded-xl border border-gold-700/30">
           {/* Muestra */}
-          {muestra && (
+          {muestra && muestra.valor !== 0 && (
             <div className="flex items-center justify-center gap-2 mb-3">
               <span className="text-gold-400/70 text-xs font-medium">Muestra:</span>
               <div className="relative">
                 <img
-                  src={`/Cartasimg/${muestra.valor}-${muestra.palo}.png`}
+                  src={`/Cartasimg/${muestra.valor.toString().padStart(2, '0')}-${muestra.palo === 'oro' ? 'oros' : muestra.palo === 'copa' ? 'copas' : muestra.palo === 'espada' ? 'espadas' : muestra.palo === 'basto' ? 'bastos' : muestra.palo}.png`}
                   alt={`${muestra.valor} de ${muestra.palo}`}
-                  className="w-12 h-16 rounded shadow-lg ring-2 ring-yellow-500/60"
+                  className="w-10 h-[3.75rem] sm:w-14 sm:h-[5.25rem] rounded shadow-lg ring-2 ring-yellow-500/60"
                 />
               </div>
             </div>
           )}
 
           {/* Mis cartas */}
-          <div className="flex items-center justify-center gap-1">
-            <span className="text-gold-400/70 text-xs font-medium mr-2">Tus cartas:</span>
-            <div className="flex gap-2">
-              {misCartas.map((carta, idx) => (
-                <div key={idx} className="relative">
-                  <img
-                    src={`/Cartasimg/${carta.valor}-${carta.palo}.png`}
-                    alt={`${carta.valor} de ${carta.palo}`}
-                    className={`w-14 h-20 rounded shadow-lg transition-all ${
-                      muestra && carta.palo === muestra.palo
-                        ? 'ring-2 ring-yellow-400/70'
-                        : ''
-                    }`}
-                  />
-                  {muestra && carta.palo === muestra.palo && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
-                      <span className="text-[8px]">⭐</span>
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-gold-400/70 text-xs font-medium">Tus cartas:</span>
+            <div className="flex gap-2 sm:gap-3 justify-center">
+              {misCartas.filter(c => c.valor !== 0).length > 0 ? (
+                misCartas.filter(c => c.valor !== 0).map((carta, idx) => {
+                  const paloStr = carta.palo === 'oro' ? 'oros' : carta.palo === 'copa' ? 'copas' : carta.palo === 'espada' ? 'espadas' : carta.palo === 'basto' ? 'bastos' : carta.palo;
+                  const valorStr = carta.valor.toString().padStart(2, '0');
+                  return (
+                    <div key={idx} className="relative">
+                      <img
+                        src={`/Cartasimg/${valorStr}-${paloStr}.png`}
+                        alt={`${carta.valor} de ${carta.palo}`}
+                        className={`w-12 h-[4.5rem] sm:w-16 sm:h-24 rounded shadow-lg transition-all ${
+                          muestra && carta.palo === muestra.palo
+                            ? 'ring-2 ring-yellow-400/70'
+                            : ''
+                        }`}
+                      />
+                      {muestra && carta.palo === muestra.palo && (
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                          <span className="text-[8px]">⭐</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
+                  );
+                })
+              ) : (
+                <span className="text-gold-500/50 text-sm italic">Cargando cartas...</span>
+              )}
             </div>
           </div>
         </div>
@@ -1091,35 +1099,53 @@ function GamePage() {
       onCorte(posicion);
     };
 
-    // Tamaños diferentes según si es tu turno o no
-    const cardWidth = esMiTurnoCorte ? 'w-12 h-20 sm:w-16 sm:h-24' : 'w-6 h-10 sm:w-8 sm:h-12';
-    const containerWidth = esMiTurnoCorte ? '700px' : '500px';
-    const containerHeight = esMiTurnoCorte ? '220px' : '140px';
-    const spreadMultiplier = esMiTurnoCorte ? 15 : 11;
-    const arcMultiplier = esMiTurnoCorte ? 20 : 12;
+    // Tamaños responsive para mobile/tablet/desktop
+    // En mobile: cartas más pequeñas y menos spread
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    const isTablet = typeof window !== 'undefined' && window.innerWidth >= 640 && window.innerWidth < 1024;
+
+    const cardWidth = esMiTurnoCorte
+      ? 'w-6 h-10 sm:w-10 sm:h-16 lg:w-14 lg:h-22'
+      : 'w-4 h-6 sm:w-6 sm:h-10';
+
+    // Contenedor responsive - más pequeño en mobile
+    const containerClasses = esMiTurnoCorte
+      ? 'w-[95vw] sm:w-[85vw] lg:w-[700px] h-[140px] sm:h-[180px] lg:h-[220px]'
+      : 'w-[80vw] sm:w-[400px] h-[100px] sm:h-[140px]';
+
+    // Spread y arco responsive
+    const getSpreadMultiplier = () => {
+      if (!esMiTurnoCorte) return isMobile ? 5 : isTablet ? 8 : 11;
+      return isMobile ? 5 : isTablet ? 10 : 15;
+    };
+    const getArcMultiplier = () => {
+      if (!esMiTurnoCorte) return isMobile ? 6 : isTablet ? 9 : 12;
+      return isMobile ? 10 : isTablet ? 15 : 20;
+    };
+
+    const spreadMultiplier = getSpreadMultiplier();
+    const arcMultiplier = getArcMultiplier();
 
     return (
       <div className={`flex flex-col items-center z-30 transition-all duration-500 ${
         esMiTurnoCorte ? 'scale-100' : 'scale-90 opacity-70'
       }`}>
-        <div className={`font-bold mb-4 uppercase tracking-wider ${
+        <div className={`font-bold mb-2 sm:mb-4 uppercase tracking-wider ${
           esMiTurnoCorte
-            ? 'text-xl sm:text-2xl text-gold-400 animate-pulse drop-shadow-lg'
-            : 'text-sm sm:text-base text-gold-500/60'
+            ? 'text-base sm:text-xl lg:text-2xl text-gold-400 animate-pulse drop-shadow-lg'
+            : 'text-xs sm:text-sm lg:text-base text-gold-500/60'
         }`}>
           {esMiTurnoCorte ? '¡CORTÁ EL MAZO!' : 'Esperando corte...'}
         </div>
 
         {esMiTurnoCorte && !cutAnimating && (
-          <div className="mb-4 text-gold-300/80 text-sm sm:text-base font-medium animate-bounce">
-            👇 Hacé click en una carta para cortar 👇
+          <div className="mb-2 sm:mb-4 text-gold-300/80 text-xs sm:text-sm lg:text-base font-medium animate-bounce">
+            👇 Tocá una carta para cortar 👇
           </div>
         )}
 
-        {/* Abanico horizontal de 40 cartas */}
-        <div className={`relative ${cutAnimating ? '' : 'deck-shuffle-anim'}`}
-          style={{ width: containerWidth, height: containerHeight }}
-        >
+        {/* Abanico horizontal de 40 cartas - responsive */}
+        <div className={`relative ${cutAnimating ? '' : 'deck-shuffle-anim'} ${containerClasses}`}>
           {Array.from({ length: TOTAL_CARTAS }).map((_, i) => {
             const isLeftPart = cutPosition !== null && i <= cutPosition;
             const isRightPart = cutPosition !== null && i > cutPosition;
@@ -1140,25 +1166,25 @@ function GamePage() {
                   zIndex: i + 1,
                   transform: cutAnimating
                     ? isLeftPart
-                      ? `translateX(calc(-50% + ${spreadX - 80}px)) translateY(${-arcY - 60}px) rotate(${-15}deg)`
+                      ? `translateX(calc(-50% + ${spreadX - 40}px)) translateY(${-arcY - 30}px) rotate(${-15}deg)`
                       : isRightPart
-                        ? `translateX(calc(-50% + ${spreadX + 80}px)) translateY(${-arcY}px) rotate(${12}deg)`
+                        ? `translateX(calc(-50% + ${spreadX + 40}px)) translateY(${-arcY}px) rotate(${12}deg)`
                         : `translateX(calc(-50% + ${spreadX}px)) translateY(${-arcY}px)`
                     : `translateX(calc(-50% + ${spreadX}px)) translateY(${-arcY}px)`,
                 }}
               >
                 <div
-                  className={`${cardWidth} card-back rounded-lg transition-all duration-200 border ${
+                  className={`${cardWidth} card-back rounded transition-all duration-200 border ${
                     esMiTurnoCorte
                       ? 'border-gold-600/70 shadow-lg shadow-gold-500/20'
                       : 'border-amber-900/50'
                   } ${esMiTurnoCorte && !cutAnimating
-                      ? 'group-hover:-translate-y-6 group-hover:shadow-xl group-hover:shadow-gold-500/50 group-hover:scale-125 group-hover:z-50 group-hover:border-gold-400'
+                      ? 'group-hover:-translate-y-4 sm:group-hover:-translate-y-6 group-hover:shadow-xl group-hover:shadow-gold-500/50 group-hover:scale-110 sm:group-hover:scale-125 group-hover:z-50 group-hover:border-gold-400'
                       : ''
                   }`}
                   style={{
                     boxShadow: esMiTurnoCorte
-                      ? `2px 4px 10px rgba(0,0,0,0.5), 0 0 15px rgba(202, 138, 4, 0.2)`
+                      ? `1px 2px 6px rgba(0,0,0,0.5), 0 0 10px rgba(202, 138, 4, 0.2)`
                       : `1px 2px 4px rgba(0,0,0,0.4)`,
                   }}
                 />
@@ -1168,13 +1194,13 @@ function GamePage() {
         </div>
 
         {esMiTurnoCorte && !cutAnimating && (
-          <div className="mt-4 text-sm text-gold-400/70 font-medium">
-            Posición 1-40 • Tu elección determina la muestra
+          <div className="mt-2 sm:mt-4 text-xs sm:text-sm text-gold-400/70 font-medium">
+            Posición 1-40
           </div>
         )}
 
         {cutAnimating && cutPosition !== null && (
-          <div className="mt-4 text-lg text-gold-400 font-bold animate-pulse">
+          <div className="mt-2 sm:mt-4 text-sm sm:text-lg text-gold-400 font-bold animate-pulse">
             ✂️ Cortando en posición {cutPosition + 1}...
           </div>
         )}
@@ -1191,10 +1217,11 @@ function GamePage() {
     showGlow?: boolean;
   }) => {
     const isOculta = carta.valor === 0;
+    // Tamaños responsive: mobile / tablet / desktop
     const sizeClasses = {
-      small: 'w-12 h-[4.5rem] sm:w-14 sm:h-20',
-      normal: 'w-16 h-24 sm:w-20 sm:h-[7.5rem]',
-      large: 'w-20 h-[7.5rem] sm:w-24 sm:h-36',
+      small: 'w-8 h-12 sm:w-12 sm:h-[4.5rem] lg:w-14 lg:h-20',
+      normal: 'w-12 h-[4.5rem] sm:w-16 sm:h-24 lg:w-20 lg:h-[7.5rem]',
+      large: 'w-14 h-[5.25rem] sm:w-20 sm:h-[7.5rem] lg:w-24 lg:h-36',
     };
 
     if (isOculta) {
@@ -1693,6 +1720,8 @@ function GamePage() {
   const cartasJugadasPorJugador = (jugadorId: string) => {
     return cartasManoActual.filter(c => c.jugadorId === jugadorId).map(c => c.carta);
   };
+  // Check if I already played a card in this mano
+  const yaJugueEnEstaMano = cartasManoActual.some(c => c.jugadorId === socketId);
 
   return (
     <div className="min-h-screen bg-table-wood p-2 sm:p-4 overflow-hidden">
@@ -1750,24 +1779,70 @@ function GamePage() {
         </div>
       )}
 
-      {/* Anuncio de FLOR */}
+      {/* Anuncio de FLOR - Banner flotante menos invasivo */}
       {florAnuncio && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 pointer-events-none">
-          <div className="flor-announcement flor-glow rounded-2xl px-10 py-6 text-center">
-            <div className="text-5xl mb-2">🌸</div>
-            <div className="text-3xl font-bold text-white drop-shadow-lg mb-2">¡FLOR!</div>
-            <div className="text-xl text-pink-100 font-medium">{florAnuncio.jugadorNombre}</div>
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-bounce-in">
+          <div className="bg-gradient-to-r from-pink-600/90 to-pink-500/90 backdrop-blur-md rounded-xl px-6 py-3 shadow-lg shadow-pink-500/30 border border-pink-400/40">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🌸</span>
+              <div>
+                <div className="text-lg font-bold text-white">¡FLOR!</div>
+                <div className="text-sm text-pink-100">{florAnuncio.jugadorNombre}</div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Resultado de FLOR */}
+      {/* Resultado de FLOR - Banner flotante */}
       {florResultado && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 pointer-events-none">
-          <div className="glass-gold rounded-2xl px-10 py-6 text-center animate-slide-up">
-            <div className="text-4xl mb-2">🏆🌸</div>
-            <div className="text-2xl font-bold text-gold-300 mb-2">
-              ¡Equipo {florResultado.ganador} gana la FLOR!
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-bounce-in">
+          <div className="bg-gradient-to-r from-pink-700/90 to-purple-600/90 backdrop-blur-md rounded-xl px-6 py-3 shadow-lg shadow-pink-500/30 border border-pink-400/40">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🏆🌸</span>
+              <div className="text-lg font-bold text-white">
+                ¡Equipo {florResultado.ganador} gana +{florResultado.puntosGanados}!
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Declaraciones de Envido - Banner flotante (no bloqueante) */}
+      {envidoDeclaraciones.length > 0 && !envidoResultado && (
+        <div className="fixed top-20 right-4 z-30 pointer-events-none animate-slide-down">
+          <div className="bg-gradient-to-br from-purple-800/90 to-purple-900/90 backdrop-blur-md rounded-xl px-4 py-3 shadow-lg shadow-purple-500/20 border border-purple-500/40 max-w-xs">
+            <div className="text-sm font-bold text-purple-300 mb-2 flex items-center gap-2">
+              <span>🎯</span> Declarando Envido
+            </div>
+            <div className="space-y-1">
+              {envidoDeclaraciones.slice(-3).map((decl, i) => (
+                <div key={i} className={`text-xs py-1 px-2 rounded ${
+                  decl.equipo === 1 ? 'bg-blue-900/40 text-blue-200' : 'bg-red-900/40 text-red-200'
+                }`}>
+                  <span className="font-medium">{decl.jugadorNombre}:</span>
+                  <span className="ml-1 text-white">
+                    {decl.sonBuenas ? '"Son buenas..."' : `"${decl.puntos}"`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resultado del Envido - Banner flotante */}
+      {envidoResultado && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-bounce-in">
+          <div className="bg-gradient-to-r from-green-700/90 to-emerald-600/90 backdrop-blur-md rounded-xl px-6 py-3 shadow-lg shadow-green-500/30 border border-green-400/40">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🏆🎯</span>
+              <div>
+                <div className="text-lg font-bold text-white">
+                  ¡Equipo {envidoResultado.ganador} gana el envido!
+                </div>
+                <div className="text-sm text-green-200">+{envidoResultado.puntosGanados} puntos</div>
+              </div>
             </div>
           </div>
         </div>
@@ -1946,7 +2021,7 @@ function GamePage() {
                       bubble.tipo === 'quiero' ? 'speech-bubble-quiero' :
                       bubble.tipo === 'no-quiero' ? 'speech-bubble-no-quiero' : ''
                     }`}>
-                      {bubble.puntos !== undefined ? (
+                      {bubble.puntos !== undefined && bubble.puntos !== null && bubble.tipo !== 'flor' ? (
                         <span className="bubble-number text-2xl font-bold">{bubble.puntos}</span>
                       ) : (
                         <span className="font-bold text-sm whitespace-nowrap">{bubble.texto}</span>
@@ -1975,23 +2050,23 @@ function GamePage() {
             <div className="lampara-glow" />
             <div className="pulperia-light rounded-[2rem] sm:rounded-[3rem]" />
 
-            {/* Muestra y Mazo - en el centro de la mesa */}
+            {/* Muestra y Mazo - en el centro de la mesa (tamaño reducido en mobile) */}
             {mesa.muestra && mesa.fase !== 'cortando' && (
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-5 flex flex-row items-center gap-4">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-5 flex flex-row items-center gap-2 sm:gap-4">
                 {/* Mazo (dorso) - a la izquierda */}
                 <div className="flex flex-col items-center">
-                  <div className="text-[10px] sm:text-xs text-gold-400/40 font-medium mb-1.5 uppercase tracking-wider">Mazo</div>
+                  <div className="text-[8px] sm:text-[10px] lg:text-xs text-gold-400/40 font-medium mb-1 uppercase tracking-wider">Mazo</div>
                   <div className="relative">
-                    <div className="w-20 h-[7.5rem] sm:w-24 sm:h-36 card-back rounded-lg shadow-lg" />
+                    <div className="w-10 h-[3.75rem] sm:w-16 sm:h-24 lg:w-20 lg:h-[7.5rem] card-back rounded-lg shadow-lg" />
                   </div>
                 </div>
-                {/* Muestra - a la derecha (más cerca del jugador mano) */}
+                {/* Muestra - a la derecha */}
                 <div className="flex flex-col items-center">
-                  <div className="text-[10px] sm:text-xs text-gold-400/60 font-medium mb-1.5 uppercase tracking-wider">Muestra</div>
+                  <div className="text-[8px] sm:text-[10px] lg:text-xs text-gold-400/60 font-medium mb-1 uppercase tracking-wider">Muestra</div>
                   <div className="relative muestra-highlight">
-                    <div className="absolute -inset-3 bg-gold-500/30 rounded-xl blur-lg animate-pulse" />
-                    <div className="absolute -inset-1.5 border-2 border-gold-400/40 rounded-lg" />
-                    <CartaImg carta={mesa.muestra} size="large" />
+                    <div className="absolute -inset-2 sm:-inset-3 bg-gold-500/30 rounded-xl blur-lg animate-pulse" />
+                    <div className="absolute -inset-1 sm:-inset-1.5 border-2 border-gold-400/40 rounded-lg" />
+                    <CartaImg carta={mesa.muestra} size="normal" />
                   </div>
                 </div>
               </div>
@@ -2178,38 +2253,114 @@ function GamePage() {
                   const realIndex = inicio + i;
                   const esCartaGanadora = mesa.cartaGanadoraMano &&
                     mesa.cartaGanadoraMano.indexEnMesa === realIndex &&
-                    cartasManoActual.length === mesa.jugadores.length; // Only highlight when all cards are played
+                    cartasManoActual.length === mesa.jugadores.length;
 
-                  // Calcular posición basada en el índice del jugador
-                  // Mi jugador está abajo, oponentes arriba distribuidos
+                  // Calcular posición basada en la posición del jugador en la mesa
+                  // La mesa tiene: yo abajo, oponentes arriba (y a los costados en 4/6 jugadores)
                   let posicionStyle: React.CSSProperties = {};
+                  const numJugadores = mesa.jugadores.length;
 
                   if (esMiCarta) {
-                    // Mi carta: abajo centro, un poco arriba del área de mis cartas
+                    // Mi carta: abajo, debajo del mazo (entre el mazo y mis cartas)
                     posicionStyle = {
                       position: 'absolute',
-                      bottom: '15%',
+                      bottom: '18%',
                       left: '50%',
                       transform: 'translateX(-50%)',
                       zIndex: esCartaGanadora ? 50 : 15 + i,
                     };
                   } else {
-                    // Cartas de oponentes: arriba, distribuidas horizontalmente
-                    const oponentesOrdenados = mesa.jugadores.filter(j => j.id !== socketId);
-                    const oponenteIndex = oponentesOrdenados.findIndex(j => j.id === jugada.jugadorId);
-                    const numOponentes = oponentesOrdenados.length;
+                    // Cartas de oponentes - calcular su posición relativa
+                    const miIndex = mesa.jugadores.findIndex(j => j.id === socketId);
+                    const jugadorIndex = mesa.jugadores.findIndex(j => j.id === jugada.jugadorId);
 
-                    // Distribuir horizontalmente en la parte superior-media de la mesa
-                    const espaciado = 100 / (numOponentes + 1);
-                    const posX = espaciado * (oponenteIndex + 1);
+                    // Calcular posición relativa (cuántos puestos después de mí)
+                    const posicionRelativa = (jugadorIndex - miIndex + numJugadores) % numJugadores;
 
-                    posicionStyle = {
-                      position: 'absolute',
-                      top: '20%',
-                      left: `${posX}%`,
-                      transform: 'translateX(-50%)',
-                      zIndex: esCartaGanadora ? 50 : 15 + i,
-                    };
+                    if (numJugadores === 2) {
+                      // 1v1: oponente está enfrente (arriba)
+                      posicionStyle = {
+                        position: 'absolute',
+                        top: '18%',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: esCartaGanadora ? 50 : 15 + i,
+                      };
+                    } else if (numJugadores === 4) {
+                      // 2v2: yo abajo, compañero arriba, oponentes a los costados
+                      if (posicionRelativa === 1) {
+                        // Oponente a mi izquierda
+                        posicionStyle = {
+                          position: 'absolute',
+                          top: '50%',
+                          left: '12%',
+                          transform: 'translateY(-50%)',
+                          zIndex: esCartaGanadora ? 50 : 15 + i,
+                        };
+                      } else if (posicionRelativa === 2) {
+                        // Compañero enfrente (arriba)
+                        posicionStyle = {
+                          position: 'absolute',
+                          top: '18%',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          zIndex: esCartaGanadora ? 50 : 15 + i,
+                        };
+                      } else if (posicionRelativa === 3) {
+                        // Oponente a mi derecha
+                        posicionStyle = {
+                          position: 'absolute',
+                          top: '50%',
+                          right: '12%',
+                          transform: 'translateY(-50%)',
+                          zIndex: esCartaGanadora ? 50 : 15 + i,
+                        };
+                      }
+                    } else if (numJugadores === 6) {
+                      // 3v3: distribuir en círculo
+                      if (posicionRelativa === 1) {
+                        // Oponente a mi izquierda abajo
+                        posicionStyle = {
+                          position: 'absolute',
+                          bottom: '30%',
+                          left: '10%',
+                          zIndex: esCartaGanadora ? 50 : 15 + i,
+                        };
+                      } else if (posicionRelativa === 2) {
+                        // Oponente a mi izquierda arriba
+                        posicionStyle = {
+                          position: 'absolute',
+                          top: '30%',
+                          left: '10%',
+                          zIndex: esCartaGanadora ? 50 : 15 + i,
+                        };
+                      } else if (posicionRelativa === 3) {
+                        // Compañero enfrente (arriba centro)
+                        posicionStyle = {
+                          position: 'absolute',
+                          top: '18%',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          zIndex: esCartaGanadora ? 50 : 15 + i,
+                        };
+                      } else if (posicionRelativa === 4) {
+                        // Oponente a mi derecha arriba
+                        posicionStyle = {
+                          position: 'absolute',
+                          top: '30%',
+                          right: '10%',
+                          zIndex: esCartaGanadora ? 50 : 15 + i,
+                        };
+                      } else if (posicionRelativa === 5) {
+                        // Oponente a mi derecha abajo
+                        posicionStyle = {
+                          position: 'absolute',
+                          bottom: '30%',
+                          right: '10%',
+                          zIndex: esCartaGanadora ? 50 : 15 + i,
+                        };
+                      }
+                    }
                   }
 
                   return (
@@ -2218,8 +2369,8 @@ function GamePage() {
                       className={`text-center card-played-anim ${esCartaGanadora ? 'card-winner card-winner-glow' : ''}`}
                       style={{ ...posicionStyle, animationDelay: `${i * 0.1}s` }}
                     >
-                      <CartaImg carta={jugada.carta} size="large" showGlow={!!esCartaGanadora} />
-                      <div className={`text-xs mt-1 font-medium ${esCartaGanadora ? 'text-yellow-400 font-bold' : esEquipo1 ? 'text-blue-300' : 'text-red-300'}`}>
+                      <CartaImg carta={jugada.carta} size="normal" showGlow={!!esCartaGanadora} />
+                      <div className={`text-[10px] sm:text-xs mt-1 font-medium ${esCartaGanadora ? 'text-yellow-400 font-bold' : esEquipo1 ? 'text-blue-300' : 'text-red-300'}`}>
                         {jugador?.nombre}
                         {esCartaGanadora && ' 🏆'}
                       </div>
@@ -2293,53 +2444,17 @@ function GamePage() {
             </div>
           )}
 
-          {/* Panel de declaración automática de Envido */}
-          {envidoDeclaraciones.length > 0 && !envidoResultado && (
-            <div className="glass rounded-xl p-4 my-3 border border-purple-600/40 animate-slide-up">
-              <p className="text-lg font-bold text-purple-300 mb-3 text-center">
-                Declarando Envido
-              </p>
-              <div className="space-y-2">
-                {envidoDeclaraciones.map((decl, i) => (
-                  <div key={i} className={`text-center py-2 px-4 rounded-lg animate-slide-up ${
-                    decl.equipo === 1 ? 'bg-blue-900/30' : 'bg-red-900/30'
-                  }`}>
-                    <span className={`font-medium ${decl.equipo === 1 ? 'text-blue-300' : 'text-red-300'}`}>
-                      {decl.jugadorNombre}:
-                    </span>
-                    <span className="text-white ml-2">
-                      {decl.sonBuenas ? '"Son buenas..."' : `"Tengo ${decl.puntos}"`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Resultado del Envido */}
-          {envidoResultado && (
-            <div className="glass rounded-xl p-4 my-3 border border-green-600/40 animate-slide-up">
-              <p className="text-lg font-bold text-green-300 mb-2 text-center">
-                ¡Equipo {envidoResultado.ganador} gana el envido!
-              </p>
-              <p className="text-center text-green-200">+{envidoResultado.puntosGanados} puntos</p>
-              {envidoResultado.mejorPuntaje !== null && (
-                <p className="text-center text-green-400/70 text-sm mt-1">
-                  Mejor puntaje: {envidoResultado.mejorPuntaje}
-                </p>
-              )}
-            </div>
-          )}
+          {/* Las declaraciones de envido ahora se muestran como banner flotante arriba */}
 
           {/* Modal de Envido Cargado */}
           {mostrarEnvidoCargado && (
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
               <div className="glass rounded-2xl p-6 max-w-sm w-full border border-purple-600/50 animate-slide-up">
-                <h3 className="text-xl font-bold text-purple-300 text-center mb-4">
-                  Cargar Envido
+                <h3 className="text-xl font-bold text-purple-300 text-center mb-2">
+                  🎯 Envido Cargado
                 </h3>
                 <p className="text-gold-400/70 text-sm text-center mb-4">
-                  Elegí cuántos puntos querés cargar
+                  ¿Cuántos puntos querés apostar?
                 </p>
 
                 <div className="flex items-center justify-center gap-4 mb-6">
@@ -2389,7 +2504,7 @@ function GamePage() {
                     disabled={loading}
                     className="flex-1 py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 text-white hover:from-purple-500 hover:to-purple-400 transition-all disabled:opacity-50"
                   >
-                    ¡Cargar {puntosEnvidoCargado}!
+                    ¡Apostar {puntosEnvidoCargado} puntos!
                   </button>
                 </div>
               </div>
@@ -2409,7 +2524,7 @@ function GamePage() {
                   bubble.tipo === 'quiero' ? 'speech-bubble-quiero' :
                   bubble.tipo === 'no-quiero' ? 'speech-bubble-no-quiero' : ''
                 }`}>
-                  {bubble.puntos !== undefined ? (
+                  {bubble.puntos !== undefined && bubble.puntos !== null && bubble.tipo !== 'flor' ? (
                     <span className="bubble-number text-2xl font-bold">{bubble.puntos}</span>
                   ) : (
                     <span className="font-bold text-sm whitespace-nowrap">{bubble.texto}</span>
@@ -2469,9 +2584,10 @@ function GamePage() {
                       onClick={() => setMostrarEnvidoCargado(true)}
                       disabled={loading || !esMiTurno()}
                       className={`btn-envido text-white text-xs sm:text-sm bg-gradient-to-r from-purple-700 to-purple-600 hover:from-purple-600 hover:to-purple-500 ${!esMiTurno() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      title={!esMiTurno() ? 'Esperá tu turno' : 'Cargar puntos de envido'}
+                      title={!esMiTurno() ? 'Esperá tu turno' : 'Envido Cargado - Elegí cuántos puntos apostar'}
                     >
-                      +Cargar
+                      <span className="hidden sm:inline">Envido Cargado</span>
+                      <span className="sm:hidden">E. Cargado</span>
                     </button>
                   </>
                 )}
@@ -2516,17 +2632,26 @@ function GamePage() {
             {/* Mis cartas */}
             <div className="flex justify-center gap-2 sm:gap-4">
               {misCartas().map((carta, index) => (
-                <CartaImg
+                <div
                   key={`${carta.palo}-${carta.valor}-${index}`}
-                  carta={carta}
-                  size="large"
-                  onClick={esMiTurno() ? () => handleJugarCarta(carta) : undefined}
-                  disabled={!esMiTurno() || loading}
-                  showGlow={esMiTurno()}
-                />
+                  className={`transition-all duration-300 ${yaJugueEnEstaMano ? 'opacity-40 grayscale scale-95' : ''}`}
+                >
+                  <CartaImg
+                    carta={carta}
+                    size="large"
+                    onClick={esMiTurno() && !yaJugueEnEstaMano ? () => handleJugarCarta(carta) : undefined}
+                    disabled={!esMiTurno() || loading || yaJugueEnEstaMano}
+                    showGlow={esMiTurno() && !yaJugueEnEstaMano}
+                  />
+                </div>
               ))}
               {misCartas().length === 0 && mesa.estado === 'jugando' && (
                 <div className="text-gold-500/40 text-sm py-8">Sin cartas</div>
+              )}
+              {yaJugueEnEstaMano && misCartas().length > 0 && (
+                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-gold-500/60 whitespace-nowrap">
+                  Esperando a los demás...
+                </div>
               )}
             </div>
           </div>

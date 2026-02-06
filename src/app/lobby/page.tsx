@@ -10,6 +10,26 @@ interface Partida {
   maxJugadores: number;
   tamañoSala: '1v1' | '2v2' | '3v3';
   estado: string;
+  creadorNombre?: string;
+  jugadoresNombres?: string[];
+}
+
+// Icono de basura/eliminar
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
+// Icono de reconexión
+function ReconnectIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
 }
 
 // Icono de usuarios
@@ -133,6 +153,68 @@ export default function LobbyPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReconectarPartida = async (mesaId: string) => {
+    if (!nombre.trim()) {
+      alert('Por favor ingresa tu nombre');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const success = await socketService.reconectarPartida(mesaId, nombre.trim());
+      if (success) {
+        navigateToGame(mesaId);
+      } else {
+        // Si falla reconectar, intentar unirse normal
+        const joinSuccess = await socketService.unirsePartida(mesaId, nombre.trim());
+        if (joinSuccess) {
+          navigateToGame(mesaId);
+        } else {
+          alert('Error al reconectar a la partida');
+        }
+      }
+    } catch (error) {
+      console.error('Error reconnecting:', error);
+      alert('Error al reconectar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEliminarPartida = async (mesaId: string) => {
+    if (!confirm('¿Estás seguro de que querés eliminar esta partida?')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const success = await socketService.eliminarPartida(mesaId, nombre.trim());
+      if (success) {
+        // La partida se eliminará y el lobby se actualizará automáticamente
+        setPartidas(prev => prev.filter(p => p.mesaId !== mesaId));
+      } else {
+        alert('Error al eliminar la partida');
+      }
+    } catch (error) {
+      console.error('Error deleting game:', error);
+      alert('Error al eliminar la partida');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Verificar si el usuario actual es parte de una partida (por nombre)
+  const esJugadorEnPartida = (partida: Partida): boolean => {
+    if (!nombre.trim()) return false;
+    return partida.jugadoresNombres?.includes(nombre.trim()) || false;
+  };
+
+  // Verificar si el usuario es el creador
+  const esCreador = (partida: Partida): boolean => {
+    if (!nombre.trim()) return false;
+    return partida.creadorNombre === nombre.trim();
   };
 
   // Pantalla de carga
@@ -278,21 +360,26 @@ export default function LobbyPage() {
               {partidas.map((partida, index) => {
                 const estaEsperando = partida.estado === 'esperando';
                 const puedeUnirse = estaEsperando && partida.jugadores < partida.maxJugadores;
+                const soyJugador = esJugadorEnPartida(partida);
+                const soyCreador = esCreador(partida);
+                const puedeReconectar = soyJugador && estaEsperando;
 
                 return (
                   <div
                     key={partida.mesaId}
                     className={`glass rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 border ${
-                      puedeUnirse
-                        ? 'border-green-600/30 hover:border-green-500/50 hover:bg-green-900/10'
-                        : 'border-gold-800/20 opacity-60'
+                      soyJugador
+                        ? 'border-blue-500/50 bg-blue-900/10'
+                        : puedeUnirse
+                          ? 'border-green-600/30 hover:border-green-500/50 hover:bg-green-900/10'
+                          : 'border-gold-800/20 opacity-60'
                     } animate-slide-up`}
                     style={{ animationDelay: `${0.05 * index}s` }}
                   >
                     <div className="flex items-center gap-4">
                       {/* Icono de mesa */}
                       <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
-                        puedeUnirse ? 'bg-green-600/20' : 'bg-gold-600/10'
+                        soyJugador ? 'bg-blue-600/20' : puedeUnirse ? 'bg-green-600/20' : 'bg-gold-600/10'
                       }`}>
                         <span className="text-2xl font-bold text-gold-400">
                           {partida.mesaId.split('_')[1]?.slice(0, 2) || '#'}
@@ -300,9 +387,28 @@ export default function LobbyPage() {
                       </div>
 
                       <div>
-                        <h3 className="font-bold text-lg text-white mb-1">
-                          Mesa {partida.mesaId.split('_')[1]?.slice(0, 6) || partida.mesaId.slice(0, 6)}
-                        </h3>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-lg text-white">
+                            Mesa {partida.mesaId.split('_')[1]?.slice(0, 6) || partida.mesaId.slice(0, 6)}
+                          </h3>
+                          {soyCreador && (
+                            <span className="px-2 py-0.5 bg-purple-600/30 text-purple-300 rounded-full text-[10px] font-bold uppercase">
+                              Tu mesa
+                            </span>
+                          )}
+                          {soyJugador && !soyCreador && (
+                            <span className="px-2 py-0.5 bg-blue-600/30 text-blue-300 rounded-full text-[10px] font-bold uppercase">
+                              Estás aquí
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Creador */}
+                        {partida.creadorNombre && (
+                          <div className="text-gold-500/60 text-xs mb-1.5">
+                            Creada por: <span className="text-gold-400">{partida.creadorNombre}</span>
+                          </div>
+                        )}
 
                         <div className="flex items-center gap-3 flex-wrap">
                           {/* Indicador de jugadores */}
@@ -344,25 +450,52 @@ export default function LobbyPage() {
                       </div>
                     </div>
 
-                    {/* Botón unirse */}
-                    <button
-                      onClick={() => handleUnirsePartida(partida.mesaId)}
-                      disabled={loading || !puedeUnirse}
-                      className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 ${
-                        puedeUnirse
-                          ? 'bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 hover:scale-105 shadow-lg shadow-green-600/20 active:scale-95'
-                          : 'bg-gray-700/30 text-gray-500 cursor-not-allowed'
-                      }`}
-                    >
-                      {puedeUnirse ? (
-                        <>
-                          <UsersIcon className="w-5 h-5" />
-                          Unirse
-                        </>
-                      ) : (
-                        <span>Llena</span>
+                    {/* Botones de acción */}
+                    <div className="flex items-center gap-2">
+                      {/* Botón eliminar (solo creador y partida esperando) */}
+                      {soyCreador && estaEsperando && (
+                        <button
+                          onClick={() => handleEliminarPartida(partida.mesaId)}
+                          disabled={loading}
+                          className="px-3 py-3 rounded-xl font-bold transition-all duration-300 bg-red-900/30 text-red-400 hover:bg-red-800/50 hover:text-red-300 border border-red-700/40"
+                          title="Eliminar partida"
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </button>
                       )}
-                    </button>
+
+                      {/* Botón reconectar (si soy jugador) */}
+                      {puedeReconectar ? (
+                        <button
+                          onClick={() => handleReconectarPartida(partida.mesaId)}
+                          disabled={loading}
+                          className="px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 hover:scale-105 shadow-lg shadow-blue-600/20 active:scale-95"
+                        >
+                          <ReconnectIcon className="w-5 h-5" />
+                          Volver
+                        </button>
+                      ) : (
+                        /* Botón unirse (si no soy jugador) */
+                        <button
+                          onClick={() => handleUnirsePartida(partida.mesaId)}
+                          disabled={loading || !puedeUnirse}
+                          className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 ${
+                            puedeUnirse
+                              ? 'bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 hover:scale-105 shadow-lg shadow-green-600/20 active:scale-95'
+                              : 'bg-gray-700/30 text-gray-500 cursor-not-allowed'
+                          }`}
+                        >
+                          {puedeUnirse ? (
+                            <>
+                              <UsersIcon className="w-5 h-5" />
+                              Unirse
+                            </>
+                          ) : (
+                            <span>Llena</span>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}

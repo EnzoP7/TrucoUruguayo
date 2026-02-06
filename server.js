@@ -325,7 +325,19 @@ function getEstadoParaJugador(mesa, jugadorId) {
   delete copia.mazoBarajado;
   const miJugador = copia.jugadores.find(j => j.id === jugadorId);
   const miEquipo = miJugador?.equipo;
+
+  // Si hay perros activos, el equipo que los echó NO puede ver sus cartas
+  // hasta que el otro equipo responda (incluso durante la fase de repartición)
+  const perrosEsperandoRespuesta = mesa.perrosActivos &&
+    (mesa.fase === 'esperando_respuesta_perros' || mesa.fase === 'repartiendo');
+  const equipoQueEchoPerros = mesa.perrosConfig?.equipoQueEcha;
+  const miEquipoEchoPerros = perrosEsperandoRespuesta && miEquipo === equipoQueEchoPerros;
+
   copia.jugadores = copia.jugadores.map(j => {
+    // Si mi equipo echó los perros y estamos esperando respuesta, ocultar MIS cartas también
+    if (miEquipoEchoPerros && j.equipo === miEquipo) {
+      return { ...j, cartas: j.cartas.map(() => ({ palo: 'basto', valor: 0, poder: 0 })) };
+    }
     if (j.id === jugadorId) return j;
     // Show teammate cards (same team), hide opponent cards
     if (j.equipo === miEquipo) return j;
@@ -363,8 +375,10 @@ function jugarCarta(mesa, jugadorId, carta) {
   const cartaIdx = jugador.cartas.findIndex(c => c.palo === carta.palo && c.valor === carta.valor);
   if (cartaIdx === -1) return false;
 
+  // IMPORTANTE: Usar la carta del servidor (con poder correcto) en lugar de la del cliente
+  const cartaDelServidor = jugador.cartas[cartaIdx];
   jugador.cartas.splice(cartaIdx, 1);
-  mesa.cartasMesa.push({ jugadorId, carta });
+  mesa.cartasMesa.push({ jugadorId, carta: cartaDelServidor });
 
   if (!mesa.primeraCartaJugada) mesa.primeraCartaJugada = true;
 
@@ -1082,7 +1096,8 @@ function responderEnvido(mesa, jugadorId, acepta) {
 // Resolver envido automáticamente generando declaraciones en orden correcto
 // Flujo: mano declara primero, luego el equipo contrario responde,
 // compañeros solo intervienen si tienen más puntos que el mejor actual
-function resolverEnvidoAutomatico(mesa, puntosAcumulados) {
+// diferirPuntos: si es true, NO suma los puntos al marcador (para sumarlos después de las animaciones)
+function resolverEnvidoAutomatico(mesa, puntosAcumulados, diferirPuntos = false) {
   const equipoMano = mesa.jugadores[mesa.indiceMano]?.equipo || 1;
   const equipoContrario = equipoMano === 1 ? 2 : 1;
 
@@ -1203,16 +1218,18 @@ function resolverEnvidoAutomatico(mesa, puntosAcumulados) {
     ganador = equipoMano; // Empate gana mano
   }
 
-  // Asignar puntos
+  // Asignar puntos (solo si no se difieren)
   const equipo = mesa.equipos.find(e => e.id === ganador);
-  if (equipo) equipo.puntaje += puntosAcumulados;
+  if (!diferirPuntos) {
+    if (equipo) equipo.puntaje += puntosAcumulados;
 
-  // Check for game win
-  if (equipo && equipo.puntaje >= mesa.puntosLimite) {
-    mesa.winnerJuego = ganador;
-    mesa.estado = 'terminado';
-    mesa.mensajeRonda = `¡Equipo ${ganador} ganó el juego!`;
-    mesa.fase = 'finalizada';
+    // Check for game win
+    if (equipo && equipo.puntaje >= mesa.puntosLimite) {
+      mesa.winnerJuego = ganador;
+      mesa.estado = 'terminado';
+      mesa.mensajeRonda = `¡Equipo ${ganador} ganó el juego!`;
+      mesa.fase = 'finalizada';
+    }
   }
 
   // Limpiar estado de envido
@@ -1390,6 +1407,8 @@ function broadcastLobby(io) {
       maxJugadores: room.maxJugadores,
       tamañoSala: room.tamañoSala,
       estado: room.estado,
+      creadorNombre: room.creadorNombre || null, // Nombre del creador
+      jugadoresNombres: room.jugadores.map(j => j.nombre), // Lista de nombres para reconexión
     }));
   io.to('lobby').emit('partidas-disponibles', partidas);
 }
@@ -1426,7 +1445,7 @@ function scheduleNextRound(io, room) {
         });
       }
     }
-  }, 3000);
+  }, 2000); // Reducido de 3000 a 2000ms
 }
 
 // ============================================================
@@ -1482,6 +1501,8 @@ app.prepare().then(() => {
           maxJugadores,
           tamañoSala,
           estado: 'esperando',
+          creadorNombre: nombre, // Guardamos el nombre del creador
+          creadorSocketId: socket.id, // ID del socket original (puede cambiar si reconecta)
         };
         lobbyRooms.set(mesaId, room);
 
@@ -1501,6 +1522,8 @@ app.prepare().then(() => {
           maxJugadores: room.maxJugadores,
           tamañoSala: room.tamañoSala,
           estado: room.estado,
+          creadorNombre: room.creadorNombre,
+          jugadoresNombres: room.jugadores.map(j => j.nombre),
         });
         broadcastLobby(io);
 
@@ -1511,19 +1534,127 @@ app.prepare().then(() => {
       }
     });
 
+    // === ELIMINAR/CANCELAR PARTIDA ===
+    socket.on('eliminar-partida', (data, callback) => {
+      console.log(`[Socket.IO] ${socket.id} eliminar-partida:`, data);
+      try {
+        const { mesaId, nombre } = data;
+        const room = lobbyRooms.get(mesaId);
+
+        if (!room) {
+          callback(false, 'Partida no encontrada');
+          return;
+        }
+
+        // Solo el creador puede eliminar la partida (verificar por nombre)
+        if (room.creadorNombre !== nombre) {
+          callback(false, 'Solo el creador puede eliminar la partida');
+          return;
+        }
+
+        // Solo se puede eliminar si está en estado "esperando"
+        if (room.estado !== 'esperando') {
+          callback(false, 'No se puede eliminar una partida en curso');
+          return;
+        }
+
+        // Notificar a todos los jugadores en la partida que fue cancelada
+        io.to(mesaId).emit('partida-eliminada', {
+          mesaId,
+          mensaje: 'La partida fue cancelada por el creador'
+        });
+
+        // Mover a todos los jugadores de vuelta al lobby
+        room.jugadores.forEach(p => {
+          const playerSocket = io.sockets.sockets.get(p.socketId);
+          if (playerSocket) {
+            playerSocket.leave(mesaId);
+            playerSocket.join('lobby');
+          }
+        });
+
+        // Eliminar la partida
+        lobbyRooms.delete(mesaId);
+        engines.delete(mesaId);
+
+        // Actualizar el lobby
+        broadcastLobby(io);
+
+        console.log(`[Socket.IO] Partida ${mesaId} eliminada por ${nombre}`);
+        callback(true, 'Partida eliminada');
+      } catch (err) {
+        console.error('Error deleting game:', err);
+        callback(false, 'Error al eliminar la partida');
+      }
+    });
+
     // === UNIRSE A PARTIDA ===
     socket.on('unirse-partida', (data, callback) => {
       try {
         const { mesaId, nombre } = data;
         const room = lobbyRooms.get(mesaId);
         if (!room) { callback(false, 'Partida no encontrada'); return; }
+
+        const mesa = engines.get(mesaId);
+        if (!mesa) { callback(false, 'Error interno'); return; }
+
+        // Verificar si es una reconexión (mismo nombre ya existe en la partida)
+        const jugadorExistente = room.jugadores.find(j => j.nombre === nombre);
+        if (jugadorExistente) {
+          // Es una reconexión - actualizar socket ID
+          const oldSocketId = jugadorExistente.socketId;
+          console.log(`[Socket.IO] Reconexión detectada en unirse-partida: ${nombre} (${oldSocketId} -> ${socket.id})`);
+
+          jugadorExistente.socketId = socket.id;
+
+          // Actualizar en mesa
+          const jugInMesa = mesa.jugadores.find(j => j.id === oldSocketId);
+          if (jugInMesa) jugInMesa.id = socket.id;
+          mesa.equipos.forEach(eq => {
+            const jEq = eq.jugadores.find(j => j.id === oldSocketId);
+            if (jEq) jEq.id = socket.id;
+          });
+          mesa.cartasMesa.forEach(cm => {
+            if (cm.jugadorId === oldSocketId) cm.jugadorId = socket.id;
+          });
+          // Actualizar jugadoresConFlor si es necesario
+          if (mesa.jugadoresConFlor) {
+            const florIdx = mesa.jugadoresConFlor.indexOf(oldSocketId);
+            if (florIdx !== -1) mesa.jugadoresConFlor[florIdx] = socket.id;
+          }
+          // Actualizar floresCantadas si es necesario
+          if (mesa.floresCantadas) {
+            mesa.floresCantadas.forEach(fc => {
+              if (fc.jugadorId === oldSocketId) fc.jugadorId = socket.id;
+            });
+          }
+
+          socket.leave('lobby');
+          socket.join(mesaId);
+
+          const jugadorInMesa = mesa.jugadores.find(j => j.id === socket.id);
+          socket.emit('reconectado', {
+            jugador: jugadorInMesa,
+            estado: getEstadoParaJugador(mesa, socket.id),
+          });
+
+          // Notificar a todos los demás del estado actualizado
+          room.jugadores.forEach(p => {
+            if (p.socketId !== socket.id) {
+              io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(mesa, p.socketId));
+            }
+          });
+
+          broadcastLobby(io);
+          callback(true);
+          return;
+        }
+
+        // No es reconexión - verificar si puede unirse normalmente
         if (room.estado !== 'esperando') { callback(false, 'La partida ya comenzó'); return; }
         if (room.jugadores.length >= room.maxJugadores) { callback(false, 'La partida está llena'); return; }
 
         room.jugadores.push({ socketId: socket.id, nombre });
-
-        const mesa = engines.get(mesaId);
-        if (!mesa) { callback(false, 'Error interno'); return; }
 
         const halfPoint = Math.ceil(room.maxJugadores / 2);
         const equipo = (room.jugadores.length - 1) < halfPoint ? 1 : 2;
@@ -1797,8 +1928,8 @@ app.prepare().then(() => {
             });
           });
 
-          // Wait 3.5 seconds before continuing
-          const DELAY_MANO = 3500;
+          // Wait 2 seconds before continuing (máximo 2s para ver cartas del ganador)
+          const DELAY_MANO = 2000;
           setTimeout(() => {
             const currentMesa = engines.get(room.mesaId);
             const currentRoom = lobbyRooms.get(room.mesaId);
@@ -2414,6 +2545,68 @@ app.prepare().then(() => {
                     console.log(`[Socket.IO] Sending estado-actualizado to ${p.nombre} (${p.socketId})`);
                     io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(finalMesa, p.socketId));
                   });
+
+                  // === FLOR AUTOMÁTICA AL INICIAR RONDA ===
+                  // Si hay jugadores con flor, cantar automáticamente después de un pequeño delay
+                  if (finalMesa.manoActual === 1 && !finalMesa.florYaCantada && finalMesa.jugadoresConFlor && finalMesa.jugadoresConFlor.length > 0) {
+                    setTimeout(() => {
+                      const currentMesa = engines.get(mesaId);
+                      const currentRoom = lobbyRooms.get(mesaId);
+                      if (!currentMesa || !currentRoom || currentMesa.florYaCantada) return;
+
+                      const florResult = cantarFlorAutomatica(currentMesa);
+
+                      // Emitir las flores cantadas secuencialmente
+                      florResult.cantadas.forEach((declaracion, index) => {
+                        setTimeout(() => {
+                          currentRoom.jugadores.forEach(p => {
+                            const pJugador = currentMesa.jugadores.find(j => j.id === p.socketId);
+                            const mismoEquipo = pJugador && pJugador.equipo === declaracion.equipo;
+                            io.to(p.socketId).emit('flor-cantada', {
+                              jugadorId: declaracion.jugadorId,
+                              declaracion: {
+                                ...declaracion,
+                                puntos: mismoEquipo ? declaracion.puntos : null,
+                              },
+                              estado: getEstadoParaJugador(currentMesa, p.socketId),
+                            });
+                          });
+                        }, index * 1500);
+                      });
+
+                      // Emitir el resultado de la flor
+                      if (florResult.resultado) {
+                        setTimeout(() => {
+                          currentRoom.jugadores.forEach(p => {
+                            io.to(p.socketId).emit('flor-resuelta', {
+                              resultado: {
+                                ganador: florResult.resultado.ganador,
+                                puntosGanados: florResult.resultado.puntosGanados,
+                                floresCantadas: florResult.resultado.floresCantadas.map(f => ({
+                                  ...f,
+                                  puntos: null,
+                                })),
+                                mejorFlor: null,
+                              },
+                              estado: getEstadoParaJugador(currentMesa, p.socketId),
+                            });
+                          });
+
+                          if (currentMesa.winnerJuego !== null) {
+                            currentRoom.estado = 'terminado';
+                            currentRoom.jugadores.forEach(p => {
+                              io.to(p.socketId).emit('juego-finalizado', {
+                                ganadorEquipo: currentMesa.winnerJuego,
+                                estado: getEstadoParaJugador(currentMesa, p.socketId),
+                              });
+                            });
+                            broadcastLobby(io);
+                          }
+                        }, florResult.cantadas.length * 1500 + 500);
+                      }
+                    }, 1500); // Delay para que el jugador vea sus cartas primero
+                  }
+                  // === FIN FLOR AUTOMÁTICA AL INICIAR RONDA ===
                 }
               }, 500);
             }
@@ -2772,17 +2965,37 @@ app.prepare().then(() => {
 
         // If rejects both envido/flor AND truco → irse al mazo
         if (!aceptaEnvidoOFlor && !quiereTruco) {
-          // Irse al mazo - el equipo que echó los perros gana 1 punto
+          // Irse al mazo - el equipo que echó los perros gana 1 punto base
           const equipoGanador = mesa.perrosConfig.equipoQueEcha;
-          mesa.equipos.find(e => e.id === equipoGanador).puntaje += 1;
+          let puntosGanados = 1;
+
+          // Si el equipo que echó los perros tiene flor, suma 3 puntos por cada flor
+          const jugadoresEquipoEchador = mesa.jugadores.filter(j => j.equipo === equipoGanador);
+          const floresDelEquipoEchador = jugadoresEquipoEchador.filter(j =>
+            mesa.jugadoresConFlor && mesa.jugadoresConFlor.includes(j.id)
+          );
+
+          if (floresDelEquipoEchador.length > 0) {
+            // Sumar 3 puntos por cada flor del equipo que echó los perros
+            puntosGanados += floresDelEquipoEchador.length * 3;
+            // Guardar las cartas de flor para mostrar
+            mesa.cartasFlorReveladas = floresDelEquipoEchador.map(j => ({
+              jugadorNombre: j.nombre,
+              cartas: j.cartas,
+            }));
+          }
+
+          mesa.equipos.find(e => e.id === equipoGanador).puntaje += puntosGanados;
           mesa.perrosActivos = false;
+          const equipoQueEchoPerrosTemp = mesa.perrosConfig.equipoQueEcha;
           mesa.perrosConfig = null;
 
           room.jugadores.forEach(p => {
             io.to(p.socketId).emit('perros-respondidos', {
               respuesta: 'mazo',
               equipoGanador,
-              puntosGanados: 1,
+              puntosGanados,
+              floresDelEchador: floresDelEquipoEchador.length,
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           });
@@ -2819,15 +3032,56 @@ app.prepare().then(() => {
           // The flor was already detected, just need to set up contra flor
           mesa.florYaCantada = false; // Reset so it triggers
         } else if (!tieneFlor && quiereFaltaEnvido) {
-          // Falta Envido accepted - set up envido
+          // Falta Envido accepted - resolver automáticamente (ya se aceptó en los perros)
           mesa.envidoYaCantado = true;
-          mesa.envidoActivo = {
-            tipos: ['falta_envido'],
-            equipoQueCanta: mesa.perrosConfig.equipoQueEcha,
-            jugadorQueCanta: socket.id,
-            puntosAcumulados: mesa.puntosLimite, // Falta envido = all remaining points
-            puntosSiNoQuiere: 1,
-          };
+
+          // Calcular puntos de falta envido (lo que le falta al perdedor para llegar al límite)
+          const puntajeEquipo1 = mesa.equipos.find(e => e.id === 1)?.puntaje || 0;
+          const puntajeEquipo2 = mesa.equipos.find(e => e.id === 2)?.puntaje || 0;
+          const puntosParaGanar = Math.max(
+            mesa.puntosLimite - puntajeEquipo1,
+            mesa.puntosLimite - puntajeEquipo2
+          );
+
+          // Resolver envido automáticamente
+          const resultadoEnvido = resolverEnvidoAutomatico(mesa, puntosParaGanar);
+
+          // Emitir las declaraciones con delay
+          if (resultadoEnvido && resultadoEnvido.declaraciones) {
+            resultadoEnvido.declaraciones.forEach((decl, index) => {
+              setTimeout(() => {
+                room.jugadores.forEach(p => {
+                  io.to(p.socketId).emit('envido-declarado', {
+                    jugadorId: decl.jugadorId,
+                    declaracion: decl,
+                    estado: getEstadoParaJugador(mesa, p.socketId),
+                  });
+                });
+              }, (index + 1) * 1500);
+            });
+
+            // Emitir resultado después de las declaraciones
+            setTimeout(() => {
+              room.jugadores.forEach(p => {
+                io.to(p.socketId).emit('envido-resuelto', {
+                  resultado: resultadoEnvido,
+                  estado: getEstadoParaJugador(mesa, p.socketId),
+                });
+              });
+
+              // Check game end after envido
+              if (mesa.winnerJuego !== null) {
+                room.estado = 'terminado';
+                room.jugadores.forEach(p => {
+                  io.to(p.socketId).emit('juego-finalizado', {
+                    ganadorEquipo: mesa.winnerJuego,
+                    estado: getEstadoParaJugador(mesa, p.socketId),
+                  });
+                });
+                broadcastLobby(io);
+              }
+            }, (resultadoEnvido.declaraciones.length + 1) * 1500);
+          }
         } else if (tieneFlor && !quiereContraFlor) {
           // Rejected contra flor - equipo que echó gana puntos de no querer
           // "se pasa" = no quiere la contra flor, equipo echador gana 4 pts (contra flor no querida)

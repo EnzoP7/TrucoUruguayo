@@ -142,6 +142,13 @@ class SocketService {
     });
   }
 
+  async eliminarPartida(mesaId: string, nombre: string): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('eliminar-partida', { mesaId, nombre }, (success) => resolve(success));
+    });
+  }
+
   // === JUEGO ===
 
   async iniciarPartida(): Promise<boolean> {
@@ -396,6 +403,10 @@ class SocketService {
 
   onPerrosPendientes(callback: (data: any) => void): void {
     this.socket?.on('perros-pendientes', callback);
+  }
+
+  onPartidaEliminada(callback: (data: any) => void): void {
+    this.socket?.on('partida-eliminada', callback);
   }
   /* eslint-enable @typescript-eslint/no-explicit-any */
 

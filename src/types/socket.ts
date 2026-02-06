@@ -10,6 +10,7 @@ export interface ClientToServerEvents {
   'unirse-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
   'iniciar-partida': (callback: (success: boolean, message?: string) => void) => void;
   'reconectar-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
+  'eliminar-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
 
   // Juego
   'jugar-carta': (data: { carta: Carta }, callback: (success: boolean, message?: string) => void) => void;
@@ -35,8 +36,9 @@ export interface ClientToServerEvents {
 // Eventos del servidor al cliente
 export interface ServerToClientEvents {
   // Lobby
-  'partidas-disponibles': (partidas: Array<{ mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string }>) => void;
-  'partida-nueva': (data: { mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string }) => void;
+  'partidas-disponibles': (partidas: Array<{ mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string; creadorNombre?: string; jugadoresNombres?: string[] }>) => void;
+  'partida-nueva': (data: { mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string; creadorNombre?: string; jugadoresNombres?: string[] }) => void;
+  'partida-eliminada': (data: { mesaId: string; mensaje: string }) => void;
 
   // Partidas
   'partida-creada': (data: { mesaId: string; jugador: Jugador }) => void;
@@ -70,7 +72,7 @@ export interface ServerToClientEvents {
   // Echar los perros
   'perros-echados': (data: { equipoQueEcha: number; estado: Mesa }) => void;
   'perros-cancelados': (data: { estado: Mesa }) => void;
-  'perros-respondidos': (data: { respuesta: string; equipoGanador?: number; puntosGanados?: number; quiereContraFlor?: boolean; quiereFaltaEnvido?: boolean; quiereTruco?: boolean; estado: Mesa }) => void;
+  'perros-respondidos': (data: { respuesta: string; equipoGanador?: number; puntosGanados?: number; floresDelEchador?: number; quiereContraFlor?: boolean; quiereFaltaEnvido?: boolean; quiereTruco?: boolean; estado: Mesa }) => void;
   'perros-pendientes': (data: { equipoQueEcha: number; debeResponder: boolean; estado: Mesa }) => void;
 }
 
