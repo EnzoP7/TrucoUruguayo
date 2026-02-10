@@ -18,7 +18,9 @@
       "Bash(node --check:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(set NODE_ENV=production)"
+      "Bash(set NODE_ENV=production)",
+      "Bash(npx -p typescript tsc:*)",
+      "Bash(npx next lint:*)"
     ]
   }
 }

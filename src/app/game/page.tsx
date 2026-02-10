@@ -540,7 +540,7 @@ function GamePage() {
   }[] | null>(null);
   const [reyesAnimStep, setReyesAnimStep] = useState(0);
   const [reyesAnimDone, setReyesAnimDone] = useState(false);
-  const [rondaBanner, setRondaBanner] = useState<{ mensaje: string; puntos: number; equipo: number; cartasFlor?: { jugadorNombre: string; cartas: Carta[] }[] } | null>(null);
+  const [rondaBanner, setRondaBanner] = useState<{ mensaje: string; puntos: number; equipo: number; cartasFlor?: { jugadorNombre: string; cartas: Carta[] }[]; cartasEnvido?: { jugadorNombre: string; puntos: number; cartas: Carta[] }[]; muestra?: Carta | null } | null>(null);
   // Envido Cargado
   const [mostrarEnvidoCargado, setMostrarEnvidoCargado] = useState(false);
   const [puntosEnvidoCargado, setPuntosEnvidoCargado] = useState(5);
@@ -761,14 +761,14 @@ function GamePage() {
             mejorPuntaje: data.resultado.mejorPuntaje
           });
           setMensaje(`¡Equipo ${data.resultado.ganador} gana el envido! (+${data.resultado.puntosGanados} pts)`);
-          // Clear envido state after showing result
+          // Clear envido state after showing result (2 seconds)
           setTimeout(() => {
             if (mounted) {
               setMensaje(null);
               setEnvidoDeclaraciones([]);
               setEnvidoResultado(null);
             }
-          }, 5000);
+          }, 2000);
         });
 
         socketService.onManoFinalizada((data) => {
@@ -787,15 +787,18 @@ function GamePage() {
           if (!mounted) return;
           setMesa(data.estado);
           // Show floating banner instead of blocking modal
-          // Include flor cards if any were revealed
+          // Include flor/envido cards if any were revealed
           setRondaBanner({
             mensaje: `Equipo ${data.ganadorEquipo} gana la ronda`,
             puntos: data.puntosGanados,
             equipo: data.ganadorEquipo,
             cartasFlor: data.cartasFlorReveladas || [],
+            cartasEnvido: data.cartasEnvidoReveladas || [],
+            muestra: data.muestra || null,
           });
-          // Longer timeout if flor cards are shown
-          const timeout = data.cartasFlorReveladas?.length > 0 ? 7000 : 4000;
+          // Longer timeout if flor/envido cards are shown (2s with cards, 2s without)
+          const tieneCartas = ((data.cartasFlorReveladas?.length ?? 0) > 0) || ((data.cartasEnvidoReveladas?.length ?? 0) > 0);
+          const timeout = tieneCartas ? 4000 : 2000;
           setTimeout(() => { if (mounted) setRondaBanner(null); }, timeout);
         });
 
@@ -891,7 +894,7 @@ function GamePage() {
               setFlorAnuncio(null);
               setMensaje(null);
             }
-          }, 4000);
+          }, 2000);
         });
 
         // Flor pendiente - ambos equipos tienen flor, esperando respuesta
@@ -962,11 +965,17 @@ function GamePage() {
           setPerrosActivos(false);
           setEquipoPerros(null);
           if (data.equipoGanador) {
-            setMensaje(`¡Equipo ${data.equipoGanador} gana ${data.puntosGanados} pts por los perros!`);
+            // Al mazo - show points and score
+            const eq1 = data.estado.equipos[0]?.puntaje ?? 0;
+            const eq2 = data.estado.equipos[1]?.puntaje ?? 0;
+            setMensaje(`🐕 ¡Al mazo! Equipo ${data.equipoGanador} gana ${data.puntosGanados} pts\n📊 Marcador: Equipo 1: ${eq1} - Equipo 2: ${eq2}`);
           } else {
-            setMensaje(`Perros respondidos: ${data.respuesta}`);
+            // Partial acceptance - show response and score
+            const eq1 = data.estado.equipos[0]?.puntaje ?? 0;
+            const eq2 = data.estado.equipos[1]?.puntaje ?? 0;
+            setMensaje(`🐕 ${data.respuesta}\n📊 Marcador: Equipo 1: ${eq1} - Equipo 2: ${eq2}`);
           }
-          setTimeout(() => { if (mounted) setMensaje(null); }, 4000);
+          setTimeout(() => { if (mounted) setMensaje(null); }, 5000);
         });
 
         // Perros pendientes - después de repartir, el receptor debe responder
@@ -1030,6 +1039,8 @@ function GamePage() {
     if (!mesa || !socketId || mesa.estado !== 'jugando') return false;
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
     if (mesa.fase !== 'jugando') return false;
+    // No se puede jugar carta si hay flor pendiente de respuesta
+    if (mesa.esperandoRespuestaFlor || florPendiente) return false;
     return mesa.jugadores[mesa.turnoActual]?.id === socketId;
   };
 
@@ -1054,6 +1065,8 @@ function GamePage() {
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
     if (mesa.fase !== 'jugando') return false;
     if (!miEquipo) return false;
+    // No se puede cantar truco si hay flor pendiente
+    if (mesa.esperandoRespuestaFlor || florPendiente) return false;
     if (mesa.nivelGritoAceptado === null) return true;
     return false;
   };
@@ -1964,8 +1977,6 @@ function GamePage() {
   const rivales = mesa.jugadores.filter(j => j.id !== socketId && j.equipo !== miEquipo);
   const companerosEquipo = mesa.jugadores.filter(j => j.id !== socketId && j.equipo === miEquipo);
 
-  // Compatibilidad: oponentes ahora solo incluye rivales (no compañeros)
-  const oponentes = rivales;
   // Teammates (same team, excluding me) - their cards are now visible from the server
   const companeros = companerosEquipo;
   // Cards that each teammate has played in the current mano
@@ -1974,6 +1985,114 @@ function GamePage() {
   };
   // Check if I already played a card in this mano
   const yaJugueEnEstaMano = cartasManoActual.some(c => c.jugadorId === socketId);
+
+  // === SLOT-BASED PLAYER POSITIONING ===
+  // Assign each player a visual slot based on team membership (not array index)
+  // 2v2: rivals on left/right, teammate on top
+  // 3v3: rivals at side-left/top-center/side-right, teammates at top-left/top-right
+  type PlayerSlot = 'top' | 'left' | 'right' | 'top-left' | 'top-center' | 'top-right' | 'side-left' | 'side-right';
+
+  const getSlotForPlayer = (jugadorId: string): PlayerSlot | null => {
+    const numJugadores = mesa.jugadores.length;
+    const jugador = mesa.jugadores.find(j => j.id === jugadorId);
+    if (!jugador || jugador.id === socketId) return null;
+
+    if (numJugadores === 2) return 'top';
+
+    if (numJugadores === 4) {
+      const esRival = jugador.equipo !== miEquipo;
+      if (esRival) {
+        const rivalIdx = rivales.indexOf(jugador);
+        return rivalIdx === 0 ? 'left' : 'right';
+      }
+      return 'top'; // teammate
+    }
+
+    if (numJugadores === 6) {
+      const esRival = jugador.equipo !== miEquipo;
+      if (esRival) {
+        const rivalIdx = rivales.indexOf(jugador);
+        if (rivalIdx === 0) return 'side-left';
+        if (rivalIdx === 1) return 'top-center';
+        return 'side-right';
+      } else {
+        const compIdx = companeros.indexOf(jugador);
+        return compIdx === 0 ? 'top-left' : 'top-right';
+      }
+    }
+
+    return null;
+  };
+
+  // Players grouped by position area
+  const topRowPlayers = mesa.jugadores.filter(j => {
+    const slot = getSlotForPlayer(j.id);
+    return slot && (slot === 'top' || slot.startsWith('top-'));
+  }).sort((a, b) => {
+    const order: Record<string, number> = { 'top-left': 0, 'top': 1, 'top-center': 1, 'top-right': 2 };
+    return (order[getSlotForPlayer(a.id) || ''] ?? 1) - (order[getSlotForPlayer(b.id) || ''] ?? 1);
+  });
+
+  const leftSidePlayer = mesa.jugadores.find(j => {
+    const slot = getSlotForPlayer(j.id);
+    return slot === 'left' || slot === 'side-left';
+  }) || null;
+
+  const rightSidePlayer = mesa.jugadores.find(j => {
+    const slot = getSlotForPlayer(j.id);
+    return slot === 'right' || slot === 'side-right';
+  }) || null;
+
+  // Helper to render a player indicator (name + cards)
+  const renderPlayerIndicator = (j: typeof mesa.jugadores[0], compact: boolean = false) => {
+    const esSuTurno = jugadorDelTurno?.id === j.id;
+    const esCompanero = j.equipo === miEquipo;
+    const bubble = speechBubbles.find(b => b.jugadorId === j.id);
+    const jugadas = cartasJugadasPorJugador(j.id);
+
+    return (
+      <div key={j.id} className="text-center relative">
+        {bubble && (
+          <div className={`absolute -top-14 left-1/2 -translate-x-1/2 z-50 speech-bubble ${
+            bubble.tipo === 'envido' ? 'speech-bubble-envido' :
+            bubble.tipo === 'flor' ? 'speech-bubble-flor' :
+            bubble.tipo === 'truco' ? 'speech-bubble-truco' :
+            bubble.tipo === 'quiero' ? 'speech-bubble-quiero' :
+            bubble.tipo === 'no-quiero' ? 'speech-bubble-no-quiero' : ''
+          }`}>
+            {bubble.puntos !== undefined && bubble.puntos !== null && bubble.tipo !== 'flor' ? (
+              <span className="bubble-number text-2xl font-bold">{bubble.puntos}</span>
+            ) : (
+              <span className="font-bold text-sm whitespace-nowrap">{bubble.texto}</span>
+            )}
+          </div>
+        )}
+        <div className={`inline-flex items-center ${compact ? 'gap-1 px-2' : 'gap-2 px-3'} py-1 rounded-lg ${compact ? 'text-xs' : 'text-sm'} font-medium ${compact ? 'mb-1' : 'mb-2'} ${
+          j.equipo === 1 ? 'equipo-1-light text-blue-300' : 'equipo-2-light text-red-300'
+        } ${esSuTurno ? 'turn-glow' : ''}`}>
+          {j.nombre}
+          {j.esMano && <MonedaMano isActive={true} />}
+        </div>
+        <div className={compact ? 'flex flex-col gap-0.5 items-center' : 'flex gap-1 justify-center'}>
+          {esCompanero ? (
+            j.cartas.filter(c => c.valor !== 0).map((carta, ci) => {
+              const yaJugada = jugadas.some(cj => cj.palo === carta.palo && cj.valor === carta.valor);
+              return (
+                <div key={`${carta.palo}-${carta.valor}-${ci}`}
+                  className={`transition-all duration-300 ${yaJugada ? 'opacity-25 grayscale scale-90' : ''}`}>
+                  <CartaImg carta={carta} size="small" />
+                </div>
+              );
+            })
+          ) : (
+            j.cartas.map((_, i) => (
+              <div key={i} className={compact ? 'w-7 h-10 sm:w-8 sm:h-12 card-back rounded' : 'w-8 h-12 sm:w-10 sm:h-14 card-back rounded'} />
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-table-wood p-2 sm:p-4 overflow-hidden">
@@ -2002,48 +2121,6 @@ function GamePage() {
               🐔 Pico a Pico
               <span className="text-yellow-400/60 text-xs font-normal">(1v1 en malas)</span>
             </span>
-          </div>
-        </div>
-      )}
-
-      {/* Panel de cartas de compañeros (bottom-left) */}
-      {companeros.length > 0 && mesa.estado === 'jugando' && mesa.fase !== 'cortando' && mesa.fase !== 'repartiendo' && (
-        <div className="fixed bottom-4 left-2 sm:left-4 z-30 animate-slide-up">
-          <div className="glass rounded-xl p-2 sm:p-3 border border-gold-800/30 backdrop-blur-md" style={{ minWidth: '100px' }}>
-            <div className="text-[9px] sm:text-[10px] text-gold-500/60 uppercase tracking-wider mb-1.5 text-center font-medium">
-              Compañero{companeros.length > 1 ? 's' : ''}
-            </div>
-            <div className="space-y-2">
-              {companeros.map(comp => {
-                const cartasJugadas = cartasJugadasPorJugador(comp.id);
-                return (
-                  <div key={comp.id} className="flex flex-col items-center gap-1">
-                    <span className={`text-[10px] sm:text-xs font-medium ${
-                      comp.equipo === 1 ? 'text-blue-300' : 'text-red-300'
-                    }`}>
-                      {comp.nombre}
-                    </span>
-                    <div className="flex gap-0.5 sm:gap-1">
-                      {comp.cartas.filter(c => c.valor !== 0).map((carta, ci) => {
-                        // Check if this card was already played
-                        const yaJugada = cartasJugadas.some(cj =>
-                          cj.palo === carta.palo && cj.valor === carta.valor
-                        );
-                        return (
-                          <div key={`${carta.palo}-${carta.valor}-${ci}`}
-                            className={`transition-all duration-300 ${yaJugada ? 'opacity-25 grayscale scale-90' : ''}`}>
-                            <CartaImg carta={carta} size="small" />
-                          </div>
-                        );
-                      })}
-                      {comp.cartas.filter(c => c.valor !== 0).length === 0 && (
-                        <span className="text-gold-600/30 text-[10px] italic">Sin cartas</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         </div>
       )}
@@ -2139,22 +2216,49 @@ function GamePage() {
               +{rondaBanner.puntos} puntos 🧉
             </div>
 
+            {/* Muestra */}
+            {rondaBanner.muestra && ((rondaBanner.cartasFlor?.length ?? 0) > 0 || (rondaBanner.cartasEnvido?.length ?? 0) > 0) && (
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <span className="text-yellow-400/70 text-xs font-medium">Muestra:</span>
+                <div className="w-10 h-[3.75rem] rounded-lg overflow-hidden shadow-lg border border-yellow-500/50">
+                  <img src={getCartaImageUrl(rondaBanner.muestra)} alt="Muestra" className="w-full h-full object-cover" />
+                </div>
+              </div>
+            )}
+
             {/* Mostrar cartas de FLOR al final de la ronda */}
             {rondaBanner.cartasFlor && rondaBanner.cartasFlor.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gold-600/30">
-                <div className="text-pink-400 text-base sm:text-lg font-bold mb-4">🌸 Cartas de FLOR reveladas:</div>
-                <div className="flex flex-col gap-4">
+              <div className="mt-3 pt-3 border-t border-gold-600/30">
+                <div className="text-pink-400 text-sm font-bold mb-2">🌸 FLOR:</div>
+                <div className="flex flex-col gap-3">
                   {rondaBanner.cartasFlor.map((florInfo, idx) => (
-                    <div key={idx} className="flex flex-col items-center gap-2">
-                      <span className="text-gold-300 text-sm sm:text-base font-semibold">{florInfo.jugadorNombre}</span>
-                      <div className="flex gap-2 justify-center">
+                    <div key={idx} className="flex flex-col items-center gap-1">
+                      <span className="text-gold-300 text-xs font-semibold">{florInfo.jugadorNombre}</span>
+                      <div className="flex gap-1.5 justify-center">
                         {florInfo.cartas.map((carta, cIdx) => (
-                          <div key={cIdx} className="w-16 h-24 sm:w-20 sm:h-28 rounded-lg overflow-hidden shadow-lg border border-gold-600/30">
-                            <img
-                              src={getCartaImageUrl(carta)}
-                              alt={`${carta.valor} de ${carta.palo}`}
-                              className="w-full h-full object-cover"
-                            />
+                          <div key={cIdx} className="w-12 h-[4.5rem] rounded-lg overflow-hidden shadow-lg border border-gold-600/30">
+                            <img src={getCartaImageUrl(carta)} alt={`${carta.valor} de ${carta.palo}`} className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Mostrar cartas del ENVIDO ganador al final de la ronda */}
+            {rondaBanner.cartasEnvido && rondaBanner.cartasEnvido.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gold-600/30">
+                <div className="text-purple-400 text-sm font-bold mb-2">🎯 ENVIDO:</div>
+                <div className="flex flex-col gap-3">
+                  {rondaBanner.cartasEnvido.map((envidoInfo, idx) => (
+                    <div key={idx} className="flex flex-col items-center gap-1">
+                      <span className="text-gold-300 text-xs font-semibold">{envidoInfo.jugadorNombre} ({envidoInfo.puntos} pts)</span>
+                      <div className="flex gap-1.5 justify-center">
+                        {envidoInfo.cartas.map((carta, cIdx) => (
+                          <div key={cIdx} className="w-12 h-[4.5rem] rounded-lg overflow-hidden shadow-lg border border-gold-600/30">
+                            <img src={getCartaImageUrl(carta)} alt={`${carta.valor} de ${carta.palo}`} className="w-full h-full object-cover" />
                           </div>
                         ))}
                       </div>
@@ -2274,47 +2378,22 @@ function GamePage() {
 
         {/* Mesa de juego */}
         <div className="flex-1 flex flex-col">
-          {/* Oponentes */}
+          {/* Top row players (opponents in 1v1, teammate in 2v2, TL-TC-TR in 3v3) */}
           <div className="flex justify-center gap-4 sm:gap-8 mb-2 sm:mb-4">
-            {oponentes.map(j => {
-              const esSuTurno = jugadorDelTurno?.id === j.id;
-              const bubble = speechBubbles.find(b => b.jugadorId === j.id);
-              return (
-                <div key={j.id} className="text-center relative">
-                  {/* Bocadillo de diálogo */}
-                  {bubble && (
-                    <div className={`absolute -top-16 left-1/2 z-50 speech-bubble ${
-                      bubble.tipo === 'envido' ? 'speech-bubble-envido' :
-                      bubble.tipo === 'flor' ? 'speech-bubble-flor' :
-                      bubble.tipo === 'truco' ? 'speech-bubble-truco' :
-                      bubble.tipo === 'quiero' ? 'speech-bubble-quiero' :
-                      bubble.tipo === 'no-quiero' ? 'speech-bubble-no-quiero' : ''
-                    }`}>
-                      {bubble.puntos !== undefined && bubble.puntos !== null && bubble.tipo !== 'flor' ? (
-                        <span className="bubble-number text-2xl font-bold">{bubble.puntos}</span>
-                      ) : (
-                        <span className="font-bold text-sm whitespace-nowrap">{bubble.texto}</span>
-                      )}
-                    </div>
-                  )}
-                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium mb-2 ${
-                    j.equipo === 1 ? 'equipo-1-light text-blue-300' : 'equipo-2-light text-red-300'
-                  } ${esSuTurno ? 'turn-glow' : ''}`}>
-                    {j.nombre}
-                    {j.esMano && <MonedaMano isActive={true} />}
-                  </div>
-                  <div className="flex gap-1 justify-center">
-                    {j.cartas.map((_, i) => (
-                      <div key={i} className="w-8 h-12 sm:w-10 sm:h-14 card-back rounded" />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+            {topRowPlayers.map(j => renderPlayerIndicator(j))}
           </div>
 
-          {/* Mesa central con fieltro */}
-          <div className="flex-1 mesa-flat wood-border rounded-[2rem] sm:rounded-[3rem] p-4 sm:p-6 relative flex flex-col justify-center items-center min-h-[200px]">
+          {/* Mesa with optional side players */}
+          <div className="flex-1 flex flex-row items-stretch gap-1 sm:gap-2">
+            {/* Left side player (rival in 2v2/3v3) */}
+            {leftSidePlayer && (
+              <div className="flex flex-col items-center justify-center w-16 sm:w-24">
+                {renderPlayerIndicator(leftSidePlayer, true)}
+              </div>
+            )}
+
+            {/* Mesa central con fieltro */}
+            <div className="flex-1 mesa-flat wood-border rounded-[2rem] sm:rounded-[3rem] p-4 sm:p-6 relative flex flex-col justify-center items-center min-h-[200px]">
             {/* Luz de lámpara */}
             <div className="lampara-glow" />
             <div className="pulperia-light rounded-[2rem] sm:rounded-[3rem]" />
@@ -2533,10 +2612,8 @@ function GamePage() {
                     mesa.cartaGanadoraMano.indexEnMesa === realIndex &&
                     cartasManoActual.length === mesa.jugadores.length;
 
-                  // Calcular posición basada en la posición del jugador en la mesa
-                  // La mesa tiene: yo abajo, oponentes arriba (y a los costados en 4/6 jugadores)
+                  // Calcular posición basada en el slot del jugador
                   let posicionStyle: React.CSSProperties = {};
-                  const numJugadores = mesa.jugadores.length;
 
                   if (esMiCarta) {
                     // Mi carta: abajo, debajo del mazo (entre el mazo y mis cartas)
@@ -2548,96 +2625,35 @@ function GamePage() {
                       zIndex: esCartaGanadora ? 50 : 15 + i,
                     };
                   } else {
-                    // Cartas de oponentes - calcular su posición relativa
-                    const miIndex = mesa.jugadores.findIndex(j => j.id === socketId);
-                    const jugadorIndex = mesa.jugadores.findIndex(j => j.id === jugada.jugadorId);
+                    // Cartas de otros jugadores - usar slot-based positioning
+                    const slot = getSlotForPlayer(jugada.jugadorId);
+                    const z = esCartaGanadora ? 50 : 15 + i;
 
-                    // Calcular posición relativa (cuántos puestos después de mí)
-                    const posicionRelativa = (jugadorIndex - miIndex + numJugadores) % numJugadores;
-
-                    if (numJugadores === 2) {
-                      // 1v1: oponente está enfrente (arriba)
-                      posicionStyle = {
-                        position: 'absolute',
-                        top: '18%',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: esCartaGanadora ? 50 : 15 + i,
-                      };
-                    } else if (numJugadores === 4) {
-                      // 2v2: yo abajo, compañero arriba, oponentes a los costados
-                      if (posicionRelativa === 1) {
-                        // Oponente a mi izquierda
-                        posicionStyle = {
-                          position: 'absolute',
-                          top: '50%',
-                          left: '12%',
-                          transform: 'translateY(-50%)',
-                          zIndex: esCartaGanadora ? 50 : 15 + i,
-                        };
-                      } else if (posicionRelativa === 2) {
-                        // Compañero enfrente (arriba)
-                        posicionStyle = {
-                          position: 'absolute',
-                          top: '18%',
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          zIndex: esCartaGanadora ? 50 : 15 + i,
-                        };
-                      } else if (posicionRelativa === 3) {
-                        // Oponente a mi derecha
-                        posicionStyle = {
-                          position: 'absolute',
-                          top: '50%',
-                          right: '12%',
-                          transform: 'translateY(-50%)',
-                          zIndex: esCartaGanadora ? 50 : 15 + i,
-                        };
-                      }
-                    } else if (numJugadores === 6) {
-                      // 3v3: distribuir en círculo
-                      if (posicionRelativa === 1) {
-                        // Oponente a mi izquierda abajo
-                        posicionStyle = {
-                          position: 'absolute',
-                          bottom: '30%',
-                          left: '10%',
-                          zIndex: esCartaGanadora ? 50 : 15 + i,
-                        };
-                      } else if (posicionRelativa === 2) {
-                        // Oponente a mi izquierda arriba
-                        posicionStyle = {
-                          position: 'absolute',
-                          top: '30%',
-                          left: '10%',
-                          zIndex: esCartaGanadora ? 50 : 15 + i,
-                        };
-                      } else if (posicionRelativa === 3) {
-                        // Compañero enfrente (arriba centro)
-                        posicionStyle = {
-                          position: 'absolute',
-                          top: '18%',
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          zIndex: esCartaGanadora ? 50 : 15 + i,
-                        };
-                      } else if (posicionRelativa === 4) {
-                        // Oponente a mi derecha arriba
-                        posicionStyle = {
-                          position: 'absolute',
-                          top: '30%',
-                          right: '10%',
-                          zIndex: esCartaGanadora ? 50 : 15 + i,
-                        };
-                      } else if (posicionRelativa === 5) {
-                        // Oponente a mi derecha abajo
-                        posicionStyle = {
-                          position: 'absolute',
-                          bottom: '30%',
-                          right: '10%',
-                          zIndex: esCartaGanadora ? 50 : 15 + i,
-                        };
-                      }
+                    switch (slot) {
+                      case 'top': // 1v1 opponent or 2v2 teammate
+                        posicionStyle = { position: 'absolute', top: '18%', left: '50%', transform: 'translateX(-50%)', zIndex: z };
+                        break;
+                      case 'left': // 2v2 rival left
+                        posicionStyle = { position: 'absolute', top: '50%', left: '12%', transform: 'translateY(-50%)', zIndex: z };
+                        break;
+                      case 'right': // 2v2 rival right
+                        posicionStyle = { position: 'absolute', top: '50%', right: '12%', transform: 'translateY(-50%)', zIndex: z };
+                        break;
+                      case 'side-left': // 3v3 rival bottom-left
+                        posicionStyle = { position: 'absolute', bottom: '30%', left: '10%', zIndex: z };
+                        break;
+                      case 'top-left': // 3v3 teammate top-left
+                        posicionStyle = { position: 'absolute', top: '30%', left: '10%', zIndex: z };
+                        break;
+                      case 'top-center': // 3v3 rival top-center
+                        posicionStyle = { position: 'absolute', top: '18%', left: '50%', transform: 'translateX(-50%)', zIndex: z };
+                        break;
+                      case 'top-right': // 3v3 teammate top-right
+                        posicionStyle = { position: 'absolute', top: '30%', right: '10%', zIndex: z };
+                        break;
+                      case 'side-right': // 3v3 rival bottom-right
+                        posicionStyle = { position: 'absolute', bottom: '30%', right: '10%', zIndex: z };
+                        break;
                     }
                   }
 
@@ -2676,6 +2692,14 @@ function GamePage() {
               </div>
             )}
           </div>
+
+            {/* Right side player (rival in 2v2/3v3) */}
+            {rightSidePlayer && (
+              <div className="flex flex-col items-center justify-center w-16 sm:w-24">
+                {renderPlayerIndicator(rightSidePlayer, true)}
+              </div>
+            )}
+          </div> {/* close flex-row wrapper for side players */}
 
           {/* Panel de respuesta a Truco */}
           {deboResponderGrito() && mesa.gritoActivo && (
@@ -2736,17 +2760,14 @@ function GamePage() {
               </p>
               <p className="text-sm text-pink-400/70 mb-3">¡Vos también tenés flor! ¿Qué querés hacer?</p>
               <div className="flex justify-center gap-2 flex-wrap">
-                <button onClick={() => handleResponderFlor('quiero')} disabled={loading} className="btn-quiero text-white">
-                  ¡QUIERO! (3 pts c/flor)
-                </button>
-                <button onClick={() => handleResponderFlor('no_quiero')} disabled={loading} className="btn-no-quiero text-white">
-                  NO QUIERO
-                </button>
-                <button onClick={() => handleResponderFlor('contra_flor')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-pink-600 to-purple-600 text-white hover:from-pink-500 hover:to-purple-500 transition-all shadow-lg">
-                  🔥 CONTRA FLOR AL RESTO
+                <button onClick={() => handleResponderFlor('quiero')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 transition-all shadow-lg">
+                  🌸 FLOR (Achicarse)
                 </button>
                 <button onClick={() => handleResponderFlor('con_flor_envido')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-500 hover:to-blue-500 transition-all shadow-lg">
-                  🌸 CON FLOR ENVIDO
+                  🎯 CON FLOR ENVIDO
+                </button>
+                <button onClick={() => handleResponderFlor('contra_flor')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-pink-600 to-red-600 text-white hover:from-pink-500 hover:to-red-500 transition-all shadow-lg">
+                  🔥 CONTRA FLOR AL RESTO
                 </button>
               </div>
             </div>

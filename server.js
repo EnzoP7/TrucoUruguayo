@@ -178,6 +178,7 @@ function crearEstadoMesa(mesaId, jugadores, puntosLimite = 30, opciones = {}) {
     cartasRepartidas: [], // Tracks which cards have been dealt for animation
     // Winner card highlight
     cartaGanadoraMano: null, // { jugadorId, carta, indexEnMesa, manoNumero }
+    manoGanadorJugadorId: null, // ID del jugador específico que ganó la mano
     corteRealizado: false,
     posicionCorte: null,
     mazoBarajado: null, // stored temporarily for cut
@@ -188,6 +189,7 @@ function crearEstadoMesa(mesaId, jugadores, puntosLimite = 30, opciones = {}) {
     esperandoFlor: false, // When waiting for flor declarations
     jugadoresConFlor: [], // List of player IDs who have flor
     cartasFlorReveladas: [], // Cartas de quienes tuvieron flor para mostrar al final de ronda
+    cartasEnvidoReveladas: [], // Cartas del ganador del envido para mostrar al final de ronda
     // Contra Flor system - cuando ambos equipos tienen flor
     esperandoRespuestaFlor: false, // Esperando que el segundo equipo responda
     florPendiente: null, // { equipoQueCanta, tipoRespuesta: null | 'contra_flor' | 'con_flor_envido' }
@@ -216,6 +218,7 @@ function iniciarRondaFase1(mesa) {
   mesa.estado = 'jugando';
   mesa.cartasMesa = [];
   mesa.ganadoresManos = [];
+  mesa.manoGanadorJugadorId = null;
   mesa.manoActual = 1;
   mesa.winnerRonda = null;
   mesa.mensajeRonda = null;
@@ -229,6 +232,7 @@ function iniciarRondaFase1(mesa) {
   mesa.fase = 'cortando'; // New phase: waiting for cut
   // Reset nuevos campos
   mesa.cartasFlorReveladas = [];
+  mesa.cartasEnvidoReveladas = [];
   mesa.equipoQueCantoUltimo = null;
   // Mantener perrosActivos si está configurado (se resetea manualmente)
 
@@ -523,6 +527,7 @@ function determinarGanadorMano(mesa) {
   if (empate) {
     mesa.ganadoresManos.push(null);
     mesa.cartaGanadoraMano = null; // No winner - empate
+    mesa.manoGanadorJugadorId = null;
   } else {
     const jugadorGanador = mesa.jugadores.find(j => j.id === cartaGanadora.jugadorId);
     mesa.ganadoresManos.push(jugadorGanador?.equipo || null);
@@ -533,6 +538,8 @@ function determinarGanadorMano(mesa) {
       indexEnMesa: cartaGanadoraIndex,
       manoNumero: mesa.manoActual,
     };
+    // Store the specific winning player for next hand turn assignment
+    mesa.manoGanadorJugadorId = cartaGanadora.jugadorId;
   }
 
   evaluarEstadoRonda(mesa);
@@ -610,10 +617,12 @@ function finalizarRonda(mesa, equipoGanador) {
 function prepararSiguienteMano(mesa) {
   mesa.manoActual++;
   const ganadorAnterior = mesa.ganadoresManos[mesa.ganadoresManos.length - 1];
-  if (ganadorAnterior !== null) {
-    const primerJugador = mesa.jugadores.findIndex(j => j.equipo === ganadorAnterior);
-    mesa.turnoActual = primerJugador >= 0 ? primerJugador : mesa.indiceMano;
+  if (ganadorAnterior !== null && mesa.manoGanadorJugadorId) {
+    // The specific player who won the hand starts next
+    const jugadorIndex = mesa.jugadores.findIndex(j => j.id === mesa.manoGanadorJugadorId);
+    mesa.turnoActual = jugadorIndex >= 0 ? jugadorIndex : mesa.indiceMano;
   } else {
+    // Tie or no winner: mano player starts
     mesa.turnoActual = mesa.indiceMano;
   }
 }
@@ -862,14 +871,14 @@ function cantarFlorAutomatica(mesa) {
 
   // Si ambos equipos tienen flor, esperar respuesta del segundo equipo
   if (ambosEquiposTienenFlor) {
-    // El equipo del mano canta primero, el otro debe responder
+    // El equipo que NO es mano canta primero, el mano decide qué hacer (responde)
     const equipoMano = mesa.jugadores[mesa.indiceMano]?.equipo || 1;
-    const equipoQueDebeResponder = equipoMano === 1 ? 2 : 1;
+    const equipoNoMano = equipoMano === 1 ? 2 : 1;
 
     mesa.esperandoRespuestaFlor = true;
     mesa.florPendiente = {
-      equipoQueCanta: equipoMano,
-      equipoQueResponde: equipoQueDebeResponder,
+      equipoQueCanta: equipoNoMano,
+      equipoQueResponde: equipoMano,
       tipoRespuesta: null, // Se llenará cuando responda
     };
 
@@ -1591,6 +1600,21 @@ function resolverEnvidoAutomatico(mesa, puntosAcumulados, diferirPuntos = false)
     }
   }
 
+  // Guardar cartas del ganador del envido para revelar al final de la ronda
+  const jugadorGanador = jugadoresConPuntos.find(j => j.equipo === ganador && j.puntos === mejorPuntajeDeclarado);
+  if (jugadorGanador) {
+    const jugadorObj = mesa.jugadores.find(j => j.id === jugadorGanador.jugadorId);
+    if (jugadorObj) {
+      mesa.cartasEnvidoReveladas.push({
+        jugadorId: jugadorGanador.jugadorId,
+        jugadorNombre: jugadorGanador.jugadorNombre,
+        equipo: jugadorGanador.equipo,
+        puntos: jugadorGanador.puntos,
+        cartas: jugadorObj.cartas.map(c => ({ ...c })),
+      });
+    }
+  }
+
   // Limpiar estado de envido
   mesa.envidoDeclaracion = null;
 
@@ -2277,8 +2301,20 @@ app.prepare().then(() => {
               }
             }
           }, florResult.cantadas.length * 1000 + 500);
+
+          // Si hay flor pendiente de respuesta, NO permitir jugar carta
+          if (florResult.esperandoRespuesta) {
+            callback(false, 'Hay flor pendiente de respuesta');
+            return;
+          }
         }
         // === FIN FLOR AUTOMÁTICA ===
+
+        // Bloquear jugar carta si hay flor pendiente de respuesta
+        if (mesa.esperandoRespuestaFlor) {
+          callback(false, 'Hay flor pendiente de respuesta');
+          return;
+        }
 
         const success = jugarCarta(mesa, socket.id, carta);
         if (!success) { callback(false, 'Movimiento inválido'); return; }
@@ -2313,12 +2349,14 @@ app.prepare().then(() => {
             if (!resultado) return;
 
             if (resultado.tipo === 'ronda') {
-              // Ronda finished - emit events with flor cards revealed
+              // Ronda finished - emit events with flor/envido cards revealed
               currentRoom.jugadores.forEach(p => {
                 io.to(p.socketId).emit('ronda-finalizada', {
                   ganadorEquipo: currentMesa.winnerRonda,
                   puntosGanados: currentMesa.puntosEnJuego,
                   cartasFlorReveladas: currentMesa.cartasFlorReveladas || [],
+                  cartasEnvidoReveladas: currentMesa.cartasEnvidoReveladas || [],
+                  muestra: currentMesa.muestra,
                   estado: getEstadoParaJugador(currentMesa, p.socketId),
                 });
               });
@@ -2421,6 +2459,8 @@ app.prepare().then(() => {
               ganadorEquipo: mesa.winnerRonda,
               puntosGanados: mesa.puntosEnJuego,
               cartasFlorReveladas: mesa.cartasFlorReveladas || [],
+              cartasEnvidoReveladas: mesa.cartasEnvidoReveladas || [],
+              muestra: mesa.muestra,
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           });
@@ -2910,6 +2950,8 @@ app.prepare().then(() => {
             ganadorEquipo: mesa.winnerRonda,
             puntosGanados: mesa.puntosEnJuego,
             cartasFlorReveladas: mesa.cartasFlorReveladas || [],
+            cartasEnvidoReveladas: mesa.cartasEnvidoReveladas || [],
+            muestra: mesa.muestra,
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });
@@ -3485,17 +3527,19 @@ app.prepare().then(() => {
             });
           });
 
-          // Check game end
+          // Check game end - delay to let players see the perros result
           const eqGanador = mesa.equipos.find(e => e.id === equipoGanador);
           if (eqGanador && eqGanador.puntaje >= mesa.puntosLimite) {
             mesa.winnerJuego = equipoGanador;
-            room.jugadores.forEach(p => {
-              io.to(p.socketId).emit('juego-finalizado', {
-                ganadorEquipo: mesa.winnerJuego,
-                estado: getEstadoParaJugador(mesa, p.socketId),
+            setTimeout(() => {
+              room.jugadores.forEach(p => {
+                io.to(p.socketId).emit('juego-finalizado', {
+                  ganadorEquipo: mesa.winnerJuego,
+                  estado: getEstadoParaJugador(mesa, p.socketId),
+                });
               });
-            });
-            broadcastLobby(io);
+              broadcastLobby(io);
+            }, 3000);
           } else {
             scheduleNextRound(io, room);
           }
@@ -3665,17 +3709,19 @@ app.prepare().then(() => {
           });
         }
 
-        // Check game end after point assignments
+        // Check game end after point assignments - delay to let players see the perros result
         const maxPuntaje = Math.max(...mesa.equipos.map(e => e.puntaje));
         if (maxPuntaje >= mesa.puntosLimite) {
           mesa.winnerJuego = mesa.equipos.find(e => e.puntaje >= mesa.puntosLimite).id;
-          room.jugadores.forEach(p => {
-            io.to(p.socketId).emit('juego-finalizado', {
-              ganadorEquipo: mesa.winnerJuego,
-              estado: getEstadoParaJugador(mesa, p.socketId),
+          setTimeout(() => {
+            room.jugadores.forEach(p => {
+              io.to(p.socketId).emit('juego-finalizado', {
+                ganadorEquipo: mesa.winnerJuego,
+                estado: getEstadoParaJugador(mesa, p.socketId),
+              });
             });
-          });
-          broadcastLobby(io);
+            broadcastLobby(io);
+          }, 3000);
         }
 
         callback(true);
