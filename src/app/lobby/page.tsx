@@ -59,21 +59,51 @@ function ArrowIcon({ className }: { className?: string }) {
   );
 }
 
+interface Usuario {
+  id: number;
+  apodo: string;
+}
+
+interface MiPartida {
+  mesaId: string;
+  estado: 'esperando' | 'jugando';
+  tamañoSala: '1v1' | '2v2' | '3v3';
+  jugadores: string[];
+  jugadoresCount: number;
+  maxJugadores: number;
+  puntaje?: { equipo1: number; equipo2: number; limite: number };
+  miEquipo?: number;
+}
+
 export default function LobbyPage() {
   const [nombre, setNombre] = useState('');
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [conectado, setConectado] = useState(false);
   const [loading, setLoading] = useState(false);
   const [tamañoSala, setTamañoSala] = useState<'1v1' | '2v2' | '3v3'>('2v2');
-  const [modoAlternado, setModoAlternado] = useState(true); // Pico a Pico - Por defecto habilitado
-  const [partidaGuardada, setPartidaGuardada] = useState<string | null>(null); // mesaId de partida anterior
+  const [modoAlternado, setModoAlternado] = useState(true);
+  const [partidaGuardada, setPartidaGuardada] = useState<string | null>(null);
+
+  // Auth state
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [misPartidas, setMisPartidas] = useState<MiPartida[]>([]);
 
   useEffect(() => {
-    const savedNombre = sessionStorage.getItem('truco_nombre');
-    if (savedNombre) setNombre(savedNombre);
+    // Restaurar sesión guardada
+    const savedUsuario = sessionStorage.getItem('truco_usuario');
+    if (savedUsuario) {
+      try {
+        const u = JSON.parse(savedUsuario);
+        setUsuario(u);
+        setNombre(u.apodo);
+      } catch { /* ignorar */ }
+    } else {
+      const savedNombre = sessionStorage.getItem('truco_nombre');
+      if (savedNombre) setNombre(savedNombre);
+    }
 
-    // Verificar si hay una partida guardada para reconectar
     const savedMesaId = sessionStorage.getItem('truco_mesaId');
+    const savedNombre = sessionStorage.getItem('truco_nombre');
     if (savedMesaId && savedNombre) {
       setPartidaGuardada(savedMesaId);
     }
@@ -83,7 +113,6 @@ export default function LobbyPage() {
         await socketService.connect();
         setConectado(true);
 
-        // Register listeners BEFORE joining lobby so we don't miss the response
         socketService.onPartidasDisponibles((partidasData) => {
           setPartidas(partidasData);
         });
@@ -96,6 +125,20 @@ export default function LobbyPage() {
         });
 
         await socketService.joinLobby();
+
+        // Re-autenticar el socket si ya tenemos sesión
+        if (savedUsuario) {
+          try {
+            const u = JSON.parse(savedUsuario);
+            const savedPw = sessionStorage.getItem('truco_auth');
+            if (savedPw) {
+              const loginResult = await socketService.login(u.apodo, savedPw);
+              if (loginResult?.success && loginResult.partidasActivas) {
+                setMisPartidas(loginResult.partidasActivas);
+              }
+            }
+          } catch { /* ignorar */ }
+        }
       } catch (error) {
         console.error('Failed to connect:', error);
         setConectado(false);
@@ -105,12 +148,56 @@ export default function LobbyPage() {
     connectToServer();
 
     return () => {
-      // Only remove listeners, don't disconnect - socket is a singleton
-      // and React strict mode will remount causing double connect/disconnect
       socketService.off('partidas-disponibles');
       socketService.off('partida-nueva');
     };
   }, []);
+
+  const handleCerrarSesion = () => {
+    setUsuario(null);
+    setNombre('');
+    setMisPartidas([]);
+    sessionStorage.removeItem('truco_usuario');
+    sessionStorage.removeItem('truco_auth');
+    sessionStorage.removeItem('truco_nombre');
+  };
+
+  // Obtener partidas del usuario logueado
+  const fetchMisPartidas = async () => {
+    if (!usuario) return;
+    const result = await socketService.obtenerMisPartidas();
+    if (result.success) {
+      setMisPartidas(result.partidas || []);
+    }
+  };
+
+  // Auto-refresh de mis partidas cada 10 segundos
+  useEffect(() => {
+    if (!usuario || !conectado) return;
+    const interval = setInterval(fetchMisPartidas, 10000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario, conectado]);
+
+  // Reconectar a partida como usuario logueado (usa userId)
+  const handleReconectarPartidaUsuario = async (mesaId: string) => {
+    if (!usuario) return;
+    setLoading(true);
+    try {
+      const success = await socketService.reconectarPartida(mesaId, usuario.apodo, usuario.id);
+      if (success) {
+        navigateToGame(mesaId);
+      } else {
+        alert('Error al reconectar. La partida puede haber terminado.');
+        fetchMisPartidas();
+      }
+    } catch {
+      alert('Error al reconectar a la partida');
+      fetchMisPartidas();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const navigateToGame = (mesaId: string) => {
     sessionStorage.setItem('truco_nombre', nombre.trim());
@@ -267,8 +354,8 @@ export default function LobbyPage() {
           </div>
         </header>
 
-        {/* Banner de reconexión */}
-        {partidaGuardada && nombre.trim() && (
+        {/* Banner de reconexión (solo invitados) */}
+        {!usuario && partidaGuardada && nombre.trim() && (
           <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-amber-500/30 bg-amber-900/10">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -300,22 +387,173 @@ export default function LobbyPage() {
           </div>
         )}
 
+        {/* Barra de usuario o invitado */}
+        {usuario ? (
+          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-gold-800/20">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold text-lg">
+                  {usuario.apodo[0].toUpperCase()}
+                </div>
+                <div>
+                  <div className="text-gold-300 font-bold">{usuario.apodo}</div>
+                  <div className="text-gold-500/50 text-xs">Jugador registrado</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link href="/perfil" className="px-3 py-1.5 rounded-lg text-xs text-gold-400/70 hover:text-gold-300 hover:bg-white/5 transition-all">
+                  Mi Perfil
+                </Link>
+                <Link href="/ranking" className="px-3 py-1.5 rounded-lg text-xs text-gold-400/70 hover:text-gold-300 hover:bg-white/5 transition-all">
+                  Ranking
+                </Link>
+                <button
+                  onClick={handleCerrarSesion}
+                  className="px-3 py-1.5 rounded-lg text-xs text-red-400/70 hover:text-red-300 hover:bg-red-900/20 transition-all"
+                >
+                  Salir
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-gold-800/20">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-wood-800 flex items-center justify-center text-gold-500/50 text-lg">
+                  ?
+                </div>
+                <div>
+                  <div className="text-gold-400/70 font-medium">Modo invitado</div>
+                  <div className="text-gold-500/40 text-xs">Sin estadísticas ni ranking</div>
+                </div>
+              </div>
+              <Link
+                href="/login"
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-gold-600 to-gold-700 text-wood-950 hover:from-gold-500 hover:to-gold-600 transition-all shadow-lg shadow-gold-600/20"
+              >
+                Iniciar sesión / Registrarse
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Tus Partidas - solo usuarios logueados */}
+        {usuario && misPartidas.length > 0 && (
+          <div className="glass rounded-2xl p-6 sm:p-8 mb-6 animate-slide-up border border-blue-500/30 bg-blue-900/10">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-[var(--font-cinzel)] text-2xl sm:text-3xl font-bold text-blue-400">
+                Tus Partidas
+              </h2>
+              <button
+                onClick={fetchMisPartidas}
+                className="text-sm text-blue-400/70 hover:text-blue-300 transition-colors flex items-center gap-1.5"
+              >
+                <ReconnectIcon className="w-4 h-4" />
+                Actualizar
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {misPartidas.map((partida) => {
+                const estaJugando = partida.estado === 'jugando';
+
+                return (
+                  <div
+                    key={partida.mesaId}
+                    className="glass rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-blue-500/40 bg-blue-900/20"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-xl flex items-center justify-center bg-blue-600/30">
+                        <span className="text-2xl font-bold text-blue-400">
+                          {partida.tamañoSala}
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-lg text-white">
+                            Mesa {partida.mesaId.split('_')[1]?.slice(0, 6) || partida.mesaId.slice(0, 6)}
+                          </h3>
+                          <span className="px-2 py-0.5 bg-blue-600/30 text-blue-300 rounded-full text-[10px] font-bold uppercase">
+                            Tu partida
+                          </span>
+                        </div>
+
+                        <div className="text-gold-500/60 text-xs mb-1.5">
+                          Jugadores: <span className="text-gold-400">{partida.jugadores.join(', ')}</span>
+                        </div>
+
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: partida.maxJugadores }, (_, i) => (
+                                <div
+                                  key={i}
+                                  className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                                    i < partida.jugadoresCount ? 'bg-blue-400' : 'bg-gold-800/40'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-gold-400/60 text-sm">
+                              {partida.jugadoresCount}/{partida.maxJugadores}
+                            </span>
+                          </div>
+
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${
+                            estaJugando
+                              ? 'bg-green-600/20 text-green-400'
+                              : 'bg-amber-600/20 text-amber-400'
+                          }`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${
+                              estaJugando ? 'bg-green-400 animate-pulse' : 'bg-amber-400'
+                            }`} />
+                            {estaJugando ? 'En juego' : 'Esperando'}
+                          </span>
+
+                          {estaJugando && partida.puntaje && (
+                            <span className="px-2.5 py-0.5 bg-gold-600/20 text-gold-300 rounded-full text-xs font-medium">
+                              {partida.puntaje.equipo1} - {partida.puntaje.equipo2}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleReconectarPartidaUsuario(partida.mesaId)}
+                      disabled={loading}
+                      className="px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 hover:scale-105 shadow-lg shadow-blue-600/20 active:scale-95 disabled:opacity-50"
+                    >
+                      <ReconnectIcon className="w-5 h-5" />
+                      Volver
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Panel de crear partida */}
         <div className="glass rounded-2xl p-6 sm:p-8 mb-6 animate-slide-up border border-gold-800/20">
-          {/* Input nombre */}
-          <div className="mb-6">
-            <label className="block text-gold-400/80 text-sm font-medium mb-2 tracking-wide">
-              Tu nombre
-            </label>
-            <input
-              type="text"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              className="input-glass w-full px-4 py-3.5 rounded-xl text-lg"
-              placeholder="Ingresa tu nombre para jugar"
-              maxLength={20}
-            />
-          </div>
+          {/* Input nombre (solo para usuarios no registrados como fallback) */}
+          {!usuario && (
+            <div className="mb-6">
+              <label className="block text-gold-400/80 text-sm font-medium mb-2 tracking-wide">
+                O jugá como invitado
+              </label>
+              <input
+                type="text"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                className="input-glass w-full px-4 py-3.5 rounded-xl text-lg"
+                placeholder="Nombre temporal (sin estadísticas)"
+                maxLength={20}
+              />
+            </div>
+          )}
 
           {/* Selector de tamaño */}
           <div className="mb-6">

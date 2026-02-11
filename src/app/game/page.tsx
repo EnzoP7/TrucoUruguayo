@@ -643,6 +643,11 @@ function GamePage() {
           }
         });
 
+        socketService.onAnfitrionDesconectado((data) => {
+          if (!mounted) return;
+          mostrarMensaje(`El anfitrión (${data.nombre}) se ha desconectado`, 5000);
+        });
+
         socketService.onUnidoPartida((data) => {
           if (!mounted) return;
           console.log('[Game] unido-partida received, jugadores:', data.estado.jugadores?.length);
@@ -1025,16 +1030,23 @@ function GamePage() {
           setTimeout(() => { if (mounted) setMensaje(null); }, 5000);
         });
 
+        // Obtener userId si está logueado
+        let userId: number | undefined;
+        try {
+          const savedUsuario = sessionStorage.getItem('truco_usuario');
+          if (savedUsuario) userId = JSON.parse(savedUsuario).id;
+        } catch { /* ignorar */ }
+
         // Register auto-reconnect: if socket drops and reconnects, re-join the game room
         socketService.onAutoReconnect(() => {
           if (!mounted) return;
           console.log('[Game] Auto-reconnected, re-joining game room');
           setSocketId(socketService.getSocketId());
-          socketService.reconectarPartida(mesaId, nombre);
+          socketService.reconectarPartida(mesaId, nombre, userId);
         });
 
         // NOW call reconectar after listeners are ready
-        const success = await socketService.reconectarPartida(mesaId, nombre);
+        const success = await socketService.reconectarPartida(mesaId, nombre, userId);
         if (!success && mounted) {
           console.error('Failed to reconnect to game');
           // Don't redirect immediately - could be a timing issue
@@ -1314,6 +1326,17 @@ function GamePage() {
     try {
       const success = await socketService.revancha();
       if (!success) mostrarMensaje('Error al iniciar revancha');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTerminarPartida = async () => {
+    if (!confirm('¿Terminar la partida? Tu equipo pierde por abandono.')) return;
+    setLoading(true);
+    try {
+      const success = await socketService.terminarPartida();
+      if (!success) mostrarMensaje('Error al terminar la partida');
     } finally {
       setLoading(false);
     }
@@ -2414,6 +2437,18 @@ function GamePage() {
           <div className="flex-1 flex flex-col items-center justify-center boliche-panel rounded-xl px-2 sm:px-4 py-2 border-gold-700/30 relative">
             {/* Decoración de mate */}
             <div className="absolute -top-1 -right-1 text-lg opacity-30">🧉</div>
+
+            {/* Botón terminar partida (solo anfitrión, solo en juego) */}
+            {esAnfitrion() && mesa.estado === 'jugando' && (
+              <button
+                onClick={handleTerminarPartida}
+                disabled={loading}
+                className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] text-red-400/60 hover:text-red-300 hover:bg-red-900/30 transition-all disabled:opacity-50"
+                title="Terminar partida (tu equipo pierde)"
+              >
+                Terminar
+              </button>
+            )}
 
             <div className="text-gold-400/70 text-xs sm:text-sm font-medium uppercase tracking-wider">
               Mano {mesa.manoActual}/3

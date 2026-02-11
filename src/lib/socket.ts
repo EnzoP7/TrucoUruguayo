@@ -135,10 +135,26 @@ class SocketService {
     });
   }
 
-  async reconectarPartida(mesaId: string, nombre: string): Promise<boolean> {
+  async reconectarPartida(mesaId: string, nombre: string, userId?: number): Promise<boolean> {
     if (!this.socket) return false;
     return new Promise((resolve) => {
-      this.socket!.emit('reconectar-partida', { mesaId, nombre }, (success) => resolve(success));
+      this.socket!.emit('reconectar-partida', { mesaId, nombre, userId }, (success) => resolve(success));
+    });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async obtenerMisPartidas(): Promise<{ success: boolean; partidas?: any[]; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.socket!.emit('obtener-mis-partidas' as any, (result: { success: boolean; partidas?: any[]; error?: string }) => resolve(result));
+    });
+  }
+
+  async terminarPartida(): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('terminar-partida', (success) => resolve(success));
     });
   }
 
@@ -267,6 +283,66 @@ class SocketService {
     });
   }
 
+  // === AUTH ===
+
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  async registrar(apodo: string, password: string): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('registrar' as any, { apodo, password }, (result: any) => resolve(result));
+    });
+  }
+
+  async login(apodo: string, password: string): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('login' as any, { apodo, password }, (result: any) => resolve(result));
+    });
+  }
+
+  async obtenerPerfil(): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-perfil' as any, (result: any) => resolve(result));
+    });
+  }
+
+  async obtenerRanking(): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-ranking' as any, (result: any) => resolve(result));
+    });
+  }
+
+  async obtenerAmigos(): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-amigos' as any, (result: any) => resolve(result));
+    });
+  }
+
+  async buscarUsuarios(termino: string): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('buscar-usuarios' as any, { termino }, (result: any) => resolve(result));
+    });
+  }
+
+  async agregarAmigo(amigoId: number): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('agregar-amigo' as any, { amigoId }, (result: any) => resolve(result));
+    });
+  }
+
+  async eliminarAmigo(amigoId: number): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('eliminar-amigo' as any, { amigoId }, (result: any) => resolve(result));
+    });
+  }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
   // === SOLICITAR ESTADO ===
 
   async solicitarEstado(): Promise<boolean> {
@@ -329,6 +405,10 @@ class SocketService {
 
   onReconectado(callback: (data: any) => void): void {
     this.socket?.on('reconectado', callback);
+  }
+
+  onAnfitrionDesconectado(callback: (data: { nombre: string }) => void): void {
+    this.socket?.on('anfitrion-desconectado', callback);
   }
 
   onEstadoActualizado(callback: (estado: any) => void): void {

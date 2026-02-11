@@ -9,7 +9,7 @@ export interface ClientToServerEvents {
   'crear-partida': (data: { nombre: string; tamañoSala?: '1v1' | '2v2' | '3v3'; modoAlternado?: boolean; modoAyuda?: boolean }, callback: (success: boolean, mesaId?: string) => void) => void;
   'unirse-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
   'iniciar-partida': (callback: (success: boolean, message?: string) => void) => void;
-  'reconectar-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
+  'reconectar-partida': (data: { mesaId: string; nombre: string; userId?: number }, callback: (success: boolean, message?: string) => void) => void;
   'eliminar-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
 
   // Juego
@@ -33,6 +33,7 @@ export interface ClientToServerEvents {
   'responder-perros': (data: { quiereContraFlor: boolean; quiereFaltaEnvido: boolean; quiereTruco: boolean }, callback: (success: boolean, message?: string) => void) => void;
   'solicitar-estado': (callback: (success: boolean) => void) => void;
   'toggle-ayuda': (data: { modoAyuda: boolean }, callback: (success: boolean) => void) => void;
+  'terminar-partida': (callback: (success: boolean, message?: string) => void) => void;
 }
 
 // Eventos del servidor al cliente
@@ -79,6 +80,7 @@ export interface ServerToClientEvents {
   'perros-cancelados': (data: { estado: Mesa }) => void;
   'perros-respondidos': (data: { respuesta: string; equipoGanador?: number; puntosGanados?: number; floresDelEchador?: number; quiereContraFlor?: boolean; quiereFaltaEnvido?: boolean; quiereTruco?: boolean; estado: Mesa }) => void;
   'perros-pendientes': (data: { equipoQueEcha: number; debeResponder: boolean; estado: Mesa }) => void;
+  'anfitrion-desconectado': (data: { nombre: string }) => void;
 }
 
 // Types for step-by-step envido

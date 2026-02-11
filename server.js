@@ -1,7 +1,10 @@
+require('dotenv').config();
 const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
 const { Server: SocketIOServer } = require('socket.io');
+const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios } = require('./db');
+const { registrar, login } = require('./auth');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
@@ -1152,7 +1155,7 @@ function emitirFlorDeJugador(io, room, mesa, florResult) {
         });
 
         if (mesa.winnerJuego !== null) {
-          room.estado = 'terminado';
+          room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
           room.jugadores.forEach(p => {
             io.to(p.socketId).emit('juego-finalizado', {
               ganadorEquipo: mesa.winnerJuego,
@@ -2242,7 +2245,10 @@ function scheduleNextRound(io, room) {
 // Main
 // ============================================================
 
-app.prepare().then(() => {
+app.prepare().then(async () => {
+  // Inicializar base de datos Turso
+  await initDB();
+
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
     handle(req, res, parsedUrl);
@@ -2257,8 +2263,219 @@ app.prepare().then(() => {
     },
   });
 
+  // Map socketId → userId para saber qué usuario está detrás de cada socket
+  const socketUsuarios = new Map();
+
+  // Helper: guardar partida en BD cuando termina el juego
+  async function guardarResultadoPartida(room, mesa) {
+    try {
+      const duracionSeg = room.inicioPartida ? Math.round((Date.now() - room.inicioPartida) / 1000) : null;
+      const jugadoresConUserId = mesa.jugadores.map(j => {
+        const roomJugador = room.jugadores.find(rj => rj.socketId === j.id);
+        return {
+          userId: roomJugador?.userId || j.userId || null,
+          equipo: j.equipo,
+        };
+      });
+      // Solo guardar si al menos un jugador está registrado
+      if (jugadoresConUserId.some(j => j.userId)) {
+        await guardarPartida(
+          room.tamañoSala,
+          mesa.winnerJuego,
+          mesa.equipos[0].puntaje,
+          mesa.equipos[1].puntaje,
+          duracionSeg,
+          jugadoresConUserId
+        );
+        console.log(`[DB] Partida guardada: ${room.tamañoSala}, ganador equipo ${mesa.winnerJuego}`);
+      }
+    } catch (err) {
+      console.error('[DB] Error guardando partida:', err);
+    }
+  }
+
   io.on('connection', (socket) => {
     console.log(`[Socket.IO] Connected: ${socket.id}`);
+
+    // === REGISTRO ===
+    socket.on('registrar', async (data, callback) => {
+      try {
+        const result = await registrar(data.apodo, data.password);
+        if (result.success) {
+          socketUsuarios.set(socket.id, result.usuario);
+        }
+        callback(result);
+      } catch (err) {
+        console.error('[Auth] Error registro:', err);
+        callback({ success: false, error: 'Error interno del servidor' });
+      }
+    });
+
+    // === LOGIN ===
+    socket.on('login', async (data, callback) => {
+      try {
+        const result = await login(data.apodo, data.password);
+        if (result.success) {
+          socketUsuarios.set(socket.id, result.usuario);
+
+          // Buscar partidas activas del usuario
+          const partidasActivas = [];
+          for (const [mesaId, room] of lobbyRooms.entries()) {
+            if (room.estado === 'terminado') continue;
+            const jugadorEnRoom = room.jugadores.find(j => j.userId === result.usuario.id);
+            if (!jugadorEnRoom) continue;
+
+            const mesa = engines.get(mesaId);
+            const partidaInfo = {
+              mesaId: room.mesaId,
+              estado: room.estado,
+              tamañoSala: room.tamañoSala,
+              jugadores: room.jugadores.map(j => j.nombre),
+              jugadoresCount: room.jugadores.length,
+              maxJugadores: room.maxJugadores,
+            };
+            if (room.estado === 'jugando' && mesa) {
+              partidaInfo.puntaje = {
+                equipo1: mesa.equipos[0].puntaje,
+                equipo2: mesa.equipos[1].puntaje,
+                limite: mesa.puntosLimite,
+              };
+              const jugadorEnMesa = mesa.jugadores.find(j => j.nombre === jugadorEnRoom.nombre);
+              if (jugadorEnMesa) partidaInfo.miEquipo = jugadorEnMesa.equipo;
+            }
+            partidasActivas.push(partidaInfo);
+          }
+          result.partidasActivas = partidasActivas;
+        }
+        callback(result);
+      } catch (err) {
+        console.error('[Auth] Error login:', err);
+        callback({ success: false, error: 'Error interno del servidor' });
+      }
+    });
+
+    // === OBTENER PERFIL/ESTADÍSTICAS ===
+    socket.on('obtener-perfil', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const stats = await obtenerEstadisticas(usuario.id);
+        const historial = await obtenerHistorial(usuario.id, 10);
+        callback({ success: true, stats, historial });
+      } catch (err) {
+        console.error('[DB] Error obtener perfil:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    // === RANKING ===
+    socket.on('obtener-ranking', async (callback) => {
+      try {
+        const ranking = await obtenerRanking(50);
+        callback({ success: true, ranking });
+      } catch (err) {
+        console.error('[DB] Error obtener ranking:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    // === AMIGOS ===
+    socket.on('obtener-amigos', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const amigos = await obtenerAmigos(usuario.id);
+        // Marcar cuáles están online
+        const amigosConEstado = amigos.map(a => ({
+          ...a,
+          online: [...socketUsuarios.values()].some(u => u.id === Number(a.id)),
+        }));
+        callback({ success: true, amigos: amigosConEstado });
+      } catch (err) {
+        console.error('[DB] Error obtener amigos:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('buscar-usuarios', async (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const usuarios = await buscarUsuarios(data.termino, usuario.id);
+        callback({ success: true, usuarios });
+      } catch (err) {
+        console.error('[DB] Error buscar usuarios:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('agregar-amigo', async (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        await agregarAmigo(usuario.id, data.amigoId);
+        callback({ success: true });
+      } catch (err) {
+        console.error('[DB] Error agregar amigo:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('eliminar-amigo', async (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        await eliminarAmigo(usuario.id, data.amigoId);
+        callback({ success: true });
+      } catch (err) {
+        console.error('[DB] Error eliminar amigo:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    // === OBTENER MIS PARTIDAS (usuarios logueados) ===
+    socket.on('obtener-mis-partidas', (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+
+        const misPartidas = [];
+        for (const [mesaId, room] of lobbyRooms.entries()) {
+          if (room.estado === 'terminado') continue;
+          const jugadorEnRoom = room.jugadores.find(j => j.userId === usuario.id);
+          if (!jugadorEnRoom) continue;
+
+          const mesa = engines.get(mesaId);
+          const partidaInfo = {
+            mesaId: room.mesaId,
+            estado: room.estado,
+            tamañoSala: room.tamañoSala,
+            jugadores: room.jugadores.map(j => j.nombre),
+            jugadoresCount: room.jugadores.length,
+            maxJugadores: room.maxJugadores,
+          };
+
+          if (room.estado === 'jugando' && mesa) {
+            partidaInfo.puntaje = {
+              equipo1: mesa.equipos[0].puntaje,
+              equipo2: mesa.equipos[1].puntaje,
+              limite: mesa.puntosLimite,
+            };
+            const jugadorEnMesa = mesa.jugadores.find(j => j.nombre === jugadorEnRoom.nombre);
+            if (jugadorEnMesa) {
+              partidaInfo.miEquipo = jugadorEnMesa.equipo;
+            }
+          }
+
+          misPartidas.push(partidaInfo);
+        }
+
+        callback({ success: true, partidas: misPartidas });
+      } catch (err) {
+        console.error('[obtener-mis-partidas] Error:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
 
     // === JOIN LOBBY ===
     socket.on('join-lobby', (callback) => {
@@ -2285,20 +2502,22 @@ app.prepare().then(() => {
         const mesaId = `mesa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const maxJugadores = getMaxJugadores(tamañoSala);
 
+        const usuarioCreador = socketUsuarios.get(socket.id);
         const room = {
           mesaId,
-          jugadores: [{ socketId: socket.id, nombre }],
+          jugadores: [{ socketId: socket.id, nombre, userId: usuarioCreador?.id || null }],
           maxJugadores,
           tamañoSala,
           estado: 'esperando',
-          creadorNombre: nombre, // Guardamos el nombre del creador
-          creadorSocketId: socket.id, // ID del socket original (puede cambiar si reconecta)
-          modoAlternado, // Opción de Pico a Pico 3v3/1v1 para 6 jugadores
-          modoAyuda, // Modo ayuda para principiantes
+          creadorNombre: nombre,
+          creadorSocketId: socket.id,
+          modoAlternado,
+          modoAyuda,
+          inicioPartida: null, // timestamp para calcular duración
         };
         lobbyRooms.set(mesaId, room);
 
-        const jugador = { id: socket.id, nombre, equipo: 1, cartas: [], modoAyuda: false };
+        const jugador = { id: socket.id, nombre, equipo: 1, cartas: [], modoAyuda: false, userId: usuarioCreador?.id || null };
         const mesa = crearEstadoMesa(mesaId, [jugador], 30, { modoAlternado, modoAyuda });
         engines.set(mesaId, mesa);
 
@@ -2448,11 +2667,12 @@ app.prepare().then(() => {
         if (room.estado !== 'esperando') { callback(false, 'La partida ya comenzó'); return; }
         if (room.jugadores.length >= room.maxJugadores) { callback(false, 'La partida está llena'); return; }
 
-        room.jugadores.push({ socketId: socket.id, nombre });
+        const usuarioAuth = socketUsuarios.get(socket.id);
+        room.jugadores.push({ socketId: socket.id, nombre, userId: usuarioAuth?.id || null });
 
         const halfPoint = Math.ceil(room.maxJugadores / 2);
         const equipo = (room.jugadores.length - 1) < halfPoint ? 1 : 2;
-        const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false };
+        const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false, userId: usuarioAuth?.id || null };
 
         mesa.jugadores.push(jugador);
         // Re-assign teams
@@ -2485,7 +2705,7 @@ app.prepare().then(() => {
     socket.on('reconectar-partida', (data, callback) => {
       console.log(`[Socket.IO] ${socket.id} reconectar-partida:`, data);
       try {
-        const { mesaId, nombre } = data;
+        const { mesaId, nombre, userId } = data;
         const room = lobbyRooms.get(mesaId);
         if (!room) { console.log(`[Socket.IO] Room ${mesaId} not found`); callback(false, 'Partida no encontrada'); return; }
 
@@ -2493,14 +2713,37 @@ app.prepare().then(() => {
         if (!mesa) { callback(false, 'Motor no encontrado'); return; }
 
         let isNewPlayer = false;
-        const existingPlayer = room.jugadores.find(j => j.nombre === nombre);
+        // Priorizar búsqueda por userId si está disponible, fallback a nombre
+        let existingPlayer;
+        if (userId) {
+          existingPlayer = room.jugadores.find(j => j.userId === userId);
+        }
+        if (!existingPlayer) {
+          existingPlayer = room.jugadores.find(j => j.nombre === nombre);
+        }
         if (existingPlayer) {
           const oldSocketId = existingPlayer.socketId;
-          console.log(`[Socket.IO] Updating socketId for ${nombre}: ${oldSocketId} -> ${socket.id}`);
+          console.log(`[Socket.IO] Updating socketId for ${existingPlayer.nombre}: ${oldSocketId} -> ${socket.id}`);
           existingPlayer.socketId = socket.id;
+          // Asegurar que el userId quede asociado
+          if (userId && !existingPlayer.userId) existingPlayer.userId = userId;
+          // Actualizar socketUsuarios si aplica
+          if (userId) {
+            const usuarioViejo = socketUsuarios.get(oldSocketId);
+            if (usuarioViejo) {
+              socketUsuarios.delete(oldSocketId);
+              socketUsuarios.set(socket.id, usuarioViejo);
+            } else {
+              const usuarioNuevo = socketUsuarios.get(socket.id);
+              if (!usuarioNuevo) {
+                // Intentar restaurar desde el userId
+                socketUsuarios.set(socket.id, { id: userId, apodo: existingPlayer.nombre });
+              }
+            }
+          }
 
           // Update in mesa
-          const jugInMesa = mesa.jugadores.find(j => j.id === oldSocketId || j.nombre === nombre);
+          const jugInMesa = mesa.jugadores.find(j => j.id === oldSocketId || j.nombre === existingPlayer.nombre);
           if (jugInMesa) {
             jugInMesa.id = socket.id;
             jugInMesa.desconectado = false; // Marcar como reconectado
@@ -2526,10 +2769,11 @@ app.prepare().then(() => {
         } else {
           if (room.estado === 'esperando' && room.jugadores.length < room.maxJugadores) {
             isNewPlayer = true;
-            room.jugadores.push({ socketId: socket.id, nombre });
+            const usuarioAuth2 = socketUsuarios.get(socket.id);
+            room.jugadores.push({ socketId: socket.id, nombre, userId: usuarioAuth2?.id || null });
             const halfPoint = Math.ceil(room.maxJugadores / 2);
             const equipo = (room.jugadores.length - 1) < halfPoint ? 1 : 2;
-            const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false };
+            const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false, userId: usuarioAuth2?.id || null };
             mesa.jugadores.push(jugador);
             mesa.jugadores.forEach((j, idx) => {
               j.equipo = idx < halfPoint ? 1 : 2;
@@ -2608,6 +2852,7 @@ app.prepare().then(() => {
         console.log(`[Socket.IO] iniciar-partida: Starting game with ${room.jugadores.length} players:`, room.jugadores.map(j => `${j.nombre}(${j.socketId})`));
 
         room.estado = 'jugando';
+        room.inicioPartida = Date.now();
 
         // Reorder players to alternate teams (pico a pico seating: E1,E2,E1,E2,...)
         // This ensures siguienteTurno correctly alternates between teams
@@ -2855,7 +3100,7 @@ app.prepare().then(() => {
           });
 
           if (mesa.winnerJuego !== null) {
-            room.estado = 'terminado';
+            room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
             room.jugadores.forEach(p => {
               io.to(p.socketId).emit('juego-finalizado', {
                 ganadorEquipo: mesa.winnerJuego,
@@ -2934,7 +3179,7 @@ app.prepare().then(() => {
               });
 
               if (mesa.winnerJuego !== null) {
-                room.estado = 'terminado';
+                room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
                 room.jugadores.forEach(p => {
                   io.to(p.socketId).emit('juego-finalizado', {
                     ganadorEquipo: mesa.winnerJuego,
@@ -3036,7 +3281,7 @@ app.prepare().then(() => {
               });
 
               if (mesa.winnerJuego !== null) {
-                room.estado = 'terminado';
+                room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
                 room.jugadores.forEach(p => {
                   io.to(p.socketId).emit('juego-finalizado', {
                     ganadorEquipo: mesa.winnerJuego,
@@ -3120,7 +3365,7 @@ app.prepare().then(() => {
             });
 
             if (mesa.winnerJuego !== null) {
-              room.estado = 'terminado';
+              room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
               room.jugadores.forEach(p => {
                 io.to(p.socketId).emit('juego-finalizado', {
                   ganadorEquipo: mesa.winnerJuego,
@@ -3133,7 +3378,7 @@ app.prepare().then(() => {
         } else if (!result.acepta) {
           // No quiero - check game end
           if (mesa.winnerJuego !== null) {
-            room.estado = 'terminado';
+            room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
             room.jugadores.forEach(p => {
               io.to(p.socketId).emit('juego-finalizado', {
                 ganadorEquipo: mesa.winnerJuego,
@@ -3174,7 +3419,7 @@ app.prepare().then(() => {
           });
 
           if (mesa.winnerJuego !== null) {
-            room.estado = 'terminado';
+            room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
             room.jugadores.forEach(p => {
               io.to(p.socketId).emit('juego-finalizado', {
                 ganadorEquipo: mesa.winnerJuego,
@@ -3232,7 +3477,7 @@ app.prepare().then(() => {
           });
 
           if (mesa.winnerJuego !== null) {
-            room.estado = 'terminado';
+            room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
             room.jugadores.forEach(p => {
               io.to(p.socketId).emit('juego-finalizado', {
                 ganadorEquipo: mesa.winnerJuego,
@@ -3311,7 +3556,7 @@ app.prepare().then(() => {
         });
 
         if (mesa.winnerJuego !== null) {
-          room.estado = 'terminado';
+          room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
           room.jugadores.forEach(p => {
             io.to(p.socketId).emit('juego-finalizado', {
               ganadorEquipo: mesa.winnerJuego,
@@ -3370,7 +3615,7 @@ app.prepare().then(() => {
           });
 
           if (mesa.winnerJuego !== null) {
-            room.estado = 'terminado';
+            room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
             room.jugadores.forEach(p => {
               io.to(p.socketId).emit('juego-finalizado', {
                 ganadorEquipo: mesa.winnerJuego,
@@ -3775,6 +4020,44 @@ app.prepare().then(() => {
       }
     });
 
+    // === TERMINAR PARTIDA (solo anfitrión) ===
+    socket.on('terminar-partida', (callback) => {
+      try {
+        const room = findRoomBySocket(socket.id);
+        if (!room) { callback(false, 'No estás en ninguna partida'); return; }
+        if (room.jugadores[0].socketId !== socket.id) { callback(false, 'Solo el anfitrión puede terminar la partida'); return; }
+
+        const mesa = engines.get(room.mesaId);
+        if (!mesa) { callback(false, 'Motor no encontrado'); return; }
+        if (mesa.estado !== 'jugando') { callback(false, 'La partida no está en curso'); return; }
+
+        // El equipo del anfitrión pierde por abandono
+        const jugadorAnfitrion = mesa.jugadores.find(j => j.id === socket.id);
+        const equipoAnfitrion = jugadorAnfitrion ? jugadorAnfitrion.equipo : 1;
+        const equipoGanador = equipoAnfitrion === 1 ? 2 : 1;
+
+        mesa.winnerJuego = equipoGanador;
+        mesa.estado = 'terminado';
+        mesa.mensajeRonda = `El anfitrión terminó la partida. Equipo ${equipoGanador} gana por abandono.`;
+        room.estado = 'terminado';
+        guardarResultadoPartida(room, mesa);
+
+        // Notificar a todos
+        room.jugadores.forEach(p => {
+          io.to(p.socketId).emit('juego-finalizado', {
+            ganadorEquipo: equipoGanador,
+            estado: getEstadoParaJugador(mesa, p.socketId),
+          });
+        });
+
+        broadcastLobby(io);
+        callback(true);
+      } catch (err) {
+        console.error('Error terminar-partida:', err);
+        callback(false, 'Error interno');
+      }
+    });
+
     // === ECHAR LOS PERROS ===
     // Activar modo "echar los perros" antes de repartir
     socket.on('echar-perros', (data, callback) => {
@@ -4036,7 +4319,7 @@ app.prepare().then(() => {
 
               // Check game end after envido
               if (mesa.winnerJuego !== null) {
-                room.estado = 'terminado';
+                room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
                 room.jugadores.forEach(p => {
                   io.to(p.socketId).emit('juego-finalizado', {
                     ganadorEquipo: mesa.winnerJuego,
@@ -4133,6 +4416,7 @@ app.prepare().then(() => {
     // === DISCONNECT ===
     socket.on('disconnect', () => {
       console.log(`[Socket.IO] Disconnected: ${socket.id}`);
+      socketUsuarios.delete(socket.id);
       socket.leave('lobby');
 
       // Buscar si el jugador estaba en una partida
@@ -4144,6 +4428,17 @@ app.prepare().then(() => {
           if (jugador) {
             jugador.desconectado = true;
             console.log(`[Socket.IO] Jugador ${jugador.nombre} marcado como desconectado en mesa ${room.mesaId}`);
+
+            // Si el anfitrión se desconecta durante el juego, notificar especialmente
+            const esAnfitrion = room.jugadores[0]?.socketId === socket.id;
+            if (esAnfitrion && room.estado === 'jugando') {
+              mesa.mensajeRonda = `El anfitrión (${jugador.nombre}) se ha desconectado`;
+              room.jugadores.forEach(p => {
+                if (p.socketId !== socket.id) {
+                  io.to(p.socketId).emit('anfitrion-desconectado', { nombre: jugador.nombre });
+                }
+              });
+            }
 
             // Notificar a los demás jugadores
             room.jugadores.forEach(p => {
