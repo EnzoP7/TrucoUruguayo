@@ -562,22 +562,6 @@ function GamePage() {
     puntos?: number;
   }[]>([]);
 
-  // Función para mostrar un bocadillo
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const mostrarBocadillo = useCallback((
-    jugadorId: string,
-    tipo: 'envido' | 'flor' | 'truco' | 'quiero' | 'no-quiero',
-    texto: string,
-    puntos?: number,
-    duracion = 3000
-  ) => {
-    const id = `${Date.now()}-${Math.random()}`;
-    setSpeechBubbles(prev => [...prev, { id, jugadorId, tipo, texto, puntos }]);
-    setTimeout(() => {
-      setSpeechBubbles(prev => prev.filter(b => b.id !== id));
-    }, duracion);
-  }, []);
-
   const mostrarMensaje = useCallback((msg: string, duracion = 3000) => {
     setMensaje(msg);
     setTimeout(() => setMensaje(null), duracion);

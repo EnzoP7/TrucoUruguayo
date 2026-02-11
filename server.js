@@ -311,8 +311,17 @@ function iniciarRondaFase1(mesa) {
     mesa.indiceEnfrentamiento1v1 = (idx + 1) % 3;
   }
 
-  // The player to the LEFT of mano cuts (next index)
-  mesa.indiceJugadorCorta = (mesa.indiceMano + 1) % mesa.jugadores.length;
+  // The player to the LEFT of mano cuts (next participating player)
+  let cortaIdx = (mesa.indiceMano + 1) % mesa.jugadores.length;
+  // En pico a pico, saltar a un jugador que participe
+  if (mesa.modoRondaActual === '1v1') {
+    let intentos = 0;
+    while (mesa.jugadores[cortaIdx].participaRonda === false && intentos < mesa.jugadores.length) {
+      cortaIdx = (cortaIdx + 1) % mesa.jugadores.length;
+      intentos++;
+    }
+  }
+  mesa.indiceJugadorCorta = cortaIdx;
   mesa.esperandoCorte = true;
   mesa.corteRealizado = false;
   mesa.posicionCorte = null;
@@ -503,18 +512,27 @@ function jugarCarta(mesa, jugadorId, carta) {
 }
 
 function siguienteTurno(mesa) {
-  const inicio = (mesa.manoActual - 1) * mesa.jugadores.length;
+  const numParticipan = mesa.jugadores.filter(j => j.participaRonda !== false).length;
+  const inicio = (mesa.manoActual - 1) * numParticipan;
   const cartasEnEstaMano = mesa.cartasMesa.length - inicio;
 
-  if (cartasEnEstaMano >= mesa.jugadores.length) {
+  if (cartasEnEstaMano >= numParticipan) {
     determinarGanadorMano(mesa);
   } else {
-    mesa.turnoActual = (mesa.turnoActual + 1) % mesa.jugadores.length;
+    // Avanzar al siguiente jugador que participa en la ronda
+    let next = (mesa.turnoActual + 1) % mesa.jugadores.length;
+    let intentos = 0;
+    while (mesa.jugadores[next].participaRonda === false && intentos < mesa.jugadores.length) {
+      next = (next + 1) % mesa.jugadores.length;
+      intentos++;
+    }
+    mesa.turnoActual = next;
   }
 }
 
 function determinarGanadorMano(mesa) {
-  const inicio = (mesa.manoActual - 1) * mesa.jugadores.length;
+  const numParticipan = mesa.jugadores.filter(j => j.participaRonda !== false).length;
+  const inicio = (mesa.manoActual - 1) * numParticipan;
   const cartasDeLaMano = mesa.cartasMesa.slice(inicio);
   if (cartasDeLaMano.length === 0) return;
 
@@ -644,6 +662,7 @@ function prepararSiguienteMano(mesa) {
 
 function iniciarSiguienteRonda(mesa) {
   if (mesa.estado === 'terminado') return;
+  // Avanzar indiceMano al siguiente jugador (la fase1 determinará quién participa en pico a pico)
   mesa.indiceMano = (mesa.indiceMano + 1) % mesa.jugadores.length;
   iniciarRondaFase1(mesa); // Phase 1 only - wait for cut
 }
@@ -761,12 +780,11 @@ function responderTruco(mesa, jugadorId, acepta) {
     const puntos = mesa.gritoActivo.puntosSiNoQuiere;
     const equipoGanador = mesa.gritoActivo.equipoQueGrita;
     mesa.gritoActivo = null;
-    finalizarRonda(mesa, equipoGanador);
+    // No usar finalizarRonda (suma puntosEnJuego), sumar solo puntosSiNoQuiere
+    mesa.winnerRonda = equipoGanador;
+    mesa.fase = 'finalizada';
     const equipo = mesa.equipos.find(e => e.id === equipoGanador);
-    if (equipo) {
-      equipo.puntaje -= mesa.puntosEnJuego;
-      equipo.puntaje += puntos;
-    }
+    if (equipo) equipo.puntaje += puntos;
     mesa.mensajeRonda = `Equipo ${equipoGanador} ganó por no querer (+${puntos} pts)`;
     if (equipo && equipo.puntaje >= mesa.puntosLimite) {
       mesa.winnerJuego = equipoGanador;
@@ -803,7 +821,8 @@ function cantarEnvido(mesa, jugadorId, tipo, puntosCustom = null) {
 
   // El jugador puede cantar envido antes de jugar SU propia carta en esta mano
   // Verificar si el jugador ya jugó una carta en la mano actual
-  const cartasManoActual = mesa.cartasMesa.slice(0, mesa.jugadores.length); // Primera mano = primeras N cartas
+  const numParticipan = mesa.jugadores.filter(j => j.participaRonda !== false).length;
+  const cartasManoActual = mesa.cartasMesa.slice(0, numParticipan); // Primera mano = primeras N cartas
   const yaJugueSuCarta = cartasManoActual.some(c => c.jugadorId === jugadorId);
   if (yaJugueSuCarta) return false;
 
@@ -1347,9 +1366,9 @@ function calcularPuntosFlor(jugador, muestra) {
 
   let total = piezasConValor[0].valorEnvido; // Valor completo de la más alta
 
-  // Resto de piezas: solo último dígito
+  // Resto de piezas: solo último dígito (valor - 20, ej: 30→10, 29→9, 28→8, 27→7)
   for (let i = 1; i < piezasConValor.length; i++) {
-    total += piezasConValor[i].valorEnvido % 10;
+    total += piezasConValor[i].valorEnvido - 20;
   }
 
   // Sumar cartas que no son piezas (si hay alguna con 3 piezas)
@@ -1558,9 +1577,9 @@ function responderFlor(mesa, jugadorId, tipoRespuesta) {
   if (tipoRespuesta === 'no_quiero') {
     ganador = mesa.florPendiente.equipoQueCanta;
     if (ultimoTipoCantado === 'contra_flor') {
-      // No quiso contra flor al resto → gana con_flor_envido points (3 por cada flor + 2 base)
-      const floresTotal = floresEquipo1.length + floresEquipo2.length;
-      puntosGanados = 3 * floresTotal + 2;
+      // No quiso contra flor al resto → el que la cantó gana la partida (todos los puntos restantes)
+      const puntajeActual = mesa.equipos.find(e => e.id === ganador)?.puntaje || 0;
+      puntosGanados = mesa.puntosLimite - puntajeActual;
     } else if (ultimoTipoCantado === 'con_flor_envido') {
       // No quiso con flor envido → gana 3 pts por cada flor del equipo que cantó
       const floresDelGanador = ganador === 1 ? floresEquipo1 : floresEquipo2;
