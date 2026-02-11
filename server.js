@@ -280,6 +280,7 @@ function iniciarRondaFase1(mesa) {
     j.esMano = i === mesa.indiceMano;
     // En modo 1v1, marcar quién participa esta ronda
     j.participaRonda = true; // Por defecto todos participan
+    j.seVaAlMazo = false; // Reset al inicio de cada ronda
   });
 
   // En modo Pico a Pico (1v1), solo 2 jugadores participan - cada uno contra su rival de enfrente
@@ -512,17 +513,17 @@ function jugarCarta(mesa, jugadorId, carta) {
 }
 
 function siguienteTurno(mesa) {
-  const numParticipan = mesa.jugadores.filter(j => j.participaRonda !== false).length;
+  const numParticipan = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo).length;
   const inicio = (mesa.manoActual - 1) * numParticipan;
   const cartasEnEstaMano = mesa.cartasMesa.length - inicio;
 
   if (cartasEnEstaMano >= numParticipan) {
     determinarGanadorMano(mesa);
   } else {
-    // Avanzar al siguiente jugador que participa en la ronda
+    // Avanzar al siguiente jugador que participa y no se fue al mazo
     let next = (mesa.turnoActual + 1) % mesa.jugadores.length;
     let intentos = 0;
-    while (mesa.jugadores[next].participaRonda === false && intentos < mesa.jugadores.length) {
+    while ((mesa.jugadores[next].participaRonda === false || mesa.jugadores[next].seVaAlMazo) && intentos < mesa.jugadores.length) {
       next = (next + 1) % mesa.jugadores.length;
       intentos++;
     }
@@ -531,7 +532,7 @@ function siguienteTurno(mesa) {
 }
 
 function determinarGanadorMano(mesa) {
-  const numParticipan = mesa.jugadores.filter(j => j.participaRonda !== false).length;
+  const numParticipan = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo).length;
   const inicio = (mesa.manoActual - 1) * numParticipan;
   const cartasDeLaMano = mesa.cartasMesa.slice(inicio);
   if (cartasDeLaMano.length === 0) return;
@@ -653,10 +654,23 @@ function prepararSiguienteMano(mesa) {
   if (ganadorAnterior !== null && mesa.manoGanadorJugadorId) {
     // The specific player who won the hand starts next
     const jugadorIndex = mesa.jugadores.findIndex(j => j.id === mesa.manoGanadorJugadorId);
-    mesa.turnoActual = jugadorIndex >= 0 ? jugadorIndex : mesa.indiceMano;
+    let turno = jugadorIndex >= 0 ? jugadorIndex : mesa.indiceMano;
+    // Si ese jugador se fue al mazo, buscar el siguiente activo
+    let intentos = 0;
+    while (mesa.jugadores[turno].seVaAlMazo && intentos < mesa.jugadores.length) {
+      turno = (turno + 1) % mesa.jugadores.length;
+      intentos++;
+    }
+    mesa.turnoActual = turno;
   } else {
     // Tie or no winner: mano player starts
-    mesa.turnoActual = mesa.indiceMano;
+    let turno = mesa.indiceMano;
+    let intentos = 0;
+    while (mesa.jugadores[turno].seVaAlMazo && intentos < mesa.jugadores.length) {
+      turno = (turno + 1) % mesa.jugadores.length;
+      intentos++;
+    }
+    mesa.turnoActual = turno;
   }
 }
 
@@ -1799,46 +1813,138 @@ function resolverEnvidoAutomatico(mesa, puntosAcumulados, diferirPuntos = false)
   let mejorPuntajeDeclarado = null;
   let equipoMejorPuntaje = null;
 
-  // Helper para agregar declaración
-  const agregarDeclaracion = (jugador, forzarSonBuenas = false) => {
-    if (forzarSonBuenas || (mejorPuntajeDeclarado !== null && jugador.puntos < mejorPuntajeDeclarado)) {
-      declaraciones.push({
-        jugadorId: jugador.jugadorId,
-        jugadorNombre: jugador.jugadorNombre,
-        equipo: jugador.equipo,
-        puntos: null,
-        sonBuenas: true,
-      });
-    } else {
-      declaraciones.push({
-        jugadorId: jugador.jugadorId,
-        jugadorNombre: jugador.jugadorNombre,
-        equipo: jugador.equipo,
-        puntos: jugador.puntos,
-        sonBuenas: false,
-      });
-      if (mejorPuntajeDeclarado === null || jugador.puntos > mejorPuntajeDeclarado) {
+  // Índices de avance por equipo (ya están ordenados de mayor a menor)
+  let idxMano = 0;
+  let idxContrario = 0;
+
+  // Paso 1: El mejor del equipo mano declara primero (siempre dice sus puntos)
+  const primerMano = equipoManoJugadores[idxMano];
+  declaraciones.push({
+    jugadorId: primerMano.jugadorId,
+    jugadorNombre: primerMano.jugadorNombre,
+    equipo: primerMano.equipo,
+    puntos: primerMano.puntos,
+    sonBuenas: false,
+  });
+  mejorPuntajeDeclarado = primerMano.puntos;
+  equipoMejorPuntaje = primerMano.equipo;
+  idxMano++;
+
+  // Paso 2: Alternar entre equipos - el equipo contrario debe intentar superar
+  // Turno del equipo contrario primero (responder al mano)
+  let turnoEquipo = 'contrario'; // empieza respondiendo el contrario
+
+  while (true) {
+    if (turnoEquipo === 'contrario') {
+      if (idxContrario >= equipoContrarioJugadores.length) break; // no quedan jugadores
+
+      const jugador = equipoContrarioJugadores[idxContrario];
+      idxContrario++;
+
+      if (equipoMejorPuntaje === equipoContrario) {
+        // Mi equipo ya lidera, no necesito revelar puntos
+        break;
+      }
+
+      if (jugador.puntos > mejorPuntajeDeclarado) {
+        // Supera al mejor: declara sus puntos
+        declaraciones.push({
+          jugadorId: jugador.jugadorId,
+          jugadorNombre: jugador.jugadorNombre,
+          equipo: jugador.equipo,
+          puntos: jugador.puntos,
+          sonBuenas: false,
+        });
         mejorPuntajeDeclarado = jugador.puntos;
         equipoMejorPuntaje = jugador.equipo;
+        // Ahora el equipo mano debe responder
+        turnoEquipo = 'mano';
+      } else if (jugador.puntos === mejorPuntajeDeclarado) {
+        // Empate: declara puntos pero mano gana el empate
+        declaraciones.push({
+          jugadorId: jugador.jugadorId,
+          jugadorNombre: jugador.jugadorNombre,
+          equipo: jugador.equipo,
+          puntos: jugador.puntos,
+          sonBuenas: false,
+        });
+        // Empate: mano sigue ganando, ver si el contrario tiene más jugadores
+        if (idxContrario < equipoContrarioJugadores.length) {
+          // Siguiente del contrario intenta
+          continue;
+        } else {
+          // No quedan más del contrario, mano gana
+          break;
+        }
+      } else {
+        // No puede superar: son buenas
+        declaraciones.push({
+          jugadorId: jugador.jugadorId,
+          jugadorNombre: jugador.jugadorNombre,
+          equipo: jugador.equipo,
+          puntos: null,
+          sonBuenas: true,
+        });
+        // Ver si quedan más del equipo contrario que puedan superar
+        if (idxContrario < equipoContrarioJugadores.length) {
+          // El siguiente del contrario ya tiene puntos menores (están ordenados), no puede
+          // Todos los restantes del contrario dicen son buenas implícitamente
+          break;
+        } else {
+          break;
+        }
+      }
+    } else {
+      // turnoEquipo === 'mano'
+      if (idxMano >= equipoManoJugadores.length) break; // no quedan jugadores
+
+      const jugador = equipoManoJugadores[idxMano];
+      idxMano++;
+
+      if (equipoMejorPuntaje === equipoMano) {
+        // Mi equipo ya lidera, no necesito revelar puntos
+        break;
+      }
+
+      if (jugador.puntos > mejorPuntajeDeclarado) {
+        // Supera al mejor: declara sus puntos
+        declaraciones.push({
+          jugadorId: jugador.jugadorId,
+          jugadorNombre: jugador.jugadorNombre,
+          equipo: jugador.equipo,
+          puntos: jugador.puntos,
+          sonBuenas: false,
+        });
+        mejorPuntajeDeclarado = jugador.puntos;
+        equipoMejorPuntaje = jugador.equipo;
+        // Ahora el equipo contrario debe responder
+        turnoEquipo = 'contrario';
+      } else if (jugador.puntos === mejorPuntajeDeclarado) {
+        // Empate: declara, pero como es mano gana el empate
+        declaraciones.push({
+          jugadorId: jugador.jugadorId,
+          jugadorNombre: jugador.jugadorNombre,
+          equipo: jugador.equipo,
+          puntos: jugador.puntos,
+          sonBuenas: false,
+        });
+        mejorPuntajeDeclarado = jugador.puntos;
+        equipoMejorPuntaje = jugador.equipo; // mano gana empate
+        // Mano ahora lidera, contrario debe responder
+        turnoEquipo = 'contrario';
+      } else {
+        // No puede superar: son buenas
+        declaraciones.push({
+          jugadorId: jugador.jugadorId,
+          jugadorNombre: jugador.jugadorNombre,
+          equipo: jugador.equipo,
+          puntos: null,
+          sonBuenas: true,
+        });
+        // Los restantes del mano tienen puntos menores (ordenados), no pueden
+        break;
       }
     }
-  };
-
-  // Paso 1: El mejor del equipo mano declara primero
-  agregarDeclaracion(equipoManoJugadores[0]);
-
-  // Paso 2: El mejor del equipo contrario responde
-  agregarDeclaracion(equipoContrarioJugadores[0]);
-
-  // Paso 3: Todos los compañeros restantes declaran (todos participan)
-  // Compañeros del equipo mano
-  for (let i = 1; i < equipoManoJugadores.length; i++) {
-    agregarDeclaracion(equipoManoJugadores[i]);
-  }
-
-  // Compañeros del equipo contrario
-  for (let i = 1; i < equipoContrarioJugadores.length; i++) {
-    agregarDeclaracion(equipoContrarioJugadores[i]);
   }
 
   // Determinar ganador (en empate gana mano)
@@ -2029,10 +2135,42 @@ function finalizarDeclaracionEnvido(mesa) {
 function irseAlMazo(mesa, jugadorId) {
   const jugador = mesa.jugadores.find(j => j.id === jugadorId);
   if (!jugador || mesa.estado !== 'jugando') return false;
+  if (jugador.seVaAlMazo) return false; // Ya se fue
+
+  // Marcar al jugador como fuera (se fue al mazo)
+  jugador.seVaAlMazo = true;
+  jugador.cartas = []; // Ya no tiene cartas
+
   const equipoContrario = jugador.equipo === 1 ? 2 : 1;
-  finalizarRonda(mesa, equipoContrario);
-  mesa.mensajeRonda = `Equipo ${jugador.equipo} se fue al mazo. Equipo ${equipoContrario} gana (+${mesa.puntosEnJuego} pts)`;
-  return true;
+
+  // Verificar si TODOS los jugadores participantes de ese equipo se fueron al mazo
+  const companerosActivos = mesa.jugadores.filter(
+    j => j.equipo === jugador.equipo && j.participaRonda !== false && !j.seVaAlMazo
+  );
+
+  if (companerosActivos.length === 0) {
+    // Todo el equipo se fue al mazo: finalizar la ronda
+    finalizarRonda(mesa, equipoContrario);
+    mesa.mensajeRonda = `Equipo ${jugador.equipo} se fue al mazo. Equipo ${equipoContrario} gana (+${mesa.puntosEnJuego} pts)`;
+    return true;
+  }
+
+  // Aún quedan compañeros: el juego continúa
+  // Si era el turno de este jugador, avanzar al siguiente
+  const jugadorIndex = mesa.jugadores.findIndex(j => j.id === jugadorId);
+  if (mesa.turnoActual === jugadorIndex) {
+    let next = (mesa.turnoActual + 1) % mesa.jugadores.length;
+    let intentos = 0;
+    while ((mesa.jugadores[next].participaRonda === false || mesa.jugadores[next].seVaAlMazo) && intentos < mesa.jugadores.length) {
+      next = (next + 1) % mesa.jugadores.length;
+      intentos++;
+    }
+    mesa.turnoActual = next;
+  }
+
+  mesa.mensajeRonda = `${jugador.nombre} se fue al mazo`;
+  // No finalizar la ronda - devolver un indicador especial
+  return 'parcial';
 }
 
 // ============================================================
@@ -3200,39 +3338,49 @@ app.prepare().then(() => {
         if (!mesa) { callback(false, 'Motor no encontrado'); return; }
 
         const jugador = mesa.jugadores.find(j => j.id === socket.id);
-        const success = irseAlMazo(mesa, socket.id);
-        if (!success) { callback(false, 'No se puede ir al mazo'); return; }
+        const result = irseAlMazo(mesa, socket.id);
+        if (!result) { callback(false, 'No se puede ir al mazo'); return; }
 
+        // Notificar que el jugador se fue al mazo
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('jugador-al-mazo', {
             jugadorId: socket.id,
             equipoQueSeVa: jugador?.equipo || 0,
+            parcial: result === 'parcial', // true = el equipo sigue jugando
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });
 
-        room.jugadores.forEach(p => {
-          io.to(p.socketId).emit('ronda-finalizada', {
-            ganadorEquipo: mesa.winnerRonda,
-            puntosGanados: mesa.puntosEnJuego,
-            cartasFlorReveladas: mesa.cartasFlorReveladas || [],
-            cartasEnvidoReveladas: mesa.cartasEnvidoReveladas || [],
-            muestra: mesa.muestra,
-            estado: getEstadoParaJugador(mesa, p.socketId),
-          });
-        });
-
-        if (mesa.winnerJuego !== null) {
-          room.estado = 'terminado';
+        if (result === 'parcial') {
+          // Solo un jugador se fue, el equipo sigue - actualizar estado
           room.jugadores.forEach(p => {
-            io.to(p.socketId).emit('juego-finalizado', {
-              ganadorEquipo: mesa.winnerJuego,
+            io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(mesa, p.socketId));
+          });
+        } else {
+          // Todo el equipo se fue al mazo - finalizar ronda
+          room.jugadores.forEach(p => {
+            io.to(p.socketId).emit('ronda-finalizada', {
+              ganadorEquipo: mesa.winnerRonda,
+              puntosGanados: mesa.puntosEnJuego,
+              cartasFlorReveladas: mesa.cartasFlorReveladas || [],
+              cartasEnvidoReveladas: mesa.cartasEnvidoReveladas || [],
+              muestra: mesa.muestra,
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           });
-          broadcastLobby(io);
-        } else {
-          scheduleNextRound(io, room);
+
+          if (mesa.winnerJuego !== null) {
+            room.estado = 'terminado';
+            room.jugadores.forEach(p => {
+              io.to(p.socketId).emit('juego-finalizado', {
+                ganadorEquipo: mesa.winnerJuego,
+                estado: getEstadoParaJugador(mesa, p.socketId),
+              });
+            });
+            broadcastLobby(io);
+          } else {
+            scheduleNextRound(io, room);
+          }
         }
 
         callback(true);

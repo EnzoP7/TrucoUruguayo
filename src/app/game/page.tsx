@@ -17,6 +17,7 @@ interface Jugador {
   cartas: Carta[];
   esMano?: boolean;
   modoAyuda?: boolean;
+  seVaAlMazo?: boolean;
 }
 
 interface GritoActivo {
@@ -225,27 +226,39 @@ function ordenarCartasPorPoder(cartas: Carta[]): Carta[] {
 
 // Obtener nombre legible del poder de una carta
 function getNombrePoderCarta(carta: Carta): string {
+  // Piezas (cartas del palo de la muestra) tienen poder 15-19
+  if (carta.poder >= 15) {
+    const posiciones: Record<number, string> = {
+      15: 'Pieza (10)',
+      16: 'Pieza (11)',
+      17: 'Pieza (5)',
+      18: 'Pieza (4)',
+      19: 'Pieza (2)',
+    };
+    return posiciones[carta.poder] || `Pieza especial`;
+  }
   const poderes: Record<number, string> = {
-    14: '1° (Espada 1)',
-    13: '2° (Basto 1)',
-    12: '3° (Espada 7)',
-    11: '4° (Oro 7)',
-    10: '5° (Tres)',
-    9: '6° (Dos)',
-    8: '7° (Oro/Copa 1)',
-    7: '8° (Doce)',
-    6: '9° (Once)',
-    5: '10° (Diez)',
-    4: '11° (Copa/Basto 7)',
-    3: '12° (Seis)',
-    2: '13° (Cinco)',
-    1: '14° (Cuatro)',
+    14: 'Mata (Espada 1)',
+    13: 'Mata (Basto 1)',
+    12: 'Mata (Espada 7)',
+    11: 'Mata (Oro 7)',
+    10: 'Tres',
+    9: 'Dos',
+    8: 'As (Oro/Copa)',
+    7: 'Doce',
+    6: 'Once',
+    5: 'Diez',
+    4: 'Siete (Copa/Basto)',
+    3: 'Seis',
+    2: 'Cinco',
+    1: 'Cuatro',
   };
   return poderes[carta.poder] || `Poder ${carta.poder}`;
 }
 
 // Componente del panel de ayuda
-function PanelAyuda({ cartas, muestra }: { cartas: Carta[]; muestra: Carta | null }) {
+function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { cartas: Carta[]; muestra: Carta | null; envidoYaCantado: boolean; florYaCantada: boolean }) {
+  const [abierto, setAbierto] = useState(false);
   const cartasOrdenadas = ordenarCartasPorPoder(cartas);
   const envido = calcularEnvido(cartas);
   const cartaMasAlta = cartasOrdenadas[0];
@@ -253,12 +266,34 @@ function PanelAyuda({ cartas, muestra }: { cartas: Carta[]; muestra: Carta | nul
   // Verificar si tiene flor (3 cartas del mismo palo)
   const tieneFlor = cartas.length === 3 && cartas.every(c => c.palo === cartas[0].palo);
 
+  // Minimizado: solo el botón
+  if (!abierto) {
+    return (
+      <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40">
+        <button
+          onClick={() => setAbierto(true)}
+          className="glass rounded-xl p-2.5 border border-blue-500/30 bg-blue-950/40 shadow-lg hover:bg-blue-900/50 transition-all"
+          title="Abrir ayuda"
+        >
+          <span className="text-lg">📚</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40 w-48 sm:w-56">
       <div className="glass rounded-xl p-3 border border-blue-500/30 bg-blue-950/40 shadow-lg">
         <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-500/20">
           <span className="text-lg">📚</span>
-          <h3 className="text-blue-300 font-bold text-sm">Ayuda</h3>
+          <h3 className="text-blue-300 font-bold text-sm flex-1">Ayuda</h3>
+          <button
+            onClick={() => setAbierto(false)}
+            className="text-blue-400/60 hover:text-blue-300 text-xs px-1.5 py-0.5 rounded hover:bg-blue-800/30 transition-all"
+            title="Minimizar"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Carta más alta */}
@@ -273,23 +308,27 @@ function PanelAyuda({ cartas, muestra }: { cartas: Carta[]; muestra: Carta | nul
               />
               <div className="text-xs">
                 <div className="text-white font-medium">{cartaMasAlta.valor} de {cartaMasAlta.palo}</div>
-                <div className="text-blue-300/60">{getNombrePoderCarta(cartaMasAlta)}</div>
+                <div className={`${cartaMasAlta.poder >= 15 ? 'text-yellow-400' : 'text-blue-300/60'}`}>
+                  {getNombrePoderCarta(cartaMasAlta)}
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Envido */}
-        <div className="mb-3">
-          <div className="text-blue-400/70 text-xs font-medium mb-1">🎯 Tu envido:</div>
-          <div className="bg-blue-900/30 rounded-lg p-2">
-            <div className="text-2xl font-bold text-green-400 mb-1">{envido.puntos}</div>
-            <div className="text-blue-300/60 text-[10px] leading-tight">{envido.explicacion}</div>
+        {/* Envido - ocultar si ya se resolvió */}
+        {!envidoYaCantado && (
+          <div className="mb-3">
+            <div className="text-blue-400/70 text-xs font-medium mb-1">🎯 Tu envido:</div>
+            <div className="bg-blue-900/30 rounded-lg p-2">
+              <div className="text-2xl font-bold text-green-400 mb-1">{envido.puntos}</div>
+              <div className="text-blue-300/60 text-[10px] leading-tight">{envido.explicacion}</div>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Flor */}
-        {tieneFlor && (
+        {/* Flor - ocultar si ya se cantó */}
+        {tieneFlor && !florYaCantada && (
           <div className="mb-3">
             <div className="text-pink-400/70 text-xs font-medium mb-1">🌸 ¡Tenés FLOR!</div>
             <div className="bg-pink-900/30 rounded-lg p-2 text-[10px] text-pink-300/70">
@@ -303,10 +342,14 @@ function PanelAyuda({ cartas, muestra }: { cartas: Carta[]; muestra: Carta | nul
           <div className="text-blue-400/70 text-xs font-medium mb-1">📊 Tus cartas (de + a -):</div>
           <div className="space-y-1">
             {cartasOrdenadas.map((carta, idx) => (
-              <div key={idx} className="flex items-center gap-2 text-[10px] bg-blue-900/20 rounded px-2 py-1">
+              <div key={idx} className={`flex items-center gap-2 text-[10px] rounded px-2 py-1 ${
+                carta.poder >= 15 ? 'bg-yellow-900/30 border border-yellow-500/20' : 'bg-blue-900/20'
+              }`}>
                 <span className="text-blue-300 font-bold">{idx + 1}.</span>
                 <span className="text-white">{carta.valor} {carta.palo}</span>
-                <span className="text-blue-400/50 ml-auto">P:{carta.poder}</span>
+                <span className={`ml-auto text-[9px] ${carta.poder >= 15 ? 'text-yellow-400' : 'text-blue-400/50'}`}>
+                  {getNombrePoderCarta(carta)}
+                </span>
               </div>
             ))}
           </div>
@@ -317,7 +360,7 @@ function PanelAyuda({ cartas, muestra }: { cartas: Carta[]; muestra: Carta | nul
           <div className="pt-2 border-t border-blue-500/20">
             <div className="text-yellow-400/70 text-xs font-medium mb-1">⭐ Muestra: {muestra.valor} de {muestra.palo}</div>
             <div className="text-[10px] text-yellow-300/50">
-              Las cartas de {muestra.palo} son más fuertes (piezas)
+              Las cartas de {muestra.palo} son piezas (más fuertes)
             </div>
           </div>
         )}
@@ -2134,9 +2177,9 @@ function GamePage() {
         </div>
       )}
 
-      {/* Panel de ayuda para principiantes */}
-      {mesa.jugadores.find(j => j.id === socketId)?.modoAyuda && mesa.estado === 'jugando' && mesa.fase === 'jugando' && misCartas().length > 0 && (
-        <PanelAyuda cartas={misCartas()} muestra={mesa.muestra} />
+      {/* Panel de ayuda - siempre disponible durante el juego */}
+      {mesa.estado === 'jugando' && misCartas().length > 0 && (
+        <PanelAyuda cartas={misCartas()} muestra={mesa.muestra} envidoYaCantado={mesa.envidoYaCantado} florYaCantada={!!mesa.florYaCantada} />
       )}
 
       {/* Banner de Pico a Pico */}
@@ -2419,7 +2462,7 @@ function GamePage() {
             )}
 
             {/* Mesa central con fieltro */}
-            <div className="flex-1 mesa-flat wood-border rounded-[2rem] sm:rounded-[3rem] p-4 sm:p-6 relative flex flex-col justify-center items-center min-h-[200px]">
+            <div className="flex-1 mesa-flat wood-border rounded-[2rem] sm:rounded-[3rem] p-4 sm:p-6 relative flex flex-col justify-center items-center min-h-[280px] sm:min-h-[340px] lg:min-h-[400px]">
             {/* Luz de lámpara */}
             <div className="lampara-glow" />
             <div className="pulperia-light rounded-[2rem] sm:rounded-[3rem]" />
@@ -2627,9 +2670,7 @@ function GamePage() {
               <>
                 {/* Cartas jugadas - posicionadas cerca de cada jugador */}
                 {cartasManoActual.map((jugada, i) => {
-                  const jugador = mesa.jugadores.find(j => j.id === jugada.jugadorId);
                   const esMiCarta = jugada.jugadorId === socketId;
-                  const esEquipo1 = jugador?.equipo === 1;
 
                   // Check if this card is the winner of the current mano
                   const inicio = (mesa.manoActual - 1) * mesa.jugadores.length;
@@ -2642,11 +2683,11 @@ function GamePage() {
                   let posicionStyle: React.CSSProperties = {};
 
                   if (esMiCarta) {
-                    // Mi carta: bien abajo, debajo del mazo/muestra sin pisarlos
+                    // Mi carta: abajo, alineada a la izquierda del centro (cerca del mazo)
                     posicionStyle = {
                       position: 'absolute',
-                      top: '73%',
-                      left: '50%',
+                      bottom: '5%',
+                      left: '46.5%',
                       transform: 'translateX(-50%)',
                       zIndex: esCartaGanadora ? 50 : 15 + i,
                     };
@@ -2656,26 +2697,26 @@ function GamePage() {
                     const z = esCartaGanadora ? 50 : 15 + i;
 
                     switch (slot) {
-                      case 'top': // 1v1 opponent or 2v2 teammate - bien arriba sin pisar mazo
-                        posicionStyle = { position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)', zIndex: z };
+                      case 'top': // 1v1 opponent or 2v2 teammate - arriba, alineada a la izquierda del centro
+                        posicionStyle = { position: 'absolute', top: '5%', left: '46.5%', transform: 'translateX(-50%)', zIndex: z };
                         break;
                       case 'left': // 2v2 rival left - a la altura del mazo
-                        posicionStyle = { position: 'absolute', top: '50%', left: '18%', transform: 'translate(-50%, -50%)', zIndex: z };
+                        posicionStyle = { position: 'absolute', top: '40%', left: '27%', transform: 'translate(-50%, -50%)', zIndex: z };
                         break;
                       case 'right': // 2v2 rival right - a la altura del mazo
-                        posicionStyle = { position: 'absolute', top: '50%', right: '18%', transform: 'translate(50%, -50%)', zIndex: z };
+                        posicionStyle = { position: 'absolute', top: '40%', right: '27%', transform: 'translate(50%, -50%)', zIndex: z };
                         break;
                       case 'side-left': // 3v3 rival at my left - a la altura del mazo
                         posicionStyle = { position: 'absolute', top: '50%', left: '8%', transform: 'translateY(-50%)', zIndex: z };
                         break;
                       case 'top-left': // 3v3 teammate top-left - arriba sin pisar mazo
-                        posicionStyle = { position: 'absolute', top: '15%', left: '20%', zIndex: z };
+                        posicionStyle = { position: 'absolute', top: '5%', left: '20%', zIndex: z };
                         break;
                       case 'top-center': // 3v3 rival top-center - arriba sin pisar mazo
-                        posicionStyle = { position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)', zIndex: z };
+                        posicionStyle = { position: 'absolute', top: '5%', left: '50%', transform: 'translateX(-50%)', zIndex: z };
                         break;
                       case 'top-right': // 3v3 teammate top-right - arriba sin pisar mazo
-                        posicionStyle = { position: 'absolute', top: '15%', right: '20%', zIndex: z };
+                        posicionStyle = { position: 'absolute', top: '5%', right: '20%', zIndex: z };
                         break;
                       case 'side-right': // 3v3 rival at my right - a la altura del mazo
                         posicionStyle = { position: 'absolute', top: '50%', right: '8%', transform: 'translateY(-50%)', zIndex: z };
@@ -2690,10 +2731,11 @@ function GamePage() {
                       style={{ ...posicionStyle, animationDelay: `${i * 0.1}s` }}
                     >
                       <CartaImg carta={jugada.carta} size="normal" showGlow={!!esCartaGanadora} />
-                      <div className={`text-[10px] sm:text-xs mt-1 font-medium ${esCartaGanadora ? 'text-yellow-400 font-bold' : esEquipo1 ? 'text-blue-300' : 'text-red-300'}`}>
-                        {jugador?.nombre}
-                        {esCartaGanadora && ' 🏆'}
-                      </div>
+                      {esCartaGanadora && (
+                        <div className="text-[10px] sm:text-xs mt-1 font-bold text-yellow-400">
+                          🏆
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -2912,7 +2954,7 @@ function GamePage() {
           )}
 
           {/* Mis cartas y controles */}
-          <div className="glass rounded-xl p-3 sm:p-4 mt-2 sm:mt-4 border border-gold-800/20 relative">
+          <div className="glass rounded-xl p-3 sm:p-4 mt-1 sm:mt-2 relative z-10 border border-gold-800/20">
             {/* Bocadillo de diálogo para mí */}
             {socketId && speechBubbles.find(b => b.jugadorId === socketId) && (() => {
               const bubble = speechBubbles.find(b => b.jugadorId === socketId)!;
@@ -3021,7 +3063,7 @@ function GamePage() {
                     Vale 4
                   </button>
                 )}
-                {mesa.estado === 'jugando' && mesa.fase !== 'finalizada' && (
+                {mesa.estado === 'jugando' && mesa.fase !== 'finalizada' && !miJugador?.seVaAlMazo && (
                   <button onClick={handleIrseAlMazo} disabled={loading} className="btn-mazo text-white">
                     Mazo
                   </button>
@@ -3030,7 +3072,7 @@ function GamePage() {
             </div>
 
             {/* Mis cartas */}
-            <div className="flex justify-center gap-2 sm:gap-4">
+            <div className="flex justify-center items-center gap-2 sm:gap-4">
               {misCartas().map((carta, index) => (
                 <div
                   key={`${carta.palo}-${carta.valor}-${index}`}
