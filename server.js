@@ -3,7 +3,7 @@ const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
 const { Server: SocketIOServer } = require('socket.io');
-const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios } = require('./db');
+const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples } = require('./db');
 const { registrar, login } = require('./auth');
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -1027,6 +1027,7 @@ function emitirFlorDeJugador(io, room, mesa, florResult) {
     const mismoEquipo = pJugador && pJugador.equipo === florResult.declaracion.equipo;
     io.to(p.socketId).emit('flor-cantada', {
       jugadorId: florResult.declaracion.jugadorId,
+      audioCustomUrl: mesa.audiosCustom?.[florResult.declaracion.jugadorId]?.['flor'] || null,
       declaracion: {
         ...florResult.declaracion,
         puntos: mismoEquipo ? florResult.declaracion.puntos : null,
@@ -1066,6 +1067,7 @@ function emitirFlorDeJugador(io, room, mesa, florResult) {
               const mismoEquipo = pJugador && pJugador.equipo === opFlorResult.declaracion.equipo;
               io.to(p.socketId).emit('flor-cantada', {
                 jugadorId: opFlorResult.declaracion.jugadorId,
+                audioCustomUrl: currentMesa.audiosCustom?.[opFlorResult.declaracion.jugadorId]?.['flor'] || null,
                 declaracion: {
                   ...opFlorResult.declaracion,
                   puntos: mismoEquipo ? opFlorResult.declaracion.puntos : null,
@@ -2361,9 +2363,42 @@ app.prepare().then(async () => {
         if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
         const stats = await obtenerEstadisticas(usuario.id);
         const historial = await obtenerHistorial(usuario.id, 10);
-        callback({ success: true, stats, historial });
+        const audiosCustom = await obtenerAudiosCustom(usuario.id);
+        callback({
+          success: true, stats, historial,
+          es_premium: !!usuario.es_premium,
+          avatar_url: usuario.avatar_url || null,
+          audiosCustom,
+        });
       } catch (err) {
         console.error('[DB] Error obtener perfil:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    // === PREMIUM ===
+    socket.on('toggle-premium', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const newStatus = !usuario.es_premium;
+        await setPremium(usuario.id, newStatus);
+        usuario.es_premium = newStatus;
+        callback({ success: true, es_premium: newStatus });
+      } catch (err) {
+        console.error('[DB] Error toggle premium:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('eliminar-audio-custom', async (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        await eliminarAudioCustom(data.audioId, usuario.id);
+        callback({ success: true });
+      } catch (err) {
+        console.error('[DB] Error eliminar audio:', err);
         callback({ success: false, error: 'Error interno' });
       }
     });
@@ -2429,6 +2464,43 @@ app.prepare().then(async () => {
         callback({ success: true });
       } catch (err) {
         console.error('[DB] Error eliminar amigo:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    // === INVITAR AMIGO A PARTIDA ===
+    socket.on('invitar-amigo', (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+
+        const { amigoId, mesaId } = data;
+        const room = lobbyRooms.get(mesaId);
+        if (!room) { callback({ success: false, error: 'Partida no encontrada' }); return; }
+        if (room.estado !== 'esperando') { callback({ success: false, error: 'La partida ya comenzó' }); return; }
+        if (room.jugadores.length >= room.maxJugadores) { callback({ success: false, error: 'La partida está llena' }); return; }
+
+        // Buscar socketId del amigo
+        let friendSocketId = null;
+        for (const [sid, u] of socketUsuarios.entries()) {
+          if (u.id === amigoId) {
+            friendSocketId = sid;
+            break;
+          }
+        }
+
+        if (!friendSocketId) { callback({ success: false, error: 'Amigo no conectado' }); return; }
+
+        io.to(friendSocketId).emit('invitacion-recibida', {
+          de: usuario.apodo,
+          deUserId: usuario.id,
+          mesaId: room.mesaId,
+          tamañoSala: room.tamañoSala,
+        });
+
+        callback({ success: true });
+      } catch (err) {
+        console.error('[Invite] Error invitar amigo:', err);
         callback({ success: false, error: 'Error interno' });
       }
     });
@@ -2838,7 +2910,7 @@ app.prepare().then(async () => {
     });
 
     // === INICIAR PARTIDA ===
-    socket.on('iniciar-partida', (callback) => {
+    socket.on('iniciar-partida', async (callback) => {
       try {
         console.log(`[Socket.IO] ${socket.id} iniciar-partida`);
         const room = findRoomBySocket(socket.id);
@@ -2871,6 +2943,25 @@ app.prepare().then(async () => {
         }
 
         iniciarRonda(mesa); // Phase 1: shuffle and wait for cut
+
+        // Cache custom audios para esta partida
+        try {
+          const userIds = room.jugadores.filter(j => j.userId).map(j => j.userId);
+          if (userIds.length > 0) {
+            const allAudios = await obtenerAudiosCustomMultiples(userIds);
+            mesa.audiosCustom = {};
+            for (const audio of allAudios) {
+              const jugador = room.jugadores.find(j => j.userId === Number(audio.usuario_id));
+              if (jugador) {
+                if (!mesa.audiosCustom[jugador.socketId]) mesa.audiosCustom[jugador.socketId] = {};
+                mesa.audiosCustom[jugador.socketId][audio.tipo_audio] = audio.url_archivo;
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[DB] Error cargando audios custom:', err);
+          mesa.audiosCustom = {};
+        }
 
         // Send state to all (shows shuffle animation + cut phase)
         room.jugadores.forEach(p => {
@@ -3036,10 +3127,12 @@ app.prepare().then(async () => {
         const success = cantarTruco(mesa, socket.id, tipo);
         if (!success) { callback(false, 'No se puede cantar'); return; }
 
+        const audioTipo = tipo === 'vale_cuatro' ? 'vale4' : tipo;
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('truco-cantado', {
             jugadorId: socket.id,
             tipo,
+            audioCustomUrl: mesa.audiosCustom?.[socket.id]?.[audioTipo] || null,
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });
@@ -3142,6 +3235,7 @@ app.prepare().then(async () => {
                 const mismoEquipo = pJugador && pJugador.equipo === declaracion.equipo;
                 io.to(p.socketId).emit('flor-cantada', {
                   jugadorId: declaracion.jugadorId,
+                  audioCustomUrl: mesa.audiosCustom?.[declaracion.jugadorId]?.['flor'] || null,
                   declaracion: {
                     ...declaracion,
                     puntos: mismoEquipo ? declaracion.puntos : null, // Ocultar puntos al rival
@@ -3206,11 +3300,13 @@ app.prepare().then(async () => {
           nombreEnvido = `cargado (${puntosCustom} pts)`;
         }
 
+        const envidoAudioTipo = tipo.replace('_', '-');
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('envido-cantado', {
             jugadorId: socket.id,
             tipo: nombreEnvido,
             puntosCustom,
+            audioCustomUrl: mesa.audiosCustom?.[socket.id]?.[envidoAudioTipo] || mesa.audiosCustom?.[socket.id]?.['envido'] || null,
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });
@@ -3244,6 +3340,7 @@ app.prepare().then(async () => {
                 const mismoEquipo = pJugador && pJugador.equipo === declaracion.equipo;
                 io.to(p.socketId).emit('flor-cantada', {
                   jugadorId: declaracion.jugadorId,
+                  audioCustomUrl: mesa.audiosCustom?.[declaracion.jugadorId]?.['flor'] || null,
                   declaracion: {
                     ...declaracion,
                     puntos: mismoEquipo ? declaracion.puntos : null,
@@ -3493,6 +3590,7 @@ app.prepare().then(async () => {
             const mismoEquipo = pJugador && pJugador.equipo === result.declaracion.equipo;
             io.to(p.socketId).emit('flor-cantada', {
               jugadorId: socket.id,
+              audioCustomUrl: mesa.audiosCustom?.[socket.id]?.['flor'] || null,
               declaracion: {
                 ...result.declaracion,
                 puntos: mismoEquipo ? result.declaracion.puntos : null,
@@ -3993,6 +4091,10 @@ app.prepare().then(async () => {
         mesa.estado = 'jugando';
         mesa.puntosLimite = puntosLimite;
 
+        // Reset room state and timer for new game
+        room.estado = 'jugando';
+        room.inicioPartida = Date.now();
+
         // Start new round
         mesa.indiceMano = 0;
         iniciarRondaFase1(mesa);
@@ -4213,6 +4315,9 @@ app.prepare().then(async () => {
           const eqGanador = mesa.equipos.find(e => e.id === equipoGanador);
           if (eqGanador && eqGanador.puntaje >= mesa.puntosLimite) {
             mesa.winnerJuego = equipoGanador;
+            mesa.estado = 'terminado';
+            room.estado = 'terminado';
+            guardarResultadoPartida(room, mesa);
             setTimeout(() => {
               room.jugadores.forEach(p => {
                 io.to(p.socketId).emit('juego-finalizado', {
@@ -4247,14 +4352,61 @@ app.prepare().then(async () => {
           );
 
           if (floresDelEchador.length > 0) {
-            // Both teams have flor - set up contra flor al resto
-            mesa.florYaCantada = false; // Reset so it triggers
-            mesa.esperandoRespuestaFlor = true;
-            mesa.florPendiente = {
-              equipoQueCanta: jugador.equipo, // El que respondió con "quiero contra flor"
-              equipoQueResponde: equipoEchador, // El echador debe confirmar
-              tipoRespuesta: null,
-            };
+            // Both teams have flor - auto-resolver contra flor al resto
+            // En perros, el echador ya desafió implícitamente al tirar los perros
+            // No necesita responder de nuevo - se resuelve automáticamente
+
+            // Primero poblar floresCantadas para que resolverFlor funcione
+            mesa.jugadoresConFlor.forEach(id => {
+              const jFlor = mesa.jugadores.find(j => j.id === id);
+              if (jFlor && !mesa.floresCantadas.some(f => f.jugadorId === id)) {
+                mesa.floresCantadas.push({
+                  jugadorId: id,
+                  jugadorNombre: jFlor.nombre,
+                  equipo: jFlor.equipo,
+                  puntos: calcularPuntosFlor(jFlor, mesa.muestra),
+                });
+              }
+            });
+
+            // Comparar flores - ganador se lleva contra flor al resto (puntos para ganar)
+            const floresEq1 = mesa.floresCantadas.filter(f => f.equipo === 1);
+            const floresEq2 = mesa.floresCantadas.filter(f => f.equipo === 2);
+            const mejorFlor1 = floresEq1.length > 0 ? Math.max(...floresEq1.map(f => f.puntos)) : 0;
+            const mejorFlor2 = floresEq2.length > 0 ? Math.max(...floresEq2.map(f => f.puntos)) : 0;
+            const equipoMano = mesa.jugadores[mesa.indiceMano]?.equipo || 1;
+
+            let ganadorFlor;
+            if (mejorFlor1 > mejorFlor2) ganadorFlor = 1;
+            else if (mejorFlor2 > mejorFlor1) ganadorFlor = 2;
+            else ganadorFlor = equipoMano; // Empate: gana mano
+
+            // Contra flor al resto = puntos para ganar la partida
+            const puntajeActual = mesa.equipos.find(e => e.id === ganadorFlor)?.puntaje || 0;
+            const puntosFlor = mesa.puntosLimite - puntajeActual;
+            mesa.equipos.find(e => e.id === ganadorFlor).puntaje += puntosFlor;
+
+            mesa.florYaCantada = true;
+            mesa.envidoYaCantado = true;
+            mesa.esperandoRespuestaFlor = false;
+            mesa.florPendiente = null;
+
+            // Guardar cartas de flor para revelar
+            mesa.cartasFlorReveladas = mesa.floresCantadas.map(f => {
+              const jFlor = mesa.jugadores.find(j => j.id === f.jugadorId);
+              return {
+                jugadorNombre: f.jugadorNombre,
+                puntos: f.puntos,
+                cartas: jFlor?.cartasOriginales || jFlor?.cartas || [],
+              };
+            });
+
+            // Check game end
+            if (mesa.equipos.find(e => e.id === ganadorFlor).puntaje >= mesa.puntosLimite) {
+              mesa.winnerJuego = ganadorFlor;
+              mesa.estado = 'terminado';
+              mesa.fase = 'finalizada';
+            }
           } else {
             // Echador doesn't have flor - respondedor wins their flor automatically (3 pts per flor)
             const floresRespondedor = mesa.jugadores.filter(j =>
@@ -4378,7 +4530,24 @@ app.prepare().then(async () => {
           });
         });
 
-        // If contra flor is pending, emit flor-pendiente to the echador team
+        // If flor was auto-resolved in perros (contra flor al resto), emit result
+        if (tieneFlor && quiereContraFlor && mesa.florYaCantada && mesa.cartasFlorReveladas) {
+          setTimeout(() => {
+            room.jugadores.forEach(p => {
+              io.to(p.socketId).emit('flor-resuelta', {
+                resultado: {
+                  ganador: mesa.winnerJuego || mesa.equipos.reduce((best, e) => e.puntaje > (best?.puntaje || 0) ? e : best, mesa.equipos[0]).id,
+                  puntosGanados: 0, // Already applied to scores
+                  floresCantadas: mesa.floresCantadas || [],
+                  esContraFlor: true,
+                },
+                estado: getEstadoParaJugador(mesa, p.socketId),
+              });
+            });
+          }, 2000);
+        }
+
+        // If contra flor is pending (legacy path), emit flor-pendiente to the echador team
         if (mesa.esperandoRespuestaFlor && mesa.florPendiente) {
           room.jugadores.forEach(p => {
             const pJugador = mesa.jugadores.find(j => j.id === p.socketId);
@@ -4395,6 +4564,9 @@ app.prepare().then(async () => {
         const maxPuntaje = Math.max(...mesa.equipos.map(e => e.puntaje));
         if (maxPuntaje >= mesa.puntosLimite) {
           mesa.winnerJuego = mesa.equipos.find(e => e.puntaje >= mesa.puntosLimite).id;
+          mesa.estado = 'terminado';
+          room.estado = 'terminado';
+          guardarResultadoPartida(room, mesa);
           setTimeout(() => {
             room.jugadores.forEach(p => {
               io.to(p.socketId).emit('juego-finalizado', {

@@ -29,7 +29,7 @@ async function registrar(apodo, password) {
 
   return {
     success: true,
-    usuario: { id: userId, apodo: apodoLimpio },
+    usuario: { id: userId, apodo: apodoLimpio, es_premium: false, avatar_url: null },
   };
 }
 
@@ -52,7 +52,7 @@ async function login(apodo, password) {
 
   return {
     success: true,
-    usuario: { id: Number(usuario.id), apodo: usuario.apodo },
+    usuario: { id: Number(usuario.id), apodo: usuario.apodo, es_premium: !!usuario.es_premium, avatar_url: usuario.avatar_url || null },
   };
 }
 

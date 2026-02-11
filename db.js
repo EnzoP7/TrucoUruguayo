@@ -49,7 +49,22 @@ async function initDB() {
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (usuario_id, amigo_id)
       );
+
+      CREATE TABLE IF NOT EXISTS audios_custom (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+        tipo_audio TEXT NOT NULL,
+        url_archivo TEXT NOT NULL,
+        file_key TEXT,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(usuario_id, tipo_audio)
+      );
     `);
+
+    // Agregar columnas nuevas a usuarios (ignorar si ya existen)
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN es_premium INTEGER DEFAULT 0'); } catch { /* ya existe */ }
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN avatar_url TEXT DEFAULT NULL'); } catch { /* ya existe */ }
+
     console.log('[DB] Tablas inicializadas correctamente');
   } catch (err) {
     console.error('[DB] Error inicializando tablas:', err);
@@ -87,11 +102,25 @@ async function actualizarUltimoLogin(userId) {
   });
 }
 
+async function setPremium(userId, isPremium) {
+  await db.execute({
+    sql: 'UPDATE usuarios SET es_premium = ? WHERE id = ?',
+    args: [isPremium ? 1 : 0, userId],
+  });
+}
+
+async function actualizarAvatarUrl(userId, url) {
+  await db.execute({
+    sql: 'UPDATE usuarios SET avatar_url = ? WHERE id = ?',
+    args: [url, userId],
+  });
+}
+
 // ============ ESTADÍSTICAS ============
 
 async function obtenerEstadisticas(userId) {
   const result = await db.execute({
-    sql: 'SELECT e.*, u.apodo FROM estadisticas e JOIN usuarios u ON u.id = e.usuario_id WHERE e.usuario_id = ?',
+    sql: 'SELECT e.*, u.apodo, u.es_premium, u.avatar_url FROM estadisticas e JOIN usuarios u ON u.id = e.usuario_id WHERE e.usuario_id = ?',
     args: [userId],
   });
   return result.rows[0] || null;
@@ -162,7 +191,7 @@ async function obtenerHistorial(userId, limite = 20) {
 
 async function obtenerRanking(limite = 50) {
   const result = await db.execute({
-    sql: `SELECT u.apodo, e.*
+    sql: `SELECT u.apodo, u.es_premium, e.*
       FROM estadisticas e
       JOIN usuarios u ON u.id = e.usuario_id
       WHERE e.partidas_jugadas > 0
@@ -196,7 +225,7 @@ async function eliminarAmigo(userId, amigoId) {
 
 async function obtenerAmigos(userId) {
   const result = await db.execute({
-    sql: `SELECT u.id, u.apodo, e.elo, e.partidas_ganadas, e.partidas_jugadas
+    sql: `SELECT u.id, u.apodo, u.es_premium, e.elo, e.partidas_ganadas, e.partidas_jugadas
       FROM amigos a
       JOIN usuarios u ON u.id = a.amigo_id
       LEFT JOIN estadisticas e ON e.usuario_id = u.id
@@ -209,8 +238,50 @@ async function obtenerAmigos(userId) {
 
 async function buscarUsuarios(termino, excludeUserId) {
   const result = await db.execute({
-    sql: `SELECT id, apodo FROM usuarios WHERE apodo LIKE ? AND id != ? LIMIT 10`,
+    sql: `SELECT id, apodo, es_premium FROM usuarios WHERE apodo LIKE ? AND id != ? LIMIT 10`,
     args: [`%${termino}%`, excludeUserId],
+  });
+  return result.rows;
+}
+
+// ============ AUDIOS CUSTOM ============
+
+async function guardarAudioCustom(userId, tipoAudio, urlArchivo, fileKey) {
+  await db.execute({
+    sql: `INSERT OR REPLACE INTO audios_custom (usuario_id, tipo_audio, url_archivo, file_key)
+      VALUES (?, ?, ?, ?)`,
+    args: [userId, tipoAudio, urlArchivo, fileKey || null],
+  });
+}
+
+async function obtenerAudiosCustom(userId) {
+  const result = await db.execute({
+    sql: 'SELECT id, tipo_audio, url_archivo, file_key, creado_en FROM audios_custom WHERE usuario_id = ? ORDER BY tipo_audio',
+    args: [userId],
+  });
+  return result.rows;
+}
+
+async function eliminarAudioCustom(id, userId) {
+  // Obtener file_key antes de borrar (para cleanup en UploadThing)
+  const existing = await db.execute({
+    sql: 'SELECT file_key FROM audios_custom WHERE id = ? AND usuario_id = ?',
+    args: [id, userId],
+  });
+  const fileKey = existing.rows[0]?.file_key || null;
+  await db.execute({
+    sql: 'DELETE FROM audios_custom WHERE id = ? AND usuario_id = ?',
+    args: [id, userId],
+  });
+  return fileKey;
+}
+
+async function obtenerAudiosCustomMultiples(userIds) {
+  if (!userIds || userIds.length === 0) return [];
+  const placeholders = userIds.map(() => '?').join(',');
+  const result = await db.execute({
+    sql: `SELECT usuario_id, tipo_audio, url_archivo FROM audios_custom WHERE usuario_id IN (${placeholders})`,
+    args: userIds,
   });
   return result.rows;
 }
@@ -221,6 +292,8 @@ module.exports = {
   crearUsuario,
   buscarUsuarioPorApodo,
   actualizarUltimoLogin,
+  setPremium,
+  actualizarAvatarUrl,
   obtenerEstadisticas,
   actualizarEstadisticas,
   guardarPartida,
@@ -230,4 +303,8 @@ module.exports = {
   eliminarAmigo,
   obtenerAmigos,
   buscarUsuarios,
+  guardarAudioCustom,
+  obtenerAudiosCustom,
+  eliminarAudioCustom,
+  obtenerAudiosCustomMultiples,
 };

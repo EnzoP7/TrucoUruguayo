@@ -88,6 +88,13 @@ export default function LobbyPage() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [misPartidas, setMisPartidas] = useState<MiPartida[]>([]);
 
+  // Invite state
+  const [inviteModalMesaId, setInviteModalMesaId] = useState<string | null>(null);
+  const [amigosOnline, setAmigosOnline] = useState<{ id: number; apodo: string; online: boolean }[]>([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteSent, setInviteSent] = useState<Set<number>>(new Set());
+  const [invitacion, setInvitacion] = useState<{ de: string; mesaId: string; tamañoSala: string } | null>(null);
+
   useEffect(() => {
     // Restaurar sesión guardada
     const savedUsuario = sessionStorage.getItem('truco_usuario');
@@ -124,6 +131,12 @@ export default function LobbyPage() {
           });
         });
 
+        // Listener de invitaciones
+        socketService.onInvitacionRecibida((data) => {
+          setInvitacion(data);
+          setTimeout(() => setInvitacion(null), 15000);
+        });
+
         await socketService.joinLobby();
 
         // Re-autenticar el socket si ya tenemos sesión
@@ -150,6 +163,7 @@ export default function LobbyPage() {
     return () => {
       socketService.off('partidas-disponibles');
       socketService.off('partida-nueva');
+      socketService.off('invitacion-recibida');
     };
   }, []);
 
@@ -196,6 +210,30 @@ export default function LobbyPage() {
       fetchMisPartidas();
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Abrir modal de invitar amigos
+  const handleOpenInvite = async (mesaId: string) => {
+    setInviteModalMesaId(mesaId);
+    setInviteSent(new Set());
+    setInviteLoading(true);
+    try {
+      const result = await socketService.obtenerAmigos();
+      if (result.success) {
+        setAmigosOnline(result.amigos?.filter((a: { online: boolean }) => a.online) || []);
+      }
+    } catch { /* ignorar */ }
+    setInviteLoading(false);
+  };
+
+  const handleInvitarAmigo = async (amigoId: number) => {
+    if (!inviteModalMesaId) return;
+    const result = await socketService.invitarAmigo(amigoId, inviteModalMesaId);
+    if (result.success) {
+      setInviteSent(prev => new Set(prev).add(amigoId));
+    } else {
+      alert(result.error || 'No se pudo invitar');
     }
   };
 
@@ -521,14 +559,27 @@ export default function LobbyPage() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleReconectarPartidaUsuario(partida.mesaId)}
-                      disabled={loading}
-                      className="px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 hover:scale-105 shadow-lg shadow-blue-600/20 active:scale-95 disabled:opacity-50"
-                    >
-                      <ReconnectIcon className="w-5 h-5" />
-                      Volver
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* Invitar amigos (solo si esperando y hay espacio) */}
+                      {partida.estado === 'esperando' && partida.jugadoresCount < partida.maxJugadores && (
+                        <button
+                          onClick={() => handleOpenInvite(partida.mesaId)}
+                          disabled={loading}
+                          className="px-4 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 hover:scale-105 shadow-lg shadow-green-600/20 active:scale-95 disabled:opacity-50 text-sm"
+                        >
+                          <UsersIcon className="w-4 h-4" />
+                          Invitar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleReconectarPartidaUsuario(partida.mesaId)}
+                        disabled={loading}
+                        className="px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 hover:scale-105 shadow-lg shadow-blue-600/20 active:scale-95 disabled:opacity-50"
+                      >
+                        <ReconnectIcon className="w-5 h-5" />
+                        Volver
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -828,6 +879,75 @@ export default function LobbyPage() {
           </div>
         </footer>
       </div>
+
+      {/* Modal invitar amigos */}
+      {inviteModalMesaId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setInviteModalMesaId(null)}>
+          <div className="glass rounded-2xl p-6 max-w-sm w-full border border-green-500/30 bg-green-900/10" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg text-green-400">Invitar Amigos</h3>
+              <button onClick={() => setInviteModalMesaId(null)} className="text-gold-500/60 hover:text-gold-300 text-xl">&times;</button>
+            </div>
+
+            {inviteLoading ? (
+              <div className="text-center py-8 text-gold-400/60">Cargando amigos...</div>
+            ) : amigosOnline.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gold-400/60 mb-1">No hay amigos online</p>
+                <p className="text-gold-500/40 text-sm">Agrega amigos desde tu perfil</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {amigosOnline.map(amigo => (
+                  <div key={amigo.id} className="flex items-center justify-between glass rounded-lg p-3 border border-gold-800/20">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-400" />
+                      <span className="text-gold-300 font-medium">{amigo.apodo}</span>
+                    </div>
+                    {inviteSent.has(amigo.id) ? (
+                      <span className="text-green-400 text-sm">Enviada</span>
+                    ) : (
+                      <button
+                        onClick={() => handleInvitarAmigo(amigo.id)}
+                        className="px-3 py-1 rounded-lg text-sm font-semibold bg-green-600/30 text-green-300 hover:bg-green-600/50 transition-all"
+                      >
+                        Invitar
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Toast de invitación recibida */}
+      {invitacion && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 glass rounded-xl px-5 py-4 border border-green-500/40 bg-green-900/20 shadow-xl shadow-green-600/10 animate-slide-down max-w-sm w-full">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-green-300 font-bold">{invitacion.de} te invita a jugar</p>
+              <p className="text-gold-400/60 text-sm">Partida {invitacion.tamañoSala}</p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <button
+                onClick={() => setInvitacion(null)}
+                className="px-3 py-1.5 rounded-lg text-sm text-gold-500/60 hover:text-gold-400 hover:bg-white/5 transition-all"
+              >
+                Ignorar
+              </button>
+              <button
+                onClick={() => { handleUnirsePartida(invitacion.mesaId); setInvitacion(null); }}
+                disabled={loading || !nombre.trim()}
+                className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50"
+              >
+                Unirse
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

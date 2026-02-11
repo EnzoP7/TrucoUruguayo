@@ -341,6 +341,33 @@ class SocketService {
       this.socket!.emit('eliminar-amigo' as any, { amigoId }, (result: any) => resolve(result));
     });
   }
+
+  async invitarAmigo(amigoId: number, mesaId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('invitar-amigo' as any, { amigoId, mesaId }, (result: any) => resolve(result));
+    });
+  }
+
+  onInvitacionRecibida(callback: (data: { de: string; deUserId: number; mesaId: string; tamañoSala: string }) => void): void {
+    this.socket?.on('invitacion-recibida' as any, callback);
+  }
+
+  // === PREMIUM ===
+
+  async togglePremium(): Promise<{ success: boolean; es_premium?: boolean; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('toggle-premium' as any, (result: any) => resolve(result));
+    });
+  }
+
+  async eliminarAudioCustom(audioId: number): Promise<{ success: boolean; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('eliminar-audio-custom' as any, { audioId }, (result: any) => resolve(result));
+    });
+  }
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   // === SOLICITAR ESTADO ===

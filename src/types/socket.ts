@@ -34,6 +34,7 @@ export interface ClientToServerEvents {
   'solicitar-estado': (callback: (success: boolean) => void) => void;
   'toggle-ayuda': (data: { modoAyuda: boolean }, callback: (success: boolean) => void) => void;
   'terminar-partida': (callback: (success: boolean, message?: string) => void) => void;
+  'invitar-amigo': (data: { amigoId: number; mesaId: string }, callback: (result: { success: boolean; error?: string }) => void) => void;
 }
 
 // Eventos del servidor al cliente
@@ -81,6 +82,7 @@ export interface ServerToClientEvents {
   'perros-respondidos': (data: { respuesta: string; equipoGanador?: number; puntosGanados?: number; floresDelEchador?: number; quiereContraFlor?: boolean; quiereFaltaEnvido?: boolean; quiereTruco?: boolean; estado: Mesa }) => void;
   'perros-pendientes': (data: { equipoQueEcha: number; debeResponder: boolean; estado: Mesa }) => void;
   'anfitrion-desconectado': (data: { nombre: string }) => void;
+  'invitacion-recibida': (data: { de: string; deUserId: number; mesaId: string; tamañoSala: string }) => void;
 }
 
 // Types for step-by-step envido

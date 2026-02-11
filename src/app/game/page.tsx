@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import socketService from '@/lib/socket';
+import audioManager from '@/lib/audioManager';
 
 interface Carta {
   palo: 'oro' | 'copa' | 'espada' | 'basto';
@@ -256,6 +257,81 @@ function getNombrePoderCarta(carta: Carta): string {
   return poderes[carta.poder] || `Poder ${carta.poder}`;
 }
 
+// Valores que son pieza del palo de la muestra
+const VALORES_PIEZA_CLIENT = [2, 4, 5, 10, 11];
+
+function esPiezaClient(carta: Carta, muestra: Carta | null): boolean {
+  if (!muestra) return false;
+  if (carta.palo !== muestra.palo) return false;
+  if (VALORES_PIEZA_CLIENT.includes(carta.valor)) return true;
+  if (carta.valor === 12 && VALORES_PIEZA_CLIENT.includes(muestra.valor)) return true;
+  return false;
+}
+
+// Detectar flor con reglas completas (mismo palo, piezas)
+function tieneFlor_client(cartas: Carta[], muestra: Carta | null): boolean {
+  if (cartas.length !== 3) return false;
+  // Regla 1: 3 cartas del mismo palo
+  if (cartas.every(c => c.palo === cartas[0].palo)) return true;
+  // Regla 2: 2+ piezas
+  const piezas = cartas.filter(c => esPiezaClient(c, muestra));
+  if (piezas.length >= 2) return true;
+  // Regla 3: 1 pieza + 2 del mismo palo
+  if (piezas.length === 1) {
+    const noPiezas = cartas.filter(c => !esPiezaClient(c, muestra));
+    if (noPiezas.length === 2 && noPiezas[0].palo === noPiezas[1].palo) return true;
+  }
+  return false;
+}
+
+// Calcular puntos de flor
+function calcularFlor_client(cartas: Carta[], muestra: Carta | null): { puntos: number; explicacion: string } {
+  if (!tieneFlor_client(cartas, muestra)) return { puntos: 0, explicacion: '' };
+
+  const getValorEnvidoLocal = (c: Carta): number => {
+    if (muestra && c.palo === muestra.palo) {
+      switch (c.valor) {
+        case 2: return 30;
+        case 4: return 29;
+        case 5: return 28;
+        case 10: return 27;
+        case 11: return 27;
+        case 12:
+          if (VALORES_PIEZA_CLIENT.includes(muestra.valor)) {
+            switch (muestra.valor) { case 2: return 30; case 4: return 29; case 5: return 28; case 10: return 27; case 11: return 27; default: return 0; }
+          }
+          return 0;
+        default: return c.valor;
+      }
+    }
+    return c.valor >= 10 ? 0 : c.valor;
+  };
+
+  const piezas = cartas.filter(c => esPiezaClient(c, muestra));
+
+  if (piezas.length === 0) {
+    let suma = 0;
+    cartas.forEach(c => { suma += (c.valor >= 10 ? 0 : c.valor); });
+    return { puntos: suma + 20, explicacion: `20 + ${cartas.map(c => c.valor >= 10 ? 0 : c.valor).join(' + ')} = ${suma + 20}` };
+  }
+
+  if (piezas.length === 1) {
+    const valorPieza = getValorEnvidoLocal(piezas[0]);
+    const noPiezas = cartas.filter(c => !(c.palo === piezas[0].palo && c.valor === piezas[0].valor));
+    let sumaOtras = 0;
+    noPiezas.forEach(c => { sumaOtras += (c.valor >= 10 ? 0 : c.valor); });
+    return { puntos: valorPieza + sumaOtras, explicacion: `Pieza(${valorPieza}) + ${sumaOtras} = ${valorPieza + sumaOtras}` };
+  }
+
+  // 2+ piezas
+  const piezasConValor = piezas.map(p => ({ carta: p, v: getValorEnvidoLocal(p) })).sort((a, b) => b.v - a.v);
+  let total = piezasConValor[0].v;
+  for (let i = 1; i < piezasConValor.length; i++) { total += piezasConValor[i].v - 20; }
+  const noPiezas = cartas.filter(c => !esPiezaClient(c, muestra));
+  noPiezas.forEach(c => { total += (c.valor >= 10 ? 0 : c.valor); });
+  return { puntos: total, explicacion: `Piezas: ${total} pts` };
+}
+
 // Componente del panel de ayuda
 function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { cartas: Carta[]; muestra: Carta | null; envidoYaCantado: boolean; florYaCantada: boolean }) {
   const [abierto, setAbierto] = useState(false);
@@ -263,10 +339,11 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
   const envido = calcularEnvido(cartas);
   const cartaMasAlta = cartasOrdenadas[0];
 
-  // Verificar si tiene flor (3 cartas del mismo palo)
-  const tieneFlor = cartas.length === 3 && cartas.every(c => c.palo === cartas[0].palo);
+  // Verificar flor con reglas completas (incluye piezas)
+  const tieneFlor = tieneFlor_client(cartas, muestra);
+  const florInfo = tieneFlor ? calcularFlor_client(cartas, muestra) : null;
 
-  // Minimizado: solo el botón
+  // Minimizado: solo el boton
   if (!abierto) {
     return (
       <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40">
@@ -292,14 +369,14 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
             className="text-blue-400/60 hover:text-blue-300 text-xs px-1.5 py-0.5 rounded hover:bg-blue-800/30 transition-all"
             title="Minimizar"
           >
-            ✕
+            X
           </button>
         </div>
 
-        {/* Carta más alta */}
+        {/* Carta mas alta */}
         {cartaMasAlta && (
           <div className="mb-3">
-            <div className="text-blue-400/70 text-xs font-medium mb-1">🃏 Tu carta más fuerte:</div>
+            <div className="text-blue-400/70 text-xs font-medium mb-1">Tu carta mas fuerte:</div>
             <div className="flex items-center gap-2 bg-blue-900/30 rounded-lg p-2">
               <img
                 src={getCartaImageUrl(cartaMasAlta)}
@@ -316,10 +393,10 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
           </div>
         )}
 
-        {/* Envido - ocultar si ya se resolvió */}
+        {/* Envido - ocultar si ya se resolvio */}
         {!envidoYaCantado && (
           <div className="mb-3">
-            <div className="text-blue-400/70 text-xs font-medium mb-1">🎯 Tu envido:</div>
+            <div className="text-blue-400/70 text-xs font-medium mb-1">Tu envido:</div>
             <div className="bg-blue-900/30 rounded-lg p-2">
               <div className="text-2xl font-bold text-green-400 mb-1">{envido.puntos}</div>
               <div className="text-blue-300/60 text-[10px] leading-tight">{envido.explicacion}</div>
@@ -327,19 +404,20 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
           </div>
         )}
 
-        {/* Flor - ocultar si ya se cantó */}
-        {tieneFlor && !florYaCantada && (
+        {/* Flor - con puntos calculados */}
+        {tieneFlor && !florYaCantada && florInfo && (
           <div className="mb-3">
-            <div className="text-pink-400/70 text-xs font-medium mb-1">🌸 ¡Tenés FLOR!</div>
-            <div className="bg-pink-900/30 rounded-lg p-2 text-[10px] text-pink-300/70">
-              Las 3 cartas son del mismo palo. ¡Cantala!
+            <div className="text-pink-400/70 text-xs font-medium mb-1">Tenes FLOR!</div>
+            <div className="bg-pink-900/30 rounded-lg p-2">
+              <div className="text-2xl font-bold text-pink-300 mb-1">{florInfo.puntos}</div>
+              <div className="text-pink-300/60 text-[10px] leading-tight">{florInfo.explicacion}</div>
             </div>
           </div>
         )}
 
         {/* Orden de cartas */}
         <div className="mb-2">
-          <div className="text-blue-400/70 text-xs font-medium mb-1">📊 Tus cartas (de + a -):</div>
+          <div className="text-blue-400/70 text-xs font-medium mb-1">Tus cartas (de + a -):</div>
           <div className="space-y-1">
             {cartasOrdenadas.map((carta, idx) => (
               <div key={idx} className={`flex items-center gap-2 text-[10px] rounded px-2 py-1 ${
@@ -358,9 +436,9 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
         {/* Muestra */}
         {muestra && (
           <div className="pt-2 border-t border-blue-500/20">
-            <div className="text-yellow-400/70 text-xs font-medium mb-1">⭐ Muestra: {muestra.valor} de {muestra.palo}</div>
+            <div className="text-yellow-400/70 text-xs font-medium mb-1">Muestra: {muestra.valor} de {muestra.palo}</div>
             <div className="text-[10px] text-yellow-300/50">
-              Las cartas de {muestra.palo} son piezas (más fuertes)
+              Las cartas de {muestra.palo} son piezas (mas fuertes)
             </div>
           </div>
         )}
@@ -645,6 +723,7 @@ function GamePage() {
 
         socketService.onAnfitrionDesconectado((data) => {
           if (!mounted) return;
+          audioManager.play('notification');
           mostrarMensaje(`El anfitrión (${data.nombre}) se ha desconectado`, 5000);
         });
 
@@ -679,11 +758,13 @@ function GamePage() {
         socketService.onCartaJugada((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          audioManager.play('card-play');
         });
 
         socketService.onTrucoCantado((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          audioManager.playWithCustom('truco', data.audioCustomUrl);
           const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
           setMensaje(`${jugador?.nombre}: ¡${getNombreGrito(data.tipo)}!`);
           setTimeout(() => { if (mounted) setMensaje(null); }, 4000);
@@ -712,6 +793,7 @@ function GamePage() {
         socketService.onEnvidoCantado((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          audioManager.playWithCustom('envido', data.audioCustomUrl);
           // Mostrar bocadillo de envido
           const bubbleId = `envido-${Date.now()}`;
           setSpeechBubbles(prev => [...prev, {
@@ -818,10 +900,16 @@ function GamePage() {
           }
           // Don't clear message - let the next state update handle it
         });
+        // Nota: el sonido de ronda ganada/perdida se reproduce en onRondaFinalizada
 
         socketService.onRondaFinalizada((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          // Sonido según si mi equipo ganó o perdió la ronda
+          const miJug = data.estado.jugadores?.find((j: Jugador) => j.id === socketService.getSocketId());
+          if (miJug) {
+            audioManager.play(data.ganadorEquipo === miJug.equipo ? 'round-won' : 'round-lost');
+          }
           // Show floating banner instead of blocking modal
           // Include flor/envido cards if any were revealed
           setRondaBanner({
@@ -841,6 +929,9 @@ function GamePage() {
         socketService.onJuegoFinalizado((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          audioManager.stopMusic();
+          const miJug = data.estado.jugadores?.find((j: Jugador) => j.id === socketService.getSocketId());
+          audioManager.play(miJug && data.ganadorEquipo === miJug.equipo ? 'game-won' : 'game-lost');
           setMensaje(`¡JUEGO TERMINADO! Equipo ${data.ganadorEquipo} gana`);
           setTimeout(() => { if (mounted) setMensaje(null); }, 10000);
         });
@@ -855,6 +946,7 @@ function GamePage() {
 
         socketService.onCorteSolicitado((data) => {
           if (!mounted) return;
+          audioManager.play('shuffle');
           setMesa(data.estado);
           const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
           setMensaje(`${jugador?.nombre} debe cortar el mazo`);
@@ -863,6 +955,7 @@ function GamePage() {
 
         socketService.onCorteRealizado((data) => {
           if (!mounted) return;
+          audioManager.play('cut');
           setMesa(data.estado);
           // Reset cut animation states
           setCutAnimating(false);
@@ -892,6 +985,7 @@ function GamePage() {
         socketService.onFlorCantada((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          audioManager.playWithCustom('flor', data.audioCustomUrl);
           setFlorAnuncio({
             jugadorNombre: data.declaracion.jugadorNombre,
           });
@@ -1062,6 +1156,7 @@ function GamePage() {
 
     return () => {
       mounted = false;
+      audioManager.stopMusic();
       socketService.clearAutoReconnect();
       socketService.removeAllListeners();
     };
@@ -1075,6 +1170,31 @@ function GamePage() {
     }, 3000);
     return () => clearInterval(interval);
   }, [esperandoInicio, conectado]);
+
+  // Sonido de "tu turno" cuando cambia el turno a mí
+  const [prevTurno, setPrevTurno] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mesa || !socketId || mesa.estado !== 'jugando') return;
+    const turnoActualId = mesa.jugadores[mesa.turnoActual]?.id;
+    if (turnoActualId === socketId && prevTurno !== socketId) {
+      audioManager.play('your-turn');
+    }
+    setPrevTurno(turnoActualId || null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesa?.turnoActual, socketId]);
+
+  // Iniciar música cuando empieza el juego
+  useEffect(() => {
+    if (mesa?.estado === 'jugando' && !esperandoInicio) {
+      audioManager.startMusic();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesa?.estado, esperandoInicio]);
+
+  // Estado de audio para la UI
+  const [muted, setMuted] = useState(audioManager.isMuted());
+  const [volume, setVolume] = useState(audioManager.getVolume());
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
   // === HELPERS ===
   const miJugador = mesa?.jugadores.find(j => j.id === socketId);
@@ -1532,7 +1652,7 @@ function GamePage() {
     const sizeClasses = {
       small: 'w-8 h-12 sm:w-12 sm:h-[4.5rem] lg:w-14 lg:h-20',
       normal: 'w-12 h-[4.5rem] sm:w-16 sm:h-24 lg:w-20 lg:h-[7.5rem]',
-      large: 'w-14 h-[5.25rem] sm:w-20 sm:h-[7.5rem] lg:w-24 lg:h-36',
+      large: 'w-[4.5rem] h-[6.75rem] sm:w-20 sm:h-[7.5rem] lg:w-24 lg:h-36',
     };
 
     if (isOculta) {
@@ -1561,37 +1681,29 @@ function GamePage() {
     );
   };
 
-  // Casilla de fósforos tradicional
-  // 1-4 puntos: lados del cuadrado (arriba, derecha, abajo, izquierda)
-  // 5to punto: diagonal que cruza el cuadrado
+  // Casilla de fósforos tradicional (solo visible en sm+)
   const Casilla = ({ count }: { count: number }) => {
-    // count es 1-5
-    const size = 'w-7 h-7 sm:w-9 sm:h-9';
+    const size = 'w-9 h-9';
     const matchColor = 'bg-amber-200';
     const matchThick = 'rounded-sm';
 
     return (
       <div className={`${size} relative`}>
-        {/* Lado arriba (punto 1) */}
         {count >= 1 && (
           <div className={`absolute top-0 left-0.5 right-0.5 h-[3px] ${matchColor} ${matchThick}`} />
         )}
-        {/* Lado derecha (punto 2) */}
         {count >= 2 && (
           <div className={`absolute top-0.5 right-0 bottom-0.5 w-[3px] ${matchColor} ${matchThick}`} />
         )}
-        {/* Lado abajo (punto 3) */}
         {count >= 3 && (
           <div className={`absolute bottom-0 left-0.5 right-0.5 h-[3px] ${matchColor} ${matchThick}`} />
         )}
-        {/* Lado izquierda (punto 4) */}
         {count >= 4 && (
           <div className={`absolute top-0.5 left-0 bottom-0.5 w-[3px] ${matchColor} ${matchThick}`} />
         )}
-        {/* Diagonal (punto 5) */}
         {count >= 5 && (
           <div
-            className={`absolute top-0 left-0 w-full h-full`}
+            className="absolute top-0 left-0 w-full h-full"
             style={{
               background: 'linear-gradient(to bottom right, transparent calc(50% - 1.5px), #fde68a calc(50% - 1.5px), #fde68a calc(50% + 1.5px), transparent calc(50% + 1.5px))',
             }}
@@ -1601,13 +1713,12 @@ function GamePage() {
     );
   };
 
-  // Marcador con casillas de fósforos tradicionales
+  // Marcador: mobile = compacto solo numeros, desktop = palitos
   const ScoreBoard = ({ equipo, puntos, isMyTeam }: { equipo: number; puntos: number; isMyTeam: boolean }) => {
     const limite = mesa?.puntosLimite || 30;
     const mitad = Math.floor(limite / 2);
     const enBuenas = puntos >= mitad;
 
-    // Separar en "malos" (0 to mitad-1) y "buenos" (mitad to limite)
     const malos = Math.min(puntos, mitad);
     const buenos = Math.max(puntos - mitad, 0);
 
@@ -1617,51 +1728,62 @@ function GamePage() {
     const buenosResto = buenos % 5;
 
     return (
-      <div className={`score-panel rounded-xl p-2 sm:p-3 ${isMyTeam ? 'ring-2 ring-gold-500/50' : ''}`}>
-        <div className="text-center mb-1">
-          <span className={`text-xs uppercase tracking-wider ${equipo === 1 ? 'text-blue-400' : 'text-red-400'}`}>
-            Equipo {equipo}
+      <div className={`score-panel rounded-xl p-1.5 sm:p-3 ${isMyTeam ? 'ring-2 ring-gold-500/50' : ''}`}>
+        <div className="text-center mb-0.5 sm:mb-1">
+          <span className={`text-[10px] sm:text-xs uppercase tracking-wider ${equipo === 1 ? 'text-blue-400' : 'text-red-400'}`}>
+            Eq {equipo}
           </span>
-          {isMyTeam && <span className="ml-1 text-gold-500 text-[10px]">(Tú)</span>}
+          {isMyTeam && <span className="ml-1 text-gold-500 text-[8px] sm:text-[10px]">(Tu)</span>}
         </div>
-        <div className="text-2xl sm:text-3xl font-bold text-center text-white mb-1">{puntos}</div>
+        <div className="text-xl sm:text-3xl font-bold text-center text-white mb-0.5 sm:mb-1">{puntos}</div>
 
-        {/* "BUENAS" indicator when crossing threshold */}
-        {enBuenas && (
-          <div className="text-center mb-1">
-            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-600/30 text-green-400 border border-green-500/40 animate-pulse">
-              BUENAS
+        {/* Mobile: solo indicador buenas/malas con numeros */}
+        <div className="sm:hidden text-center">
+          {enBuenas ? (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-600/30 text-green-400 border border-green-500/40">
+              BUENAS ({buenos}/{mitad})
             </span>
-          </div>
-        )}
-
-        {/* Malos (0 to mitad) */}
-        <div className="mb-1">
-          <div className="text-[9px] sm:text-[10px] text-gold-500/50 text-center uppercase tracking-wider">Malos</div>
-          <div className="flex flex-wrap justify-center gap-1 min-h-[28px] sm:min-h-[36px]">
-            {Array.from({ length: malosGrupos }).map((_, i) => (
-              <Casilla key={`m-${i}`} count={5} />
-            ))}
-            {malosResto > 0 && <Casilla count={malosResto} />}
-          </div>
+          ) : (
+            <span className="text-[9px] text-gold-500/50">
+              Malos {malos}/{mitad}
+            </span>
+          )}
         </div>
 
-        {/* Línea divisoria */}
-        <div className="border-t border-gold-700/30 my-1" />
+        {/* Desktop: palitos */}
+        <div className="hidden sm:block">
+          {enBuenas && (
+            <div className="text-center mb-1">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-600/30 text-green-400 border border-green-500/40 animate-pulse">
+                BUENAS
+              </span>
+            </div>
+          )}
 
-        {/* Buenos (mitad to limite) */}
-        <div>
-          <div className="text-[9px] sm:text-[10px] text-gold-500/50 text-center uppercase tracking-wider">Buenos</div>
-          <div className="flex flex-wrap justify-center gap-1 min-h-[28px] sm:min-h-[36px]">
-            {buenosGrupos > 0 && Array.from({ length: buenosGrupos }).map((_, i) => (
-              <Casilla key={`b-${i}`} count={5} />
-            ))}
-            {buenosResto > 0 && <Casilla count={buenosResto} />}
+          <div className="mb-1">
+            <div className="text-[10px] text-gold-500/50 text-center uppercase tracking-wider">Malos</div>
+            <div className="flex flex-wrap justify-center gap-1 min-h-[36px]">
+              {Array.from({ length: malosGrupos }).map((_, i) => (
+                <Casilla key={`m-${i}`} count={5} />
+              ))}
+              {malosResto > 0 && <Casilla count={malosResto} />}
+            </div>
           </div>
-        </div>
 
-        {/* Limit indicator */}
-        <div className="text-[8px] text-gold-600/30 text-center mt-1">a {limite} pts</div>
+          <div className="border-t border-gold-700/30 my-1" />
+
+          <div>
+            <div className="text-[10px] text-gold-500/50 text-center uppercase tracking-wider">Buenos</div>
+            <div className="flex flex-wrap justify-center gap-1 min-h-[36px]">
+              {buenosGrupos > 0 && Array.from({ length: buenosGrupos }).map((_, i) => (
+                <Casilla key={`b-${i}`} count={5} />
+              ))}
+              {buenosResto > 0 && <Casilla count={buenosResto} />}
+            </div>
+          </div>
+
+          <div className="text-[8px] text-gold-600/30 text-center mt-1">a {limite} pts</div>
+        </div>
       </div>
     );
   };
@@ -2435,15 +2557,57 @@ function GamePage() {
 
           {/* Info central - Panel Boliche */}
           <div className="flex-1 flex flex-col items-center justify-center boliche-panel rounded-xl px-2 sm:px-4 py-2 border-gold-700/30 relative">
-            {/* Decoración de mate */}
-            <div className="absolute -top-1 -right-1 text-lg opacity-30">🧉</div>
+            {/* Control de audio - esquina izquierda */}
+            <div className="absolute -top-1 -left-1 flex items-center gap-1 z-20">
+              <button
+                onClick={() => { const m = !muted; audioManager.setMuted(m); setMuted(m); }}
+                onMouseEnter={() => setShowVolumeSlider(true)}
+                className="text-[13px] opacity-50 hover:opacity-90 transition-opacity px-1 py-0.5"
+                title={muted ? 'Activar sonido' : 'Silenciar todo'}
+              >
+                {muted ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gold-400/60">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <line x1="23" y1="9" x2="17" y2="15" />
+                    <line x1="17" y1="9" x2="23" y2="15" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gold-400/80">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                )}
+              </button>
+              {showVolumeSlider && !muted && (
+                <div
+                  className="flex items-center gap-1 bg-wood-900/90 border border-gold-700/30 rounded-lg px-2 py-1 shadow-lg"
+                  onMouseLeave={() => setShowVolumeSlider(false)}
+                >
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round(volume * 100)}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value) / 100;
+                      audioManager.setVolume(v);
+                      setVolume(v);
+                    }}
+                    className="w-20 h-1 accent-gold-500 cursor-pointer"
+                    title={`Volumen: ${Math.round(volume * 100)}%`}
+                  />
+                  <span className="text-[9px] text-gold-400/60 min-w-[24px] text-right">{Math.round(volume * 100)}%</span>
+                </div>
+              )}
+            </div>
 
             {/* Botón terminar partida (solo anfitrión, solo en juego) */}
             {esAnfitrion() && mesa.estado === 'jugando' && (
               <button
                 onClick={handleTerminarPartida}
                 disabled={loading}
-                className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] text-red-400/60 hover:text-red-300 hover:bg-red-900/30 transition-all disabled:opacity-50"
+                className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[9px] text-red-400/60 hover:text-red-300 hover:bg-red-900/30 transition-all disabled:opacity-50"
                 title="Terminar partida (tu equipo pierde)"
               >
                 Terminar
@@ -3098,7 +3262,7 @@ function GamePage() {
                     Vale 4
                   </button>
                 )}
-                {mesa.estado === 'jugando' && mesa.fase !== 'finalizada' && !miJugador?.seVaAlMazo && (
+                {mesa.estado === 'jugando' && mesa.fase === 'jugando' && !miJugador?.seVaAlMazo && (
                   <button onClick={handleIrseAlMazo} disabled={loading} className="btn-mazo text-white">
                     Mazo
                   </button>
