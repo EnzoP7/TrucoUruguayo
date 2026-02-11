@@ -20,7 +20,9 @@
       "Bash(findstr:*)",
       "Bash(set NODE_ENV=production)",
       "Bash(npx -p typescript tsc:*)",
-      "Bash(npx next lint:*)"
+      "Bash(npx next lint:*)",
+      "Read(//c/**)",
+      "Bash(node -c:*)"
     ]
   }
 }

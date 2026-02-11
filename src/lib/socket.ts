@@ -218,6 +218,13 @@ class SocketService {
     });
   }
 
+  async toggleAyuda(modoAyuda: boolean): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('toggle-ayuda', { modoAyuda }, (success) => resolve(success));
+    });
+  }
+
   async cantarFlor(): Promise<boolean> {
     if (!this.socket) return false;
     return new Promise((resolve) => {

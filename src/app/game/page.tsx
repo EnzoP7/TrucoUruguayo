@@ -16,6 +16,7 @@ interface Jugador {
   equipo: number;
   cartas: Carta[];
   esMano?: boolean;
+  modoAyuda?: boolean;
 }
 
 interface GritoActivo {
@@ -103,6 +104,9 @@ interface Mesa {
   // Sistema de perros
   perrosActivos?: boolean;
   perrosConfig?: { contraFlor: boolean; faltaEnvido: boolean; truco: boolean } | null;
+  // Respuestas grupales envido
+  respuestasEnvido?: Record<string, boolean>;
+  esperandoRespuestasGrupales?: boolean;
   // Pico a Pico y Modo Ayuda
   modoAlternadoHabilitado?: boolean;
   modoRondaActual?: 'normal' | '1v1';
@@ -548,7 +552,7 @@ function GamePage() {
   const [perrosActivos, setPerrosActivos] = useState(false);
   const [equipoPerros, setEquipoPerros] = useState<number | null>(null);
   // Contra Flor al Resto
-  const [florPendiente, setFlorPendiente] = useState<{ equipoQueCanta: number; equipoQueResponde: number } | null>(null);
+  const [florPendiente, setFlorPendiente] = useState<{ equipoQueCanta: number; equipoQueResponde: number; ultimoTipo?: string; jugadorNombre?: string } | null>(null);
   // Bocadillos de diálogo (speech bubbles)
   const [speechBubbles, setSpeechBubbles] = useState<{
     id: string;
@@ -904,6 +908,8 @@ function GamePage() {
           setFlorPendiente({
             equipoQueCanta: data.equipoQueCanta,
             equipoQueResponde: data.equipoQueResponde,
+            ultimoTipo: (data as Record<string, unknown>).ultimoTipo as string | undefined,
+            jugadorNombre: (data as Record<string, unknown>).jugadorNombre as string | undefined,
           });
         });
 
@@ -1048,8 +1054,8 @@ function GamePage() {
     if (!mesa || !socketId) return [];
     const jugador = mesa.jugadores.find(j => j.id === socketId);
     const cartas = jugador?.cartas.filter(c => c.valor !== 0) || [];
-    // Si el modo ayuda está activo, ordenar las cartas de mayor a menor poder
-    if (mesa.modoAyudaHabilitado) {
+    // Si el modo ayuda está activo para este jugador, ordenar las cartas de mayor a menor poder
+    if (jugador?.modoAyuda) {
       return ordenarCartasPorPoder(cartas);
     }
     return cartas;
@@ -1841,16 +1847,29 @@ function GamePage() {
                                   <span className="text-[10px] bg-gold-600/30 text-gold-400 px-1.5 py-0.5 rounded">Host</span>
                                 )}
                               </div>
-                              {esAnfitrion() && (
-                                <button
-                                  onClick={() => handleCambiarEquipo(j.id, 2)}
-                                  disabled={loading}
-                                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-800/40 transition-all"
-                                  title="Mover al Equipo 2"
-                                >
-                                  → Eq.2
-                                </button>
-                              )}
+                              <div className="flex items-center gap-2">
+                                {j.id === socketId ? (
+                                  <button
+                                    onClick={() => socketService.toggleAyuda(!j.modoAyuda)}
+                                    className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? 'bg-blue-600/40 text-blue-300' : 'bg-gray-700/30 text-gray-500 hover:text-gray-400'}`}
+                                    title="Activar/desactivar modo ayuda"
+                                  >
+                                    📚 Ayuda
+                                  </button>
+                                ) : (
+                                  j.modoAyuda && <span className="text-[10px] bg-blue-600/20 text-blue-400/60 px-1.5 py-0.5 rounded">📚</span>
+                                )}
+                                {esAnfitrion() && (
+                                  <button
+                                    onClick={() => handleCambiarEquipo(j.id, 2)}
+                                    disabled={loading}
+                                    className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-800/40 transition-all"
+                                    title="Mover al Equipo 2"
+                                  >
+                                    → Eq.2
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           ))}
                           {mesa.jugadores.filter(j => j.equipo === 1).length === 0 && (
@@ -1885,16 +1904,29 @@ function GamePage() {
                                   <span className="text-[10px] bg-gold-600/30 text-gold-400 px-1.5 py-0.5 rounded">Host</span>
                                 )}
                               </div>
-                              {esAnfitrion() && (
-                                <button
-                                  onClick={() => handleCambiarEquipo(j.id, 1)}
-                                  disabled={loading}
-                                  className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-800/40 transition-all"
-                                  title="Mover al Equipo 1"
-                                >
-                                  → Eq.1
-                                </button>
-                              )}
+                              <div className="flex items-center gap-2">
+                                {j.id === socketId ? (
+                                  <button
+                                    onClick={() => socketService.toggleAyuda(!j.modoAyuda)}
+                                    className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? 'bg-blue-600/40 text-blue-300' : 'bg-gray-700/30 text-gray-500 hover:text-gray-400'}`}
+                                    title="Activar/desactivar modo ayuda"
+                                  >
+                                    📚 Ayuda
+                                  </button>
+                                ) : (
+                                  j.modoAyuda && <span className="text-[10px] bg-blue-600/20 text-blue-400/60 px-1.5 py-0.5 rounded">📚</span>
+                                )}
+                                {esAnfitrion() && (
+                                  <button
+                                    onClick={() => handleCambiarEquipo(j.id, 1)}
+                                    disabled={loading}
+                                    className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-800/40 transition-all"
+                                    title="Mover al Equipo 1"
+                                  >
+                                    → Eq.1
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           ))}
                           {mesa.jugadores.filter(j => j.equipo === 2).length === 0 && (
@@ -1926,11 +1958,24 @@ function GamePage() {
                             {j.id === socketId && <span className="text-gold-400 ml-2">(tú)</span>}
                           </span>
                         </div>
-                        {i === 0 && (
-                          <span className="text-xs bg-gold-600/30 text-gold-400 px-2 py-1 rounded">
-                            Anfitrión
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {j.id === socketId ? (
+                            <button
+                              onClick={() => socketService.toggleAyuda(!j.modoAyuda)}
+                              className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? 'bg-blue-600/40 text-blue-300' : 'bg-gray-700/30 text-gray-500 hover:text-gray-400'}`}
+                              title="Activar/desactivar modo ayuda"
+                            >
+                              📚 Ayuda
+                            </button>
+                          ) : (
+                            j.modoAyuda && <span className="text-[10px] bg-blue-600/20 text-blue-400/60 px-1.5 py-0.5 rounded">📚</span>
+                          )}
+                          {i === 0 && (
+                            <span className="text-xs bg-gold-600/30 text-gold-400 px-2 py-1 rounded">
+                              Anfitrión
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1972,13 +2017,6 @@ function GamePage() {
   // === DISTRIBUCIÓN VISUAL DE JUGADORES ===
   // Organizar jugadores según su posición en la mesa visual
   // - Yo siempre estoy abajo (centro en 3v3)
-  // - Rivales a mis lados (izquierda y derecha)
-  // - Compañeros enfrente (arriba)
-  const rivales = mesa.jugadores.filter(j => j.id !== socketId && j.equipo !== miEquipo);
-  const companerosEquipo = mesa.jugadores.filter(j => j.id !== socketId && j.equipo === miEquipo);
-
-  // Teammates (same team, excluding me) - their cards are now visible from the server
-  const companeros = companerosEquipo;
   // Cards that each teammate has played in the current mano
   const cartasJugadasPorJugador = (jugadorId: string) => {
     return cartasManoActual.filter(c => c.jugadorId === jugadorId).map(c => c.carta);
@@ -1987,38 +2025,42 @@ function GamePage() {
   const yaJugueEnEstaMano = cartasManoActual.some(c => c.jugadorId === socketId);
 
   // === SLOT-BASED PLAYER POSITIONING ===
-  // Assign each player a visual slot based on team membership (not array index)
-  // 2v2: rivals on left/right, teammate on top
-  // 3v3: rivals at side-left/top-center/side-right, teammates at top-left/top-right
+  // Uses posicionRelativa (distance in array from me) so that from EVERY player's
+  // perspective, the next player in turn order is always to their RIGHT (clockwise).
+  // This ensures consistent visuals for all players.
+  // 1v1: posRel 1 → top
+  // 2v2: posRel 1 → right, posRel 2 → top, posRel 3 → left
+  // 3v3: posRel 1 → side-right, posRel 2 → top-right, posRel 3 → top-center,
+  //       posRel 4 → top-left, posRel 5 → side-left
   type PlayerSlot = 'top' | 'left' | 'right' | 'top-left' | 'top-center' | 'top-right' | 'side-left' | 'side-right';
+
+  const miIndex = mesa.jugadores.findIndex(j => j.id === socketId);
 
   const getSlotForPlayer = (jugadorId: string): PlayerSlot | null => {
     const numJugadores = mesa.jugadores.length;
-    const jugador = mesa.jugadores.find(j => j.id === jugadorId);
-    if (!jugador || jugador.id === socketId) return null;
+    const jugadorIndex = mesa.jugadores.findIndex(j => j.id === jugadorId);
+    if (jugadorIndex === -1 || jugadorId === socketId) return null;
+
+    // How many seats clockwise from me
+    const posRel = (jugadorIndex - miIndex + numJugadores) % numJugadores;
 
     if (numJugadores === 2) return 'top';
 
     if (numJugadores === 4) {
-      const esRival = jugador.equipo !== miEquipo;
-      if (esRival) {
-        const rivalIdx = rivales.indexOf(jugador);
-        return rivalIdx === 0 ? 'left' : 'right';
-      }
-      return 'top'; // teammate
+      // posRel 1 → right, 2 → top (across), 3 → left
+      if (posRel === 1) return 'right';
+      if (posRel === 2) return 'top';
+      if (posRel === 3) return 'left';
     }
 
     if (numJugadores === 6) {
-      const esRival = jugador.equipo !== miEquipo;
-      if (esRival) {
-        const rivalIdx = rivales.indexOf(jugador);
-        if (rivalIdx === 0) return 'side-left';
-        if (rivalIdx === 1) return 'top-center';
-        return 'side-right';
-      } else {
-        const compIdx = companeros.indexOf(jugador);
-        return compIdx === 0 ? 'top-left' : 'top-right';
-      }
+      // posRel 1 → side-right, 2 → top-right, 3 → top-center (across),
+      // 4 → top-left, 5 → side-left
+      if (posRel === 1) return 'side-right';
+      if (posRel === 2) return 'top-right';
+      if (posRel === 3) return 'top-center';
+      if (posRel === 4) return 'top-left';
+      if (posRel === 5) return 'side-left';
     }
 
     return null;
@@ -2109,7 +2151,7 @@ function GamePage() {
       )}
 
       {/* Panel de ayuda para principiantes */}
-      {mesa.modoAyudaHabilitado && mesa.estado === 'jugando' && mesa.fase === 'jugando' && misCartas().length > 0 && (
+      {mesa.jugadores.find(j => j.id === socketId)?.modoAyuda && mesa.estado === 'jugando' && mesa.fase === 'jugando' && misCartas().length > 0 && (
         <PanelAyuda cartas={misCartas()} muestra={mesa.muestra} />
       )}
 
@@ -2387,8 +2429,8 @@ function GamePage() {
           <div className="flex-1 flex flex-row items-stretch gap-1 sm:gap-2">
             {/* Left side player (rival in 2v2/3v3) */}
             {leftSidePlayer && (
-              <div className="flex flex-col items-center justify-center w-16 sm:w-24">
-                {renderPlayerIndicator(leftSidePlayer, true)}
+              <div className="flex flex-col items-center justify-center w-20 sm:w-28">
+                {renderPlayerIndicator(leftSidePlayer)}
               </div>
             )}
 
@@ -2616,43 +2658,43 @@ function GamePage() {
                   let posicionStyle: React.CSSProperties = {};
 
                   if (esMiCarta) {
-                    // Mi carta: abajo, debajo del mazo (entre el mazo y mis cartas)
+                    // Mi carta: bien abajo, debajo del mazo/muestra sin pisarlos
                     posicionStyle = {
                       position: 'absolute',
-                      bottom: '18%',
+                      top: '73%',
                       left: '50%',
                       transform: 'translateX(-50%)',
                       zIndex: esCartaGanadora ? 50 : 15 + i,
                     };
                   } else {
-                    // Cartas de otros jugadores - usar slot-based positioning
+                    // Cartas de otros jugadores - distribuidas alrededor del mazo sin pisarlo
                     const slot = getSlotForPlayer(jugada.jugadorId);
                     const z = esCartaGanadora ? 50 : 15 + i;
 
                     switch (slot) {
-                      case 'top': // 1v1 opponent or 2v2 teammate
-                        posicionStyle = { position: 'absolute', top: '18%', left: '50%', transform: 'translateX(-50%)', zIndex: z };
+                      case 'top': // 1v1 opponent or 2v2 teammate - bien arriba sin pisar mazo
+                        posicionStyle = { position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)', zIndex: z };
                         break;
-                      case 'left': // 2v2 rival left
-                        posicionStyle = { position: 'absolute', top: '50%', left: '12%', transform: 'translateY(-50%)', zIndex: z };
+                      case 'left': // 2v2 rival left - a la altura del mazo
+                        posicionStyle = { position: 'absolute', top: '50%', left: '18%', transform: 'translate(-50%, -50%)', zIndex: z };
                         break;
-                      case 'right': // 2v2 rival right
-                        posicionStyle = { position: 'absolute', top: '50%', right: '12%', transform: 'translateY(-50%)', zIndex: z };
+                      case 'right': // 2v2 rival right - a la altura del mazo
+                        posicionStyle = { position: 'absolute', top: '50%', right: '18%', transform: 'translate(50%, -50%)', zIndex: z };
                         break;
-                      case 'side-left': // 3v3 rival bottom-left
-                        posicionStyle = { position: 'absolute', bottom: '30%', left: '10%', zIndex: z };
+                      case 'side-left': // 3v3 rival at my left - a la altura del mazo
+                        posicionStyle = { position: 'absolute', top: '50%', left: '8%', transform: 'translateY(-50%)', zIndex: z };
                         break;
-                      case 'top-left': // 3v3 teammate top-left
-                        posicionStyle = { position: 'absolute', top: '30%', left: '10%', zIndex: z };
+                      case 'top-left': // 3v3 teammate top-left - arriba sin pisar mazo
+                        posicionStyle = { position: 'absolute', top: '15%', left: '20%', zIndex: z };
                         break;
-                      case 'top-center': // 3v3 rival top-center
-                        posicionStyle = { position: 'absolute', top: '18%', left: '50%', transform: 'translateX(-50%)', zIndex: z };
+                      case 'top-center': // 3v3 rival top-center - arriba sin pisar mazo
+                        posicionStyle = { position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)', zIndex: z };
                         break;
-                      case 'top-right': // 3v3 teammate top-right
-                        posicionStyle = { position: 'absolute', top: '30%', right: '10%', zIndex: z };
+                      case 'top-right': // 3v3 teammate top-right - arriba sin pisar mazo
+                        posicionStyle = { position: 'absolute', top: '15%', right: '20%', zIndex: z };
                         break;
-                      case 'side-right': // 3v3 rival bottom-right
-                        posicionStyle = { position: 'absolute', bottom: '30%', right: '10%', zIndex: z };
+                      case 'side-right': // 3v3 rival at my right - a la altura del mazo
+                        posicionStyle = { position: 'absolute', top: '50%', right: '8%', transform: 'translateY(-50%)', zIndex: z };
                         break;
                     }
                   }
@@ -2695,8 +2737,8 @@ function GamePage() {
 
             {/* Right side player (rival in 2v2/3v3) */}
             {rightSidePlayer && (
-              <div className="flex flex-col items-center justify-center w-16 sm:w-24">
-                {renderPlayerIndicator(rightSidePlayer, true)}
+              <div className="flex flex-col items-center justify-center w-20 sm:w-28">
+                {renderPlayerIndicator(rightSidePlayer)}
               </div>
             )}
           </div> {/* close flex-row wrapper for side players */}
@@ -2719,59 +2761,104 @@ function GamePage() {
           )}
 
           {/* Panel de respuesta a Envido */}
-          {deboResponderEnvido() && mesa.envidoActivo && (
-            <div className="glass rounded-xl p-4 my-3 text-center border border-purple-600/40 animate-slide-up">
-              <p className="text-lg font-bold text-purple-300 mb-1">
-                {mesa.jugadores.find(j => j.id === mesa.envidoActivo!.jugadorQueCanta)?.nombre} cantó {getNombreEnvido(mesa.envidoActivo.tipos[mesa.envidoActivo.tipos.length - 1])}
-              </p>
-              <p className="text-sm text-purple-400/70 mb-3">En juego: {mesa.envidoActivo.puntosAcumulados} pts</p>
-              <div className="flex justify-center gap-2 flex-wrap">
-                <button onClick={() => handleResponderEnvido(true)} disabled={loading} className="btn-quiero text-white">
-                  ¡QUIERO!
-                </button>
-                <button onClick={() => handleResponderEnvido(false)} disabled={loading} className="btn-no-quiero text-white">
-                  NO QUIERO
-                </button>
-                {!mesa.envidoActivo.tipos.includes('falta_envido') && (
-                  <>
-                    {/* Solo mostrar Envido si el último cantado fue Envido (para revirar envido-envido) */}
-                    {mesa.envidoActivo.tipos[mesa.envidoActivo.tipos.length - 1] === 'envido' && (
-                      <button onClick={() => handleCantarEnvido('envido')} disabled={loading} className="btn-envido text-white">
-                        Envido
-                      </button>
-                    )}
+          {deboResponderEnvido() && mesa.envidoActivo && (() => {
+            // Verificar si algún compañero ya aceptó el envido
+            const compañeroYaAcepto = mesa.respuestasEnvido && Object.entries(mesa.respuestasEnvido).some(
+              ([id, resp]) => resp === true && id !== socketId && mesa.jugadores.find(j => j.id === id)?.equipo === miEquipo
+            );
+            // Determinar nivel del último envido cantado para filtrar opciones
+            const ultimoTipo = mesa.envidoActivo.tipos[mesa.envidoActivo.tipos.length - 1];
+            const tieneRealEnvido = mesa.envidoActivo.tipos.includes('real_envido');
+            const tieneFaltaEnvido = mesa.envidoActivo.tipos.includes('falta_envido');
+            const tieneEnvidoCargado = mesa.envidoActivo.tipos.some((t: string) => t.startsWith('cargado_'));
+            // No mostrar opciones menores a lo ya cantado
+            const mostrarEnvido = ultimoTipo === 'envido' && !tieneRealEnvido && !tieneFaltaEnvido && !tieneEnvidoCargado;
+            const mostrarRealEnvido = !tieneRealEnvido && !tieneFaltaEnvido && !tieneEnvidoCargado;
+            const mostrarFaltaEnvido = !tieneFaltaEnvido;
+
+            return (
+              <div className="glass rounded-xl p-4 my-3 text-center border border-purple-600/40 animate-slide-up">
+                <p className="text-lg font-bold text-purple-300 mb-1">
+                  {mesa.jugadores.find(j => j.id === mesa.envidoActivo!.jugadorQueCanta)?.nombre} cantó {getNombreEnvido(mesa.envidoActivo.tipos[mesa.envidoActivo.tipos.length - 1])}
+                </p>
+                <p className="text-sm text-purple-400/70 mb-3">En juego: {mesa.envidoActivo.puntosAcumulados} pts</p>
+                <div className="flex justify-center gap-2 flex-wrap">
+                  <button onClick={() => handleResponderEnvido(true)} disabled={loading} className="btn-quiero text-white">
+                    ¡QUIERO!
+                  </button>
+                  {/* Ocultar NO QUIERO si un compañero ya aceptó */}
+                  {!compañeroYaAcepto && (
+                    <button onClick={() => handleResponderEnvido(false)} disabled={loading} className="btn-no-quiero text-white">
+                      NO QUIERO
+                    </button>
+                  )}
+                  {/* Opciones de escalación: solo mostrar las superiores a lo ya cantado */}
+                  {mostrarEnvido && (
+                    <button onClick={() => handleCantarEnvido('envido')} disabled={loading} className="btn-envido text-white">
+                      Envido
+                    </button>
+                  )}
+                  {mostrarRealEnvido && (
                     <button onClick={() => handleCantarEnvido('real_envido')} disabled={loading} className="btn-envido text-white">
                       Real Envido
                     </button>
+                  )}
+                  {mostrarFaltaEnvido && (
                     <button onClick={() => handleCantarEnvido('falta_envido')} disabled={loading} className="btn-envido text-white">
                       Falta Envido
                     </button>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
-          {/* Panel de respuesta a Flor - Contra Flor al Resto */}
-          {florPendiente && miEquipo === florPendiente.equipoQueResponde && (
-            <div className="glass rounded-xl p-4 my-3 text-center border border-pink-600/40 animate-slide-up">
-              <p className="text-lg font-bold text-pink-300 mb-1">
-                🌸 El equipo rival cantó FLOR
-              </p>
-              <p className="text-sm text-pink-400/70 mb-3">¡Vos también tenés flor! ¿Qué querés hacer?</p>
-              <div className="flex justify-center gap-2 flex-wrap">
-                <button onClick={() => handleResponderFlor('quiero')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 transition-all shadow-lg">
-                  🌸 FLOR (Achicarse)
-                </button>
-                <button onClick={() => handleResponderFlor('con_flor_envido')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-500 hover:to-blue-500 transition-all shadow-lg">
-                  🎯 CON FLOR ENVIDO
-                </button>
-                <button onClick={() => handleResponderFlor('contra_flor')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-pink-600 to-red-600 text-white hover:from-pink-500 hover:to-red-500 transition-all shadow-lg">
-                  🔥 CONTRA FLOR AL RESTO
-                </button>
+          {/* Panel de respuesta a Flor */}
+          {florPendiente && miEquipo === florPendiente.equipoQueResponde && (() => {
+            const ultimo = florPendiente.ultimoTipo;
+            const esContraFlor = ultimo === 'contra_flor';
+            const esConFlorEnvido = ultimo === 'con_flor_envido';
+            const titulo = esContraFlor
+              ? `${florPendiente.jugadorNombre || 'El rival'} cantó CONTRA FLOR AL RESTO`
+              : esConFlorEnvido
+              ? `${florPendiente.jugadorNombre || 'El rival'} cantó CON FLOR ENVIDO`
+              : 'El equipo rival cantó FLOR';
+            const subtitulo = esContraFlor
+              ? '¿Querés aceptar la contra flor al resto?'
+              : esConFlorEnvido
+              ? '¿Qué querés hacer?'
+              : '¡Vos también tenés flor! ¿Qué querés hacer?';
+
+            return (
+              <div className="glass rounded-xl p-4 my-3 text-center border border-pink-600/40 animate-slide-up">
+                <p className="text-lg font-bold text-pink-300 mb-1">
+                  {titulo}
+                </p>
+                <p className="text-sm text-pink-400/70 mb-3">{subtitulo}</p>
+                <div className="flex justify-center gap-2 flex-wrap">
+                  <button onClick={() => handleResponderFlor('quiero')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 transition-all shadow-lg">
+                    {esContraFlor || esConFlorEnvido ? '¡QUIERO!' : 'FLOR (Achicarse)'}
+                  </button>
+                  <button onClick={() => handleResponderFlor('no_quiero')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-gray-600 to-gray-500 text-white hover:from-gray-500 hover:to-gray-400 transition-all shadow-lg">
+                    NO QUIERO
+                  </button>
+                  {/* Solo mostrar escalación si no es ya contra flor al resto */}
+                  {!esContraFlor && (
+                    <>
+                      {!esConFlorEnvido && (
+                        <button onClick={() => handleResponderFlor('con_flor_envido')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-500 hover:to-blue-500 transition-all shadow-lg">
+                          CON FLOR ENVIDO
+                        </button>
+                      )}
+                      <button onClick={() => handleResponderFlor('contra_flor')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-pink-600 to-red-600 text-white hover:from-pink-500 hover:to-red-500 transition-all shadow-lg">
+                        CONTRA FLOR AL RESTO
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Las declaraciones de envido ahora se muestran como banner flotante arriba */}
 

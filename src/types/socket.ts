@@ -32,6 +32,7 @@ export interface ClientToServerEvents {
   'cancelar-perros': (callback: (success: boolean, message?: string) => void) => void;
   'responder-perros': (data: { quiereContraFlor: boolean; quiereFaltaEnvido: boolean; quiereTruco: boolean }, callback: (success: boolean, message?: string) => void) => void;
   'solicitar-estado': (callback: (success: boolean) => void) => void;
+  'toggle-ayuda': (data: { modoAyuda: boolean }, callback: (success: boolean) => void) => void;
 }
 
 // Eventos del servidor al cliente

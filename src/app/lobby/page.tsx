@@ -66,11 +66,17 @@ export default function LobbyPage() {
   const [loading, setLoading] = useState(false);
   const [tamañoSala, setTamañoSala] = useState<'1v1' | '2v2' | '3v3'>('2v2');
   const [modoAlternado, setModoAlternado] = useState(true); // Pico a Pico - Por defecto habilitado
-  const [modoAyuda, setModoAyuda] = useState(false); // Modo ayuda para principiantes
+  const [partidaGuardada, setPartidaGuardada] = useState<string | null>(null); // mesaId de partida anterior
 
   useEffect(() => {
     const savedNombre = sessionStorage.getItem('truco_nombre');
     if (savedNombre) setNombre(savedNombre);
+
+    // Verificar si hay una partida guardada para reconectar
+    const savedMesaId = sessionStorage.getItem('truco_mesaId');
+    if (savedMesaId && savedNombre) {
+      setPartidaGuardada(savedMesaId);
+    }
 
     const connectToServer = async () => {
       try {
@@ -121,7 +127,7 @@ export default function LobbyPage() {
 
     setLoading(true);
     try {
-      const mesaId = await socketService.crearPartida(nombre.trim(), tamañoSala, modoAlternado, modoAyuda);
+      const mesaId = await socketService.crearPartida(nombre.trim(), tamañoSala, modoAlternado, false);
       if (mesaId) {
         navigateToGame(mesaId);
       } else {
@@ -174,12 +180,16 @@ export default function LobbyPage() {
         if (joinSuccess) {
           navigateToGame(mesaId);
         } else {
-          alert('Error al reconectar a la partida');
+          alert('La partida ya no existe');
+          sessionStorage.removeItem('truco_mesaId');
+          setPartidaGuardada(null);
         }
       }
     } catch (error) {
       console.error('Error reconnecting:', error);
-      alert('Error al reconectar');
+      alert('La partida ya no existe');
+      sessionStorage.removeItem('truco_mesaId');
+      setPartidaGuardada(null);
     } finally {
       setLoading(false);
     }
@@ -257,6 +267,39 @@ export default function LobbyPage() {
           </div>
         </header>
 
+        {/* Banner de reconexión */}
+        {partidaGuardada && nombre.trim() && (
+          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-amber-500/30 bg-amber-900/10">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <ReconnectIcon className="w-6 h-6 text-amber-400 animate-spin-slow flex-shrink-0" />
+                <div>
+                  <p className="text-gold-300 font-medium">Tenés una partida en curso</p>
+                  <p className="text-gold-500/60 text-sm">Podés volver a conectarte a tu partida anterior</p>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    sessionStorage.removeItem('truco_mesaId');
+                    setPartidaGuardada(null);
+                  }}
+                  className="px-3 py-2 rounded-lg text-sm text-gold-500/60 hover:text-gold-400 hover:bg-white/5 transition-all"
+                >
+                  Descartar
+                </button>
+                <button
+                  onClick={() => handleReconectarPartida(partidaGuardada)}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-amber-600 to-amber-700 text-white hover:from-amber-500 hover:to-amber-600 transition-all shadow-lg shadow-amber-600/20 disabled:opacity-50"
+                >
+                  {loading ? 'Reconectando...' : 'Volver a la partida'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Panel de crear partida */}
         <div className="glass rounded-2xl p-6 sm:p-8 mb-6 animate-slide-up border border-gold-800/20">
           {/* Input nombre */}
@@ -333,29 +376,6 @@ export default function LobbyPage() {
               </label>
             </div>
           )}
-
-          {/* Modo Ayuda para principiantes */}
-          <div className="mb-6">
-            <label className="flex items-center gap-3 cursor-pointer group">
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={modoAyuda}
-                  onChange={(e) => setModoAyuda(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-wood-800 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-gold-300 font-medium group-hover:text-gold-200 transition-colors">
-                  📚 Modo Ayuda
-                </span>
-                <span className="text-gold-400/60 text-xs">
-                  Ideal para aprender: muestra consejos, ordena cartas por valor y explica el envido
-                </span>
-              </div>
-            </label>
-          </div>
 
           {/* Botón crear */}
           <button
