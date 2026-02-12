@@ -63,6 +63,7 @@ function ArrowIcon({ className }: { className?: string }) {
 interface Usuario {
   id: number;
   apodo: string;
+  avatar_url?: string | null;
 }
 
 interface MiPartida {
@@ -447,9 +448,13 @@ export default function LobbyPage() {
           <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-gold-800/20">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold text-lg">
-                  {usuario.apodo[0].toUpperCase()}
-                </div>
+                {usuario.avatar_url ? (
+                  <img src={usuario.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-gold-600/50" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold text-lg">
+                    {usuario.apodo[0].toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <div className="text-gold-300 font-bold">{usuario.apodo}</div>
                   <div className="text-gold-500/50 text-xs">Jugador registrado</div>
