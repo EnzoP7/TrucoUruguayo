@@ -675,6 +675,8 @@ function GamePage() {
   const [equipoPerros, setEquipoPerros] = useState<number | null>(null);
   // Contra Flor al Resto
   const [florPendiente, setFlorPendiente] = useState<{ equipoQueCanta: number; equipoQueResponde: number; ultimoTipo?: string; jugadorNombre?: string } | null>(null);
+  // Notificación de jugador desconectado
+  const [jugadorDesconectado, setJugadorDesconectado] = useState<{ nombre: string; esAnfitrion: boolean } | null>(null);
   // Bocadillos de diálogo (speech bubbles)
   const [speechBubbles, setSpeechBubbles] = useState<{
     id: string;
@@ -726,6 +728,12 @@ function GamePage() {
           if (!mounted) return;
           audioManager.play('notification');
           mostrarMensaje(`El anfitrión (${data.nombre}) se ha desconectado`, 5000);
+        });
+
+        socketService.onJugadorDesconectado((data) => {
+          if (!mounted) return;
+          audioManager.play('notification');
+          setJugadorDesconectado({ nombre: data.nombre, esAnfitrion: data.esAnfitrion });
         });
 
         socketService.onUnidoPartida((data) => {
@@ -942,6 +950,7 @@ function GamePage() {
         socketService.onJugadorAlMazo((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          audioManager.playWithCustom('mazo', data.audioCustomUrl);
           const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
           setMensaje(`${jugador?.nombre} se fue al mazo`);
           setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
@@ -1012,6 +1021,7 @@ function GamePage() {
         socketService.onFlorResuelta((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          if (data.audioCustomUrl) audioManager.playWithCustom('quiero', data.audioCustomUrl);
           setFlorPendiente(null); // Limpiar flor pendiente cuando se resuelve
           setFlorResultado({
             ganador: data.resultado.ganador,
@@ -1200,6 +1210,21 @@ function GamePage() {
   const [volume, setVolume] = useState(audioManager.getVolume());
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
+  // Inicializar AudioContext desde un gesto del usuario (requerido en mobile)
+  useEffect(() => {
+    const unlock = () => {
+      audioManager.initFromUserGesture();
+      document.removeEventListener('touchstart', unlock);
+      document.removeEventListener('click', unlock);
+    };
+    document.addEventListener('touchstart', unlock, { once: true });
+    document.addEventListener('click', unlock, { once: true });
+    return () => {
+      document.removeEventListener('touchstart', unlock);
+      document.removeEventListener('click', unlock);
+    };
+  }, []);
+
   // === HELPERS ===
   const miJugador = mesa?.jugadores.find(j => j.id === socketId);
   const miEquipo = miJugador?.equipo;
@@ -1344,10 +1369,10 @@ function GamePage() {
     }
   };
 
-  const handleResponderTruco = async (acepta: boolean) => {
+  const handleResponderTruco = async (acepta: boolean, escalar?: string) => {
     setLoading(true);
     try {
-      await socketService.responderTruco(acepta);
+      await socketService.responderTruco(acepta, escalar);
     } finally {
       setLoading(false);
     }
@@ -1454,7 +1479,7 @@ function GamePage() {
   };
 
   const handleTerminarPartida = async () => {
-    if (!confirm('¿Terminar la partida? Tu equipo pierde por abandono.')) return;
+    if (!confirm('¿Abandonar la partida? Tu equipo pierde.')) return;
     setLoading(true);
     try {
       const success = await socketService.terminarPartida();
@@ -1497,16 +1522,11 @@ function GamePage() {
   // Componente de moneda dorada para identificar al jugador mano
   const MonedaMano = ({ isActive = false }: { isActive?: boolean }) => (
     <div className={`relative inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full transition-all duration-500 ${
-      isActive
-        ? 'bg-gradient-to-br from-yellow-300 via-yellow-500 to-amber-600 shadow-lg shadow-yellow-500/40 animate-coin-flip'
-        : 'bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600 opacity-40'
-    } border-2 ${isActive ? 'border-yellow-300/70' : 'border-gray-500/50'}`}
+      isActive ? 'animate-coin-flip shadow-lg shadow-yellow-500/40' : 'opacity-40 grayscale'
+    }`}
     title="Mano"
     >
-      <span className={`font-bold text-xs sm:text-sm ${isActive ? 'text-yellow-950' : 'text-gray-300'}`}>M</span>
-      {isActive && (
-        <div className="absolute inset-0 rounded-full bg-gradient-to-t from-transparent to-white/20 pointer-events-none" />
-      )}
+      <Image src="/Images/MonedaArtigas.png" alt="Mano" width={32} height={32} className="w-full h-full rounded-full object-cover" />
     </div>
   );
 
@@ -1690,15 +1710,17 @@ function GamePage() {
     const enBuenas = puntos >= mitad;
     const buenos = Math.max(puntos - mitad, 0);
     const malos = Math.min(puntos, mitad);
+    const label = isMyTeam ? 'Nosotros' : 'Ellos';
 
     return (
       <div className={`score-panel rounded-xl px-3 py-1.5 ${isMyTeam ? 'ring-2 ring-gold-500/50' : ''}`}>
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] uppercase tracking-wider ${equipo === 1 ? 'text-celeste-400' : 'text-red-400'}`}>
-            Eq {equipo}
+        <div className="text-center">
+          <span className={`text-[10px] uppercase tracking-wider font-medium ${equipo === 1 ? 'text-celeste-400' : 'text-red-400'}`}>
+            {label}
           </span>
-          {isMyTeam && <span className="text-gold-500 text-[9px]">(Tu)</span>}
-          <span className="text-lg font-bold text-white ml-auto">{puntos}</span>
+        </div>
+        <div className="text-center">
+          <span className="text-lg font-bold text-white">{puntos}</span>
         </div>
         <div className="text-center">
           {enBuenas ? (
@@ -2248,6 +2270,35 @@ function GamePage() {
         </div>
       )}
 
+      {/* Notificación de jugador desconectado */}
+      {jugadorDesconectado && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-2xl p-6 max-w-sm w-full border border-red-600/50 animate-slide-up text-center">
+            <div className="text-4xl mb-3">⚠️</div>
+            <h3 className="text-lg font-bold text-red-300 mb-2">
+              {jugadorDesconectado.nombre} se desconectó
+            </h3>
+            <p className="text-sm text-gold-400/70 mb-4">
+              {jugadorDesconectado.esAnfitrion ? 'El anfitrión abandonó la partida.' : 'Un jugador abandonó la partida.'} Podés esperar a que se reconecte o abandonar.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setJugadorDesconectado(null)}
+                className="px-5 py-2.5 rounded-xl font-bold bg-gradient-to-r from-gray-700 to-gray-600 text-white hover:from-gray-600 hover:to-gray-500 transition-all shadow-lg"
+              >
+                Esperar
+              </button>
+              <button
+                onClick={() => { setJugadorDesconectado(null); handleTerminarPartida(); }}
+                className="px-5 py-2.5 rounded-xl font-bold bg-gradient-to-r from-red-700 to-red-600 text-white hover:from-red-600 hover:to-red-500 transition-all shadow-lg"
+              >
+                Abandonar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Panel de ayuda - siempre disponible durante el juego */}
       {mesa.estado === 'jugando' && misCartas().length > 0 && (
         <PanelAyuda cartas={misCartas()} muestra={mesa.muestra} envidoYaCantado={mesa.envidoYaCantado} florYaCantada={!!mesa.florYaCantada} />
@@ -2528,15 +2579,19 @@ function GamePage() {
               )}
             </div>
 
-            {/* Botón terminar partida (solo anfitrión, solo en juego) */}
-            {esAnfitrion() && mesa.estado === 'jugando' && (
+            {/* Botón abandonar partida - visible para todos */}
+            {mesa.estado === 'jugando' && (
               <button
                 onClick={handleTerminarPartida}
                 disabled={loading}
-                className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[9px] text-red-400/60 hover:text-red-300 hover:bg-red-900/30 transition-all disabled:opacity-50"
-                title="Terminar partida (tu equipo pierde)"
+                className="absolute -top-1 -right-1 z-20 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center bg-red-900/80 hover:bg-red-700 border border-red-500/50 text-red-300 hover:text-white transition-all disabled:opacity-50 shadow-lg"
+                title="Abandonar partida (tu equipo pierde)"
               >
-                Terminar
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
               </button>
             )}
 
@@ -2894,19 +2949,32 @@ function GamePage() {
             )}
           </div> {/* close flex-row wrapper for side players */}
 
+          {/* Wrapper para paneles de respuesta - flotan en mobile para no tapar las cartas */}
+          <div className="fixed inset-x-0 bottom-[155px] z-30 px-3 sm:static sm:inset-auto sm:bottom-auto sm:z-auto sm:px-0">
+
           {/* Panel de respuesta a Truco */}
           {deboResponderGrito() && mesa.gritoActivo && (
             <div className="glass-gold rounded-xl p-3 my-1.5 text-center border border-gold-600/40 animate-slide-up">
               <p className="text-base font-bold text-gold-300 mb-2">
                 {mesa.jugadores.find(j => j.id === mesa.gritoActivo!.jugadorQueGrita)?.nombre} cantó {getNombreGrito(mesa.gritoActivo.tipo)}
               </p>
-              <div className="flex justify-center gap-3">
+              <div className="flex justify-center gap-2 flex-wrap">
                 <button onClick={() => handleResponderTruco(true)} disabled={loading} className="btn-quiero text-white">
                   ¡QUIERO!
                 </button>
                 <button onClick={() => handleResponderTruco(false)} disabled={loading} className="btn-no-quiero text-white">
                   NO QUIERO
                 </button>
+                {mesa.gritoActivo.tipo === 'truco' && (
+                  <button onClick={() => handleResponderTruco(true, 'retruco')} disabled={loading} className="btn-truco text-white">
+                    QUIERO RETRUCO
+                  </button>
+                )}
+                {mesa.gritoActivo.tipo === 'retruco' && (
+                  <button onClick={() => handleResponderTruco(true, 'vale4')} disabled={loading} className="btn-truco text-white">
+                    QUIERO VALE 4
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -3011,6 +3079,8 @@ function GamePage() {
             );
           })()}
 
+          </div> {/* close wrapper paneles de respuesta */}
+
           {/* Las declaraciones de envido ahora se muestran como banner flotante arriba */}
 
           {/* Modal de Envido Cargado */}
@@ -3102,7 +3172,7 @@ function GamePage() {
 
             {/* Barra superior con info y botones de cantos */}
             <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2">
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm ${
+            <div className={`hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm ${
               miEquipo === 1 ? 'equipo-1 text-white' : 'equipo-2 text-white'
             }`}>
               {miJugador?.nombre}

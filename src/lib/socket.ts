@@ -188,10 +188,10 @@ class SocketService {
     });
   }
 
-  async responderTruco(acepta: boolean): Promise<boolean> {
+  async responderTruco(acepta: boolean, escalar?: string): Promise<boolean> {
     if (!this.socket) return false;
     return new Promise((resolve) => {
-      this.socket!.emit('responder-truco', { acepta }, (success) => resolve(success));
+      this.socket!.emit('responder-truco', { acepta, escalar: escalar || null }, (success) => resolve(success));
     });
   }
 
@@ -436,6 +436,10 @@ class SocketService {
 
   onAnfitrionDesconectado(callback: (data: { nombre: string }) => void): void {
     this.socket?.on('anfitrion-desconectado', callback);
+  }
+
+  onJugadorDesconectado(callback: (data: { nombre: string; esAnfitrion: boolean; jugadorId: string }) => void): void {
+    this.socket?.on('jugador-desconectado', callback);
   }
 
   onEstadoActualizado(callback: (estado: any) => void): void {

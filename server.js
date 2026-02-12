@@ -756,11 +756,49 @@ function getResultadoRespuestaGrupal(mesa, tipo) {
   return Object.values(respuestas).some(r => r === true);
 }
 
-function responderTruco(mesa, jugadorId, acepta) {
+function responderTruco(mesa, jugadorId, acepta, escalar = null) {
   if (!mesa.gritoActivo) return { success: false, error: 'No hay grito activo' };
   const jugador = mesa.jugadores.find(j => j.id === jugadorId);
   if (!jugador || jugador.equipo === mesa.gritoActivo.equipoQueGrita) {
     return { success: false, error: 'No puedes responder a tu propio grito' };
+  }
+
+  // Si escala (quiero retruco / quiero vale4), es decisión inmediata del jugador
+  // No necesita respuesta grupal - el jugador acepta y sube la apuesta
+  if (escalar && acepta) {
+    // Validar que la escalación sea válida
+    const escalacionValida =
+      (escalar === 'retruco' && mesa.gritoActivo.tipo === 'truco') ||
+      (escalar === 'vale4' && mesa.gritoActivo.tipo === 'retruco');
+    if (!escalacionValida) {
+      return { success: false, error: 'Escalación inválida' };
+    }
+
+    // Aceptar el grito actual
+    mesa.puntosEnJuego = mesa.gritoActivo.puntosEnJuego;
+    mesa.nivelGritoAceptado = mesa.gritoActivo.tipo;
+    mesa.equipoQueCantoUltimo = mesa.gritoActivo.equipoQueGrita;
+
+    // Limpiar respuestas grupales pendientes
+    mesa.respuestasTruco = {};
+    mesa.esperandoRespuestasGrupales = false;
+    mesa.tipoRespuestaGrupal = null;
+
+    // Inmediatamente subir la apuesta
+    const puntosMap = {
+      'retruco': { enJuego: 3, siNoQuiere: 2 },
+      'vale4': { enJuego: 4, siNoQuiere: 3 },
+    };
+    const config = puntosMap[escalar];
+    mesa.gritoActivo = {
+      tipo: escalar,
+      equipoQueGrita: jugador.equipo,
+      jugadorQueGrita: jugadorId,
+      puntosEnJuego: config.enJuego,
+      puntosSiNoQuiere: config.siNoQuiere,
+    };
+
+    return { success: true, parcial: false, acepta: true, escalar };
   }
 
   const equipoQueResponde = jugador.equipo;
@@ -3217,14 +3255,14 @@ app.prepare().then(async () => {
     // === RESPONDER TRUCO ===
     socket.on('responder-truco', (data, callback) => {
       try {
-        const { acepta } = data;
+        const { acepta, escalar } = data;
         const room = findRoomBySocket(socket.id);
         if (!room) { callback(false, 'No estás en partida'); return; }
 
         const mesa = engines.get(room.mesaId);
         if (!mesa) { callback(false, 'Motor no encontrado'); return; }
 
-        const result = responderTruco(mesa, socket.id, acepta);
+        const result = responderTruco(mesa, socket.id, acepta, escalar || null);
         if (!result.success) { callback(false, result.error || 'No se puede responder'); return; }
 
         // Si es respuesta parcial (esperando más compañeros)
@@ -3252,6 +3290,19 @@ app.prepare().then(async () => {
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });
+
+        // Si escaló (quiero retruco / quiero vale4), emitir también el nuevo grito
+        if (result.escalar && mesa.gritoActivo) {
+          const audioEscalar = result.escalar === 'vale4' ? 'vale4' : result.escalar;
+          room.jugadores.forEach(p => {
+            io.to(p.socketId).emit('truco-cantado', {
+              jugadorId: socket.id,
+              tipo: result.escalar,
+              audioCustomUrl: mesa.audiosCustom?.[socket.id]?.[audioEscalar] || null,
+              estado: getEstadoParaJugador(mesa, p.socketId),
+            });
+          });
+        }
 
         if (!result.acepta && mesa.fase === 'finalizada') {
           room.jugadores.forEach(p => {
@@ -3712,6 +3763,8 @@ app.prepare().then(async () => {
         }
 
         // Emitir resultado de la flor
+        const florRespAudioTipo = tipoRespuesta === 'no_quiero' ? 'no-quiero' : 'quiero';
+        const florRespAudioUrl = mesa.audiosCustom?.[socket.id]?.[florRespAudioTipo] || null;
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('flor-resuelta', {
             resultado: {
@@ -3725,6 +3778,7 @@ app.prepare().then(async () => {
               esContraFlor: result.resultado.esContraFlor,
               esConFlorEnvido: result.resultado.esConFlorEnvido,
             },
+            audioCustomUrl: florRespAudioUrl,
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });
@@ -3761,11 +3815,13 @@ app.prepare().then(async () => {
         if (!result) { callback(false, 'No se puede ir al mazo'); return; }
 
         // Notificar que el jugador se fue al mazo
+        const mazoAudioUrl = mesa.audiosCustom?.[socket.id]?.['mazo'] || null;
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('jugador-al-mazo', {
             jugadorId: socket.id,
             equipoQueSeVa: jugador?.equipo || 0,
             parcial: result === 'parcial', // true = el equipo sigue jugando
+            audioCustomUrl: mazoAudioUrl,
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });
@@ -4198,25 +4254,24 @@ app.prepare().then(async () => {
       }
     });
 
-    // === TERMINAR PARTIDA (solo anfitrión) ===
+    // === TERMINAR/ABANDONAR PARTIDA (cualquier jugador) ===
     socket.on('terminar-partida', (callback) => {
       try {
         const room = findRoomBySocket(socket.id);
         if (!room) { callback(false, 'No estás en ninguna partida'); return; }
-        if (room.jugadores[0].socketId !== socket.id) { callback(false, 'Solo el anfitrión puede terminar la partida'); return; }
 
         const mesa = engines.get(room.mesaId);
         if (!mesa) { callback(false, 'Motor no encontrado'); return; }
         if (mesa.estado !== 'jugando') { callback(false, 'La partida no está en curso'); return; }
 
-        // El equipo del anfitrión pierde por abandono
-        const jugadorAnfitrion = mesa.jugadores.find(j => j.id === socket.id);
-        const equipoAnfitrion = jugadorAnfitrion ? jugadorAnfitrion.equipo : 1;
-        const equipoGanador = equipoAnfitrion === 1 ? 2 : 1;
+        // El equipo del jugador que abandona pierde
+        const jugadorQueAbandona = mesa.jugadores.find(j => j.id === socket.id);
+        const equipoQueAbandona = jugadorQueAbandona ? jugadorQueAbandona.equipo : 1;
+        const equipoGanador = equipoQueAbandona === 1 ? 2 : 1;
 
         mesa.winnerJuego = equipoGanador;
         mesa.estado = 'terminado';
-        mesa.mensajeRonda = `El anfitrión terminó la partida. Equipo ${equipoGanador} gana por abandono.`;
+        mesa.mensajeRonda = `${jugadorQueAbandona?.nombre || 'Un jugador'} abandonó la partida. Equipo ${equipoGanador} gana.`;
         room.estado = 'terminado';
         guardarResultadoPartida(room, mesa);
 
@@ -4578,6 +4633,8 @@ app.prepare().then(async () => {
         if (quiereTruco) {
           mesa.puntosEnJuego = 2; // Truco accepted = 2 points
           mesa.nivelGritoAceptado = 'truco';
+          // El equipo que echó los perros es quien "cantó" el truco
+          mesa.equipoQueCantoUltimo = mesa.perrosConfig.equipoQueEcha;
         } else {
           // Truco rejected - equipo que echó gana 1 punto
           const equipoEchador = mesa.perrosConfig.equipoQueEcha;
@@ -4679,13 +4736,19 @@ app.prepare().then(async () => {
             jugador.desconectado = true;
             console.log(`[Socket.IO] Jugador ${jugador.nombre} marcado como desconectado en mesa ${room.mesaId}`);
 
-            // Si el anfitrión se desconecta durante el juego, notificar especialmente
-            const esAnfitrion = room.jugadores[0]?.socketId === socket.id;
-            if (esAnfitrion && room.estado === 'jugando') {
-              mesa.mensajeRonda = `El anfitrión (${jugador.nombre}) se ha desconectado`;
+            // Notificar desconexión de cualquier jugador durante el juego
+            if (room.estado === 'jugando') {
+              const esAnfitrion = room.jugadores[0]?.socketId === socket.id;
+              if (esAnfitrion) {
+                mesa.mensajeRonda = `El anfitrión (${jugador.nombre}) se ha desconectado`;
+              }
               room.jugadores.forEach(p => {
                 if (p.socketId !== socket.id) {
-                  io.to(p.socketId).emit('anfitrion-desconectado', { nombre: jugador.nombre });
+                  io.to(p.socketId).emit('jugador-desconectado', {
+                    nombre: jugador.nombre,
+                    esAnfitrion,
+                    jugadorId: socket.id,
+                  });
                 }
               });
             }

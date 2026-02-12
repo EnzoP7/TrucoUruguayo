@@ -15,7 +15,7 @@ export interface ClientToServerEvents {
   // Juego
   'jugar-carta': (data: { carta: Carta }, callback: (success: boolean, message?: string) => void) => void;
   'cantar-truco': (data: { tipo: GritoTipo }, callback: (success: boolean, message?: string) => void) => void;
-  'responder-truco': (data: { acepta: boolean }, callback: (success: boolean, message?: string) => void) => void;
+  'responder-truco': (data: { acepta: boolean; escalar?: string | null }, callback: (success: boolean, message?: string) => void) => void;
   'cantar-envido': (data: { tipo: EnvidoTipo; puntosCustom?: number }, callback: (success: boolean, message?: string) => void) => void;
   'responder-envido': (data: { acepta: boolean }, callback: (success: boolean, message?: string) => void) => void;
   'irse-al-mazo': (callback: (success: boolean, message?: string) => void) => void;
@@ -82,6 +82,7 @@ export interface ServerToClientEvents {
   'perros-respondidos': (data: { respuesta: string; equipoGanador?: number; puntosGanados?: number; floresDelEchador?: number; quiereContraFlor?: boolean; quiereFaltaEnvido?: boolean; quiereTruco?: boolean; estado: Mesa }) => void;
   'perros-pendientes': (data: { equipoQueEcha: number; debeResponder: boolean; estado: Mesa }) => void;
   'anfitrion-desconectado': (data: { nombre: string }) => void;
+  'jugador-desconectado': (data: { nombre: string; esAnfitrion: boolean; jugadorId: string }) => void;
   'invitacion-recibida': (data: { de: string; deUserId: number; mesaId: string; tamañoSala: string }) => void;
 }
 

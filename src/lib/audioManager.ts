@@ -11,6 +11,7 @@ export type SoundType =
   | 'perros'
   | 'quiero'
   | 'no-quiero'
+  | 'mazo'
   | 'round-won'
   | 'round-lost'
   | 'game-won'
@@ -37,6 +38,26 @@ class AudioManager {
       this.muted = localStorage.getItem('truco_muted') === 'true';
       const savedVol = localStorage.getItem('truco_volume');
       if (savedVol !== null) this.masterVolume = parseFloat(savedVol);
+    }
+  }
+
+  /** Must be called from a user gesture (click/touch) to unlock audio on mobile */
+  initFromUserGesture(): void {
+    if (!this.ctx) {
+      this.ctx = new AudioContext();
+    }
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    // Play a silent buffer to fully unlock audio on iOS
+    try {
+      const buffer = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.ctx.destination);
+      source.start(0);
+    } catch {
+      // ignore
     }
   }
 
@@ -108,6 +129,7 @@ class AudioManager {
       case 'perros': this.synthPerros(ctx, vol); break;
       case 'quiero': this.synthQuiero(ctx, vol); break;
       case 'no-quiero': this.synthNoQuiero(ctx, vol); break;
+      case 'mazo': this.synthMazo(ctx, vol); break;
       case 'round-won': this.synthRoundWon(ctx, vol); break;
       case 'round-lost': this.synthRoundLost(ctx, vol); break;
       case 'game-won': this.synthGameWon(ctx, vol); break;
@@ -287,6 +309,21 @@ class AudioManager {
     osc.connect(gain).connect(ctx.destination);
     osc.start(t);
     osc.stop(t + 0.3);
+  }
+
+  private synthMazo(ctx: AudioContext, vol: number): void {
+    // Mazo: barrido descendente rápido (cartas cayendo)
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(600, t);
+    osc.frequency.exponentialRampToValueAtTime(100, t + 0.3);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(vol * 0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.35);
   }
 
   private synthRoundWon(ctx: AudioContext, vol: number): void {
