@@ -11,9 +11,10 @@
 
 :root {
   /* Colores nacionales uruguayos */
-  --celeste-uy: #00A1DE;
-  --celeste-oscuro: #0077B6;
-  --sol-amarillo: #FFD700;
+  --celeste-uy: #0038AF;
+  --celeste-oscuro: #002e90;
+  --celeste-claro: #5278e6;
+  --sol-amarillo: #FCD116;
   --blanco-puro: #FFFFFF;
 
   /* Materiales de pulpería */
@@ -22,12 +23,12 @@
   --madera-clara: #6d4830;
   --fieltro-verde: #064e3b;
   --fieltro-claro: #166534;
-  --oro-viejo: #ca8a04;
-  --oro-brillante: #f59e0b;
+  --oro-viejo: #c49500;
+  --oro-brillante: #FCD116;
   --cuero: #8b5a2b;
   --cuero-claro: #a67c52;
   --white-card: #fdfbf7;
-  --metal-oxidado: #8b6914;
+  --metal-oxidado: #9c7300;
 
   /* Sombras */
   --shadow-deep: rgba(0, 0, 0, 0.8);
@@ -35,8 +36,8 @@
   --shadow-soft: rgba(0, 0, 0, 0.3);
 
   /* Gradientes uruguayos */
-  --gradiente-celeste: linear-gradient(135deg, #0077B6 0%, #00A1DE 50%, #48CAE4 100%);
-  --gradiente-sol: linear-gradient(135deg, #ca8a04 0%, #f59e0b 50%, #fbbf24 100%);
+  --gradiente-celeste: linear-gradient(135deg, #002372 0%, #0038AF 50%, #5278e6 100%);
+  --gradiente-sol: linear-gradient(135deg, #9c7300 0%, #e6b800 50%, #FCD116 100%);
 }
 
 @layer base {
@@ -61,7 +62,7 @@
 
   /* Selección personalizada */
   ::selection {
-    background: rgba(202, 138, 4, 0.4);
+    background: rgba(252, 209, 22, 0.4);
     color: white;
   }
 
@@ -152,7 +153,7 @@
     transform: translateX(-50%);
     width: 200px;
     height: 100px;
-    background: radial-gradient(ellipse at center, rgba(255, 215, 0, 0.15) 0%, transparent 70%);
+    background: radial-gradient(ellipse at center, rgba(252, 209, 22, 0.15) 0%, transparent 70%);
     pointer-events: none;
   }
 
@@ -160,10 +161,10 @@
 
   .card-back {
     background:
-      radial-gradient(circle at 30% 30%, rgba(251,191,36,0.1) 0%, transparent 50%),
-      linear-gradient(135deg, #1e3a5f 0%, #2d5a8c 50%, #1e3a5f 100%);
+      radial-gradient(circle at 30% 30%, rgba(252,209,22,0.1) 0%, transparent 50%),
+      linear-gradient(135deg, #001a55 0%, #0038AF 50%, #001a55 100%);
     background-size: 200% 200%, 100% 100%;
-    border: 2px solid #3a7ec8;
+    border: 2px solid #5278e6;
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.5),
       0 0 0 1px rgba(255, 255, 255, 0.1),
@@ -219,7 +220,7 @@
     transform: translateY(-16px) scale(1.08);
     box-shadow:
       0 20px 40px rgba(0, 0, 0, 0.6),
-      0 0 30px rgba(251, 191, 36, 0.3);
+      0 0 30px rgba(252, 209, 22, 0.3);
     z-index: 10;
   }
 
@@ -255,12 +256,12 @@
   }
 
   .glass-gold {
-    background: rgba(202, 138, 4, 0.1);
+    background: rgba(252, 209, 22, 0.1);
     backdrop-filter: blur(16px);
-    border: 1px solid rgba(202, 138, 4, 0.3);
+    border: 1px solid rgba(252, 209, 22, 0.3);
     box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 215, 0, 0.1);
+      inset 0 1px 0 rgba(252, 209, 22, 0.1);
   }
 
   /* === MARCADOR (FÓSFOROS) === */
@@ -274,7 +275,7 @@
 
   .matchstick {
     height: 4px;
-    background: linear-gradient(90deg, #78350f, #ca8a04, #f59e0b);
+    background: linear-gradient(90deg, #7a5a07, #c49500, #FCD116);
     border-radius: 2px;
     box-shadow:
       0 1px 2px rgba(0,0,0,0.5),
@@ -323,16 +324,16 @@
 
   .btn-truco {
     @apply btn-canto;
-    background: linear-gradient(135deg, #92400e 0%, #b45309 50%, #d97706 100%);
+    background: linear-gradient(135deg, #7a5a07 0%, #c49500 50%, #e6b800 100%);
     box-shadow:
-      0 4px 0 #78350f,
-      0 6px 20px rgba(180, 83, 9, 0.4);
+      0 4px 0 #5c4200,
+      0 6px 20px rgba(196, 149, 0, 0.4);
   }
 
   .btn-truco:active:not(:disabled) {
     box-shadow:
-      0 2px 0 #78350f,
-      0 3px 10px rgba(180, 83, 9, 0.4);
+      0 2px 0 #5c4200,
+      0 3px 10px rgba(196, 149, 0, 0.4);
     transform: translateY(2px);
   }
 
@@ -387,27 +388,27 @@
   /* Botón Uruguay (celeste con sombra) */
   .btn-uruguay {
     @apply btn-canto text-lg px-10 py-4;
-    background: linear-gradient(135deg, #0369a1 0%, var(--celeste-uy) 50%, #38bdf8 100%);
+    background: linear-gradient(135deg, #002372 0%, var(--celeste-uy) 50%, #5278e6 100%);
     box-shadow:
-      0 6px 0 #075985,
-      0 10px 30px rgba(0, 161, 222, 0.4);
+      0 6px 0 #001a55,
+      0 10px 30px rgba(0, 56, 175, 0.4);
   }
 
   .btn-uruguay:active:not(:disabled) {
     box-shadow:
-      0 2px 0 #075985,
-      0 4px 15px rgba(0, 161, 222, 0.4);
+      0 2px 0 #001a55,
+      0 4px 15px rgba(0, 56, 175, 0.4);
     transform: translateY(4px);
   }
 
   /* Botón primario dorado */
   .btn-primary {
     @apply relative overflow-hidden font-bold;
-    background: linear-gradient(135deg, #92400e 0%, #d97706 50%, #f59e0b 100%);
+    background: linear-gradient(135deg, #7a5a07 0%, #c49500 50%, #FCD116 100%);
     background-size: 200% 100%;
     box-shadow:
-      0 4px 0 #78350f,
-      0 8px 25px rgba(251,191,36,0.3);
+      0 4px 0 #5c4200,
+      0 8px 25px rgba(252,209,22,0.3);
     transition: all 0.3s ease;
   }
 
@@ -428,15 +429,15 @@
     background-position: 100% 50%;
     transform: translateY(-2px);
     box-shadow:
-      0 6px 0 #78350f,
-      0 12px 35px rgba(251,191,36,0.5);
+      0 6px 0 #5c4200,
+      0 12px 35px rgba(252,209,22,0.5);
   }
 
   .btn-primary:active:not(:disabled) {
     transform: translateY(2px);
     box-shadow:
-      0 2px 0 #78350f,
-      0 4px 15px rgba(251,191,36,0.3);
+      0 2px 0 #5c4200,
+      0 4px 15px rgba(252,209,22,0.3);
   }
 
   /* === INPUTS === */
@@ -451,7 +452,7 @@
     @apply border-transparent ring-2;
     --tw-ring-color: var(--oro-viejo);
     background: rgba(255, 255, 255, 0.1);
-    box-shadow: 0 0 30px rgba(202, 138, 4, 0.2);
+    box-shadow: 0 0 30px rgba(252, 209, 22, 0.2);
   }
 
   /* === TOAST/MENSAJES === */
@@ -462,14 +463,14 @@
     border: 2px solid var(--oro-viejo);
     box-shadow:
       0 12px 40px rgba(0, 0, 0, 0.6),
-      0 0 40px rgba(202, 138, 4, 0.2);
+      0 0 40px rgba(252, 209, 22, 0.2);
   }
 
   /* === ELEMENTOS DECORATIVOS === */
 
   /* Sol de Mayo */
   .sun-glow {
-    filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.5));
+    filter: drop-shadow(0 0 20px rgba(252, 209, 22, 0.5));
     animation: pulse-sun 4s ease-in-out infinite;
   }
 
@@ -535,8 +536,8 @@
   }
 
   @keyframes turn-pulse {
-    0%, 100% { box-shadow: 0 0 10px var(--celeste-uy), 0 0 20px rgba(0, 161, 222, 0.3); }
-    50% { box-shadow: 0 0 20px var(--celeste-uy), 0 0 40px rgba(0, 161, 222, 0.5); }
+    0%, 100% { box-shadow: 0 0 10px var(--celeste-uy), 0 0 20px rgba(0, 56, 175, 0.3); }
+    50% { box-shadow: 0 0 20px var(--celeste-uy), 0 0 40px rgba(0, 56, 175, 0.5); }
   }
 
   .turn-indicator {
@@ -551,7 +552,7 @@
   /* === SHIMMER/LOADING === */
 
   .shimmer {
-    background: linear-gradient(90deg, transparent 0%, rgba(202,138,4,0.2) 50%, transparent 100%);
+    background: linear-gradient(90deg, transparent 0%, rgba(252,209,22,0.2) 50%, transparent 100%);
     background-size: 200% 100%;
     animation: shimmer 1.5s ease-in-out infinite;
   }
@@ -626,8 +627,8 @@
   }
 
   @keyframes pulseGlow {
-    0%, 100% { box-shadow: 0 0 10px rgba(202,138,4,0.4); }
-    50% { box-shadow: 0 0 30px rgba(202,138,4,0.8), 0 0 60px rgba(202,138,4,0.3); }
+    0%, 100% { box-shadow: 0 0 10px rgba(252,209,22,0.4); }
+    50% { box-shadow: 0 0 30px rgba(252,209,22,0.8), 0 0 60px rgba(252,209,22,0.3); }
   }
 
   /* === ANIMACIÓN DE REPARTICIÓN DE CARTAS MEJORADA === */
@@ -706,7 +707,7 @@
     border-radius: 8px;
     box-shadow:
       0 8px 25px rgba(0, 0, 0, 0.6),
-      0 0 30px rgba(202, 138, 4, 0.4),
+      0 0 30px rgba(252, 209, 22, 0.4),
       0 2px 8px rgba(0, 0, 0, 0.8);
     transition: box-shadow 0.2s ease-out;
   }
@@ -718,7 +719,7 @@
     inset: -4px;
     background: radial-gradient(
       ellipse at center,
-      rgba(202, 138, 4, 0.3) 0%,
+      rgba(252, 209, 22, 0.3) 0%,
       transparent 70%
     );
     border-radius: 12px;
@@ -782,7 +783,7 @@
 
   .card-winner {
     animation: cardWinner 0.5s ease-out forwards;
-    box-shadow: 0 0 20px rgba(234, 179, 8, 0.8), 0 0 40px rgba(234, 179, 8, 0.5);
+    box-shadow: 0 0 20px rgba(252, 209, 22, 0.8), 0 0 40px rgba(252, 209, 22, 0.5);
   }
 
   @keyframes cardWinner {
@@ -805,7 +806,7 @@
     content: '';
     position: absolute;
     inset: -4px;
-    background: linear-gradient(135deg, rgba(234, 179, 8, 0.6), rgba(251, 191, 36, 0.4));
+    background: linear-gradient(135deg, rgba(252, 209, 22, 0.6), rgba(252, 209, 22, 0.4));
     border-radius: 12px;
     z-index: -1;
     animation: winnerGlow 1.5s ease-in-out infinite;
@@ -825,8 +826,8 @@
   /* === EQUIPO COLORES === */
 
   .equipo-1 {
-    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-    border-color: #60a5fa;
+    background: linear-gradient(135deg, #002e90 0%, #0038AF 100%);
+    border-color: #5278e6;
   }
 
   .equipo-2 {
@@ -835,8 +836,8 @@
   }
 
   .equipo-1-light {
-    background: rgba(59, 130, 246, 0.2);
-    border: 1px solid rgba(59, 130, 246, 0.4);
+    background: rgba(0, 56, 175, 0.2);
+    border: 1px solid rgba(0, 56, 175, 0.4);
   }
 
   .equipo-2-light {
@@ -853,7 +854,7 @@
       linear-gradient(var(--madera-oscura), var(--madera-oscura)) padding-box,
       linear-gradient(135deg, var(--oro-viejo), var(--sol-amarillo), var(--oro-viejo)) border-box;
     box-shadow:
-      0 0 20px rgba(202, 138, 4, 0.2),
+      0 0 20px rgba(252, 209, 22, 0.2),
       inset 0 0 30px rgba(0, 0, 0, 0.4);
   }
 
@@ -900,14 +901,14 @@
     left: 0;
     right: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(202, 138, 4, 0.3), transparent);
+    background: linear-gradient(90deg, transparent, rgba(252, 209, 22, 0.3), transparent);
   }
 
   /* Título estilo rústico */
   .titulo-rustico {
     text-shadow:
       0 2px 4px rgba(0, 0, 0, 0.8),
-      0 0 20px rgba(202, 138, 4, 0.3);
+      0 0 20px rgba(252, 209, 22, 0.3);
     letter-spacing: 0.05em;
   }
 
@@ -981,7 +982,7 @@
     width: 300px;
     height: 200px;
     background: radial-gradient(ellipse at center top,
-      rgba(255, 215, 0, 0.08) 0%,
+      rgba(252, 209, 22, 0.08) 0%,
       rgba(255, 180, 0, 0.04) 30%,
       transparent 70%
     );
@@ -996,10 +997,10 @@
 
   @keyframes brilloDorado {
     0%, 100% {
-      filter: brightness(1) drop-shadow(0 0 2px rgba(202, 138, 4, 0.3));
+      filter: brightness(1) drop-shadow(0 0 2px rgba(252, 209, 22, 0.3));
     }
     50% {
-      filter: brightness(1.1) drop-shadow(0 0 8px rgba(202, 138, 4, 0.5));
+      filter: brightness(1.1) drop-shadow(0 0 8px rgba(252, 209, 22, 0.5));
     }
   }
 
@@ -1027,7 +1028,7 @@
     transform: translateY(-2px);
     box-shadow:
       0 6px 20px rgba(0, 0, 0, 0.4),
-      0 0 30px rgba(202, 138, 4, 0.2);
+      0 0 30px rgba(252, 209, 22, 0.2);
   }
 
   /* === BOCADILLOS DE DIÁLOGO (SPEECH BUBBLES) === */
@@ -1103,12 +1104,12 @@
 
   /* Variantes de color para truco */
   .speech-bubble-truco {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: linear-gradient(135deg, #FCD116 0%, #c49500 100%);
     color: white;
   }
 
   .speech-bubble-truco::after {
-    border-top-color: #d97706;
+    border-top-color: #c49500;
   }
 
   /* Variante quiero/no quiero */

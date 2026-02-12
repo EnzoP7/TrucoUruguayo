@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import socketService from '@/lib/socket';
 import audioManager from '@/lib/audioManager';
 
@@ -349,7 +350,7 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
       <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40">
         <button
           onClick={() => setAbierto(true)}
-          className="glass rounded-xl p-2.5 border border-blue-500/30 bg-blue-950/40 shadow-lg hover:bg-blue-900/50 transition-all"
+          className="glass rounded-xl p-2.5 border border-celeste-500/30 bg-celeste-950/40 shadow-lg hover:bg-celeste-900/50 transition-all"
           title="Abrir ayuda"
         >
           <span className="text-lg">📚</span>
@@ -360,13 +361,13 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
 
   return (
     <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40 w-48 sm:w-56">
-      <div className="glass rounded-xl p-3 border border-blue-500/30 bg-blue-950/40 shadow-lg">
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-500/20">
+      <div className="glass rounded-xl p-3 border border-celeste-500/30 bg-celeste-950/40 shadow-lg">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-celeste-500/20">
           <span className="text-lg">📚</span>
-          <h3 className="text-blue-300 font-bold text-sm flex-1">Ayuda</h3>
+          <h3 className="text-celeste-300 font-bold text-sm flex-1">Ayuda</h3>
           <button
             onClick={() => setAbierto(false)}
-            className="text-blue-400/60 hover:text-blue-300 text-xs px-1.5 py-0.5 rounded hover:bg-blue-800/30 transition-all"
+            className="text-celeste-400/60 hover:text-celeste-300 text-xs px-1.5 py-0.5 rounded hover:bg-celeste-800/30 transition-all"
             title="Minimizar"
           >
             X
@@ -376,8 +377,8 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
         {/* Carta mas alta */}
         {cartaMasAlta && (
           <div className="mb-3">
-            <div className="text-blue-400/70 text-xs font-medium mb-1">Tu carta mas fuerte:</div>
-            <div className="flex items-center gap-2 bg-blue-900/30 rounded-lg p-2">
+            <div className="text-celeste-400/70 text-xs font-medium mb-1">Tu carta mas fuerte:</div>
+            <div className="flex items-center gap-2 bg-celeste-900/30 rounded-lg p-2">
               <img
                 src={getCartaImageUrl(cartaMasAlta)}
                 alt={`${cartaMasAlta.valor} de ${cartaMasAlta.palo}`}
@@ -385,7 +386,7 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
               />
               <div className="text-xs">
                 <div className="text-white font-medium">{cartaMasAlta.valor} de {cartaMasAlta.palo}</div>
-                <div className={`${cartaMasAlta.poder >= 15 ? 'text-yellow-400' : 'text-blue-300/60'}`}>
+                <div className={`${cartaMasAlta.poder >= 15 ? 'text-yellow-400' : 'text-celeste-300/60'}`}>
                   {getNombrePoderCarta(cartaMasAlta)}
                 </div>
               </div>
@@ -396,10 +397,10 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
         {/* Envido - ocultar si ya se resolvio */}
         {!envidoYaCantado && (
           <div className="mb-3">
-            <div className="text-blue-400/70 text-xs font-medium mb-1">Tu envido:</div>
-            <div className="bg-blue-900/30 rounded-lg p-2">
+            <div className="text-celeste-400/70 text-xs font-medium mb-1">Tu envido:</div>
+            <div className="bg-celeste-900/30 rounded-lg p-2">
               <div className="text-2xl font-bold text-green-400 mb-1">{envido.puntos}</div>
-              <div className="text-blue-300/60 text-[10px] leading-tight">{envido.explicacion}</div>
+              <div className="text-celeste-300/60 text-[10px] leading-tight">{envido.explicacion}</div>
             </div>
           </div>
         )}
@@ -417,15 +418,15 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
 
         {/* Orden de cartas */}
         <div className="mb-2">
-          <div className="text-blue-400/70 text-xs font-medium mb-1">Tus cartas (de + a -):</div>
+          <div className="text-celeste-400/70 text-xs font-medium mb-1">Tus cartas (de + a -):</div>
           <div className="space-y-1">
             {cartasOrdenadas.map((carta, idx) => (
               <div key={idx} className={`flex items-center gap-2 text-[10px] rounded px-2 py-1 ${
-                carta.poder >= 15 ? 'bg-yellow-900/30 border border-yellow-500/20' : 'bg-blue-900/20'
+                carta.poder >= 15 ? 'bg-yellow-900/30 border border-yellow-500/20' : 'bg-celeste-900/20'
               }`}>
-                <span className="text-blue-300 font-bold">{idx + 1}.</span>
+                <span className="text-celeste-300 font-bold">{idx + 1}.</span>
                 <span className="text-white">{carta.valor} {carta.palo}</span>
-                <span className={`ml-auto text-[9px] ${carta.poder >= 15 ? 'text-yellow-400' : 'text-blue-400/50'}`}>
+                <span className={`ml-auto text-[9px] ${carta.poder >= 15 ? 'text-yellow-400' : 'text-celeste-400/50'}`}>
                   {getNombrePoderCarta(carta)}
                 </span>
               </div>
@@ -435,7 +436,7 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
 
         {/* Muestra */}
         {muestra && (
-          <div className="pt-2 border-t border-blue-500/20">
+          <div className="pt-2 border-t border-celeste-500/20">
             <div className="text-yellow-400/70 text-xs font-medium mb-1">Muestra: {muestra.valor} de {muestra.palo}</div>
             <div className="text-[10px] text-yellow-300/50">
               Las cartas de {muestra.palo} son piezas (mas fuertes)
@@ -775,6 +776,7 @@ function GamePage() {
           setMesa(data.estado);
           const jugador = data.estado.jugadores.find((j: Jugador) => j.id === data.jugadorId);
           setMensaje(`${jugador?.nombre}: ${data.acepta ? '¡QUIERO!' : '¡NO QUIERO!'}`);
+          audioManager.playWithCustom(data.acepta ? 'quiero' : 'no-quiero', data.audioCustomUrl);
           setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
         });
 
@@ -810,6 +812,7 @@ function GamePage() {
         socketService.onEnvidoRespondido((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          audioManager.playWithCustom(data.acepta ? 'quiero' : 'no-quiero', data.audioCustomUrl);
           // Mostrar bocadillo de quiero/no quiero
           const bubbleId = `envido-resp-${Date.now()}`;
           setSpeechBubbles(prev => [...prev, {
@@ -1269,8 +1272,6 @@ function GamePage() {
     if (mesa.envidoYaCantado && !mesa.envidoActivo) return false;
     if (mesa.gritoActivo) return false;
     if (mesa.envidoActivo && mesa.envidoActivo.equipoQueCanta === miEquipo) return false;
-    // No se puede cantar envido si hay flor (flor mata envido)
-    if (mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0) return false;
     // No se puede cantar si hay flor pendiente de respuesta
     if (mesa.esperandoRespuestaFlor || florPendiente) return false;
     return true;
@@ -1682,108 +1683,33 @@ function GamePage() {
     );
   };
 
-  // Casilla de fósforos tradicional (solo visible en sm+)
-  const Casilla = ({ count }: { count: number }) => {
-    const size = 'w-7 h-7';
-    const matchColor = 'bg-amber-200';
-    const matchThick = 'rounded-sm';
-
-    return (
-      <div className={`${size} relative`}>
-        {count >= 1 && (
-          <div className={`absolute top-0 left-0.5 right-0.5 h-[3px] ${matchColor} ${matchThick}`} />
-        )}
-        {count >= 2 && (
-          <div className={`absolute top-0.5 right-0 bottom-0.5 w-[3px] ${matchColor} ${matchThick}`} />
-        )}
-        {count >= 3 && (
-          <div className={`absolute bottom-0 left-0.5 right-0.5 h-[3px] ${matchColor} ${matchThick}`} />
-        )}
-        {count >= 4 && (
-          <div className={`absolute top-0.5 left-0 bottom-0.5 w-[3px] ${matchColor} ${matchThick}`} />
-        )}
-        {count >= 5 && (
-          <div
-            className="absolute top-0 left-0 w-full h-full"
-            style={{
-              background: 'linear-gradient(to bottom right, transparent calc(50% - 1.5px), #fde68a calc(50% - 1.5px), #fde68a calc(50% + 1.5px), transparent calc(50% + 1.5px))',
-            }}
-          />
-        )}
-      </div>
-    );
-  };
-
-  // Marcador: mobile = compacto solo numeros, desktop = palitos
+  // Marcador compacto: solo números en todas las pantallas
   const ScoreBoard = ({ equipo, puntos, isMyTeam }: { equipo: number; puntos: number; isMyTeam: boolean }) => {
     const limite = mesa?.puntosLimite || 30;
     const mitad = Math.floor(limite / 2);
     const enBuenas = puntos >= mitad;
-
-    const malos = Math.min(puntos, mitad);
     const buenos = Math.max(puntos - mitad, 0);
-
-    const malosGrupos = Math.floor(malos / 5);
-    const malosResto = malos % 5;
-    const buenosGrupos = Math.floor(buenos / 5);
-    const buenosResto = buenos % 5;
+    const malos = Math.min(puntos, mitad);
 
     return (
-      <div className={`score-panel rounded-xl p-1.5 sm:p-2 ${isMyTeam ? 'ring-2 ring-gold-500/50' : ''}`}>
-        <div className="text-center mb-0.5">
-          <span className={`text-[10px] sm:text-[11px] uppercase tracking-wider ${equipo === 1 ? 'text-blue-400' : 'text-red-400'}`}>
+      <div className={`score-panel rounded-xl px-3 py-1.5 ${isMyTeam ? 'ring-2 ring-gold-500/50' : ''}`}>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] uppercase tracking-wider ${equipo === 1 ? 'text-celeste-400' : 'text-red-400'}`}>
             Eq {equipo}
           </span>
-          {isMyTeam && <span className="ml-1 text-gold-500 text-[8px] sm:text-[10px]">(Tu)</span>}
+          {isMyTeam && <span className="text-gold-500 text-[9px]">(Tu)</span>}
+          <span className="text-lg font-bold text-white ml-auto">{puntos}</span>
         </div>
-        <div className="text-xl sm:text-2xl font-bold text-center text-white mb-0.5">{puntos}</div>
-
-        {/* Mobile: solo indicador buenas/malas con numeros */}
-        <div className="sm:hidden text-center">
+        <div className="text-center">
           {enBuenas ? (
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-600/30 text-green-400 border border-green-500/40">
-              BUENAS ({buenos}/{mitad})
+              BUENAS {buenos}/{mitad}
             </span>
           ) : (
             <span className="text-[9px] text-gold-500/50">
               Malos {malos}/{mitad}
             </span>
           )}
-        </div>
-
-        {/* Desktop: palitos */}
-        <div className="hidden sm:block">
-          {enBuenas && (
-            <div className="text-center mb-0.5">
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-600/30 text-green-400 border border-green-500/40 animate-pulse">
-                BUENAS
-              </span>
-            </div>
-          )}
-
-          <div className="mb-0.5">
-            <div className="text-[9px] text-gold-500/50 text-center uppercase tracking-wider">Malos</div>
-            <div className="flex flex-wrap justify-center gap-0.5 min-h-[28px]">
-              {Array.from({ length: malosGrupos }).map((_, i) => (
-                <Casilla key={`m-${i}`} count={5} />
-              ))}
-              {malosResto > 0 && <Casilla count={malosResto} />}
-            </div>
-          </div>
-
-          <div className="border-t border-gold-700/30 my-0.5" />
-
-          <div>
-            <div className="text-[9px] text-gold-500/50 text-center uppercase tracking-wider">Buenos</div>
-            <div className="flex flex-wrap justify-center gap-0.5 min-h-[28px]">
-              {buenosGrupos > 0 && Array.from({ length: buenosGrupos }).map((_, i) => (
-                <Casilla key={`b-${i}`} count={5} />
-              ))}
-              {buenosResto > 0 && <Casilla count={buenosResto} />}
-            </div>
-          </div>
-
-          <div className="text-[8px] text-gold-600/30 text-center mt-0.5">a {limite} pts</div>
         </div>
       </div>
     );
@@ -1797,8 +1723,7 @@ function GamePage() {
       <div className="min-h-screen bg-table-wood flex items-center justify-center">
         <div className="text-center">
           <div className="relative w-20 h-20 mx-auto mb-6">
-            <div className="absolute inset-0 rounded-full border-4 border-gold-700/30" />
-            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-gold-500 animate-spin" />
+            <Image src="/Images/SolDeMayo.png" alt="Cargando" width={80} height={80} className="w-20 h-20 animate-spin-slow sun-glow" />
           </div>
           <div className="text-gold-400/80 text-xl">Conectando...</div>
         </div>
@@ -1836,7 +1761,7 @@ function GamePage() {
                     <div key={item.jugadorId} className="flex flex-col items-center gap-2">
                       <span className={`text-sm font-medium ${
                         revealed
-                          ? item.esRey ? 'text-blue-300' : 'text-red-300'
+                          ? item.esRey ? 'text-celeste-300' : 'text-red-300'
                           : 'text-gold-400/70'
                       }`}>
                         {item.jugadorNombre}
@@ -1876,7 +1801,7 @@ function GamePage() {
                       {revealed && (
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full animate-slide-up ${
                           item.esRey
-                            ? 'bg-blue-600/40 text-blue-300 border border-blue-500/40'
+                            ? 'bg-celeste-600/40 text-celeste-300 border border-celeste-500/40'
                             : 'bg-red-600/40 text-red-300 border border-red-500/40'
                         }`}>
                           Equipo {item.equipo}
@@ -1892,7 +1817,7 @@ function GamePage() {
                   <p className="text-gold-300 font-bold text-lg mb-2">¡Equipos formados!</p>
                   <div className="flex justify-center gap-6">
                     <div>
-                      <span className="text-blue-400 font-medium text-sm">Equipo 1: </span>
+                      <span className="text-celeste-400 font-medium text-sm">Equipo 1: </span>
                       <span className="text-white text-sm">
                         {reyesAnimacion.filter(a => a.equipo === 1).map(a => a.jugadorNombre).join(', ')}
                       </span>
@@ -1995,11 +1920,11 @@ function GamePage() {
                     {/* Two-column team layout */}
                     <div className="grid grid-cols-2 gap-4">
                       {/* Equipo 1 */}
-                      <div className="rounded-xl border-2 border-blue-600/40 bg-blue-950/20 p-3 sm:p-4">
+                      <div className="rounded-xl border-2 border-celeste-600/40 bg-celeste-950/20 p-3 sm:p-4">
                         <div className="flex items-center gap-2 mb-3">
-                          <div className="w-3 h-3 rounded-full bg-blue-500" />
-                          <span className="text-blue-400 font-bold text-sm uppercase tracking-wider">Equipo 1</span>
-                          <span className="text-blue-400/50 text-xs ml-auto">
+                          <div className="w-3 h-3 rounded-full bg-celeste-500" />
+                          <span className="text-celeste-400 font-bold text-sm uppercase tracking-wider">Equipo 1</span>
+                          <span className="text-celeste-400/50 text-xs ml-auto">
                             {mesa.jugadores.filter(j => j.equipo === 1).length} jugadores
                           </span>
                         </div>
@@ -2007,7 +1932,7 @@ function GamePage() {
                           {mesa.jugadores.filter(j => j.equipo === 1).map((j, i) => (
                             <div
                               key={j.id || `eq1-${i}`}
-                              className="glass rounded-lg p-2.5 flex items-center justify-between border border-blue-700/30 group"
+                              className="glass rounded-lg p-2.5 flex items-center justify-between border border-celeste-700/30 group"
                             >
                               <div className="flex items-center gap-2">
                                 <span className="text-white text-sm font-medium">
@@ -2024,13 +1949,13 @@ function GamePage() {
                                 {j.id === socketId ? (
                                   <button
                                     onClick={() => socketService.toggleAyuda(!j.modoAyuda)}
-                                    className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? 'bg-blue-600/40 text-blue-300' : 'bg-gray-700/30 text-gray-500 hover:text-gray-400'}`}
+                                    className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? 'bg-celeste-600/40 text-celeste-300' : 'bg-gray-700/30 text-gray-500 hover:text-gray-400'}`}
                                     title="Activar/desactivar modo ayuda"
                                   >
                                     📚 Ayuda
                                   </button>
                                 ) : (
-                                  j.modoAyuda && <span className="text-[10px] bg-blue-600/20 text-blue-400/60 px-1.5 py-0.5 rounded">📚</span>
+                                  j.modoAyuda && <span className="text-[10px] bg-celeste-600/20 text-celeste-400/60 px-1.5 py-0.5 rounded">📚</span>
                                 )}
                                 {esAnfitrion() && (
                                   <button
@@ -2046,7 +1971,7 @@ function GamePage() {
                             </div>
                           ))}
                           {mesa.jugadores.filter(j => j.equipo === 1).length === 0 && (
-                            <div className="text-blue-500/30 text-xs text-center py-3 italic">Sin jugadores</div>
+                            <div className="text-celeste-500/30 text-xs text-center py-3 italic">Sin jugadores</div>
                           )}
                         </div>
                       </div>
@@ -2081,19 +2006,19 @@ function GamePage() {
                                 {j.id === socketId ? (
                                   <button
                                     onClick={() => socketService.toggleAyuda(!j.modoAyuda)}
-                                    className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? 'bg-blue-600/40 text-blue-300' : 'bg-gray-700/30 text-gray-500 hover:text-gray-400'}`}
+                                    className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? 'bg-celeste-600/40 text-celeste-300' : 'bg-gray-700/30 text-gray-500 hover:text-gray-400'}`}
                                     title="Activar/desactivar modo ayuda"
                                   >
                                     📚 Ayuda
                                   </button>
                                 ) : (
-                                  j.modoAyuda && <span className="text-[10px] bg-blue-600/20 text-blue-400/60 px-1.5 py-0.5 rounded">📚</span>
+                                  j.modoAyuda && <span className="text-[10px] bg-celeste-600/20 text-celeste-400/60 px-1.5 py-0.5 rounded">📚</span>
                                 )}
                                 {esAnfitrion() && (
                                   <button
                                     onClick={() => handleCambiarEquipo(j.id, 1)}
                                     disabled={loading}
-                                    className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-800/40 transition-all"
+                                    className="opacity-0 group-hover:opacity-100 text-celeste-400 hover:text-celeste-300 text-xs px-2 py-1 rounded bg-celeste-900/30 hover:bg-celeste-800/40 transition-all"
                                     title="Mover al Equipo 1"
                                   >
                                     → Eq.1
@@ -2125,7 +2050,7 @@ function GamePage() {
                         className="glass rounded-lg p-3 flex justify-between items-center border border-gold-800/20"
                       >
                         <div className="flex items-center gap-2">
-                          <div className={`w-2.5 h-2.5 rounded-full ${j.equipo === 1 ? 'bg-blue-500' : 'bg-red-500'}`} />
+                          <div className={`w-2.5 h-2.5 rounded-full ${j.equipo === 1 ? 'bg-celeste-500' : 'bg-red-500'}`} />
                           <span className="text-white font-medium">
                             {j.nombre}
                             {j.id === socketId && <span className="text-gold-400 ml-2">(tú)</span>}
@@ -2135,13 +2060,13 @@ function GamePage() {
                           {j.id === socketId ? (
                             <button
                               onClick={() => socketService.toggleAyuda(!j.modoAyuda)}
-                              className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? 'bg-blue-600/40 text-blue-300' : 'bg-gray-700/30 text-gray-500 hover:text-gray-400'}`}
+                              className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? 'bg-celeste-600/40 text-celeste-300' : 'bg-gray-700/30 text-gray-500 hover:text-gray-400'}`}
                               title="Activar/desactivar modo ayuda"
                             >
                               📚 Ayuda
                             </button>
                           ) : (
-                            j.modoAyuda && <span className="text-[10px] bg-blue-600/20 text-blue-400/60 px-1.5 py-0.5 rounded">📚</span>
+                            j.modoAyuda && <span className="text-[10px] bg-celeste-600/20 text-celeste-400/60 px-1.5 py-0.5 rounded">📚</span>
                           )}
                           {i === 0 && (
                             <span className="text-xs bg-gold-600/30 text-gold-400 px-2 py-1 rounded">
@@ -2283,7 +2208,7 @@ function GamePage() {
           </div>
         )}
         <div className={`inline-flex items-center ${compact ? 'gap-1 px-2' : 'gap-1.5 px-2'} py-0.5 rounded-lg ${compact ? 'text-xs' : 'text-xs sm:text-sm'} font-medium ${compact ? 'mb-0.5' : 'mb-1'} ${
-          j.equipo === 1 ? 'equipo-1-light text-blue-300' : 'equipo-2-light text-red-300'
+          j.equipo === 1 ? 'equipo-1-light text-celeste-300' : 'equipo-2-light text-red-300'
         } ${esSuTurno ? 'turn-glow' : ''}`}>
           {j.nombre}
           {j.esMano && <MonedaMano isActive={true} />}
@@ -2379,7 +2304,7 @@ function GamePage() {
             <div className="space-y-1">
               {envidoDeclaraciones.slice(-3).map((decl, i) => (
                 <div key={i} className={`text-xs py-1 px-2 rounded ${
-                  decl.equipo === 1 ? 'bg-blue-900/40 text-blue-200' : 'bg-red-900/40 text-red-200'
+                  decl.equipo === 1 ? 'bg-celeste-900/40 text-celeste-200' : 'bg-red-900/40 text-red-200'
                 }`}>
                   <span className="font-medium">{decl.jugadorNombre}:</span>
                   <span className="ml-1 text-white">
@@ -2414,7 +2339,7 @@ function GamePage() {
         <div className="fixed top-16 left-1/2 z-40 banner-flotante pointer-events-none">
           <div className={`rounded-2xl px-10 py-5 backdrop-blur-md border-2 shadow-2xl text-center boliche-panel esquina-decorativa ${
             rondaBanner.equipo === 1
-              ? 'border-blue-500/50 shadow-blue-500/30'
+              ? 'border-celeste-500/50 shadow-celeste-500/30'
               : 'border-red-500/50 shadow-red-500/30'
           }`}>
             {/* Decoración superior */}
@@ -2426,7 +2351,7 @@ function GamePage() {
             </div>
             <div className="separador-uy mb-2" />
             <div className={`text-lg font-bold ${
-              rondaBanner.equipo === 1 ? 'text-blue-300' : 'text-red-300'
+              rondaBanner.equipo === 1 ? 'text-celeste-300' : 'text-red-300'
             }`}>
               +{rondaBanner.puntos} puntos 🧉
             </div>
@@ -2503,9 +2428,9 @@ function GamePage() {
             <div className="separador-uy my-4" />
 
             <div className="flex justify-center gap-6 mb-6">
-              <div className={`px-4 py-2 rounded-lg ${mesa.winnerJuego === 1 ? 'bg-blue-600/30 border border-blue-500/50' : 'bg-wood-800/50 border border-gold-800/30'}`}>
+              <div className={`px-4 py-2 rounded-lg ${mesa.winnerJuego === 1 ? 'bg-celeste-600/30 border border-celeste-500/50' : 'bg-wood-800/50 border border-gold-800/30'}`}>
                 <div className="text-xs text-gold-500/60 uppercase">Equipo 1</div>
-                <div className={`text-2xl font-bold ${mesa.winnerJuego === 1 ? 'text-blue-300' : 'text-gold-400/70'}`}>
+                <div className={`text-2xl font-bold ${mesa.winnerJuego === 1 ? 'text-celeste-300' : 'text-gold-400/70'}`}>
                   {mesa.equipos[0].puntaje}
                 </div>
               </div>
@@ -2632,7 +2557,7 @@ function GamePage() {
                     key={m}
                     className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
                       ganador === null ? 'bg-gray-500/80 border-gray-400/60 shadow-inner' :
-                      ganador === 1 ? 'bg-blue-500 border-blue-400 shadow-lg shadow-blue-500/40' :
+                      ganador === 1 ? 'bg-celeste-500 border-celeste-400 shadow-lg shadow-celeste-500/40' :
                       ganador === 2 ? 'bg-red-500 border-red-400 shadow-lg shadow-red-500/40' :
                       'border-gold-700/40 bg-wood-800/50'
                     }`}
@@ -3072,7 +2997,7 @@ function GamePage() {
                   {!esContraFlor && (
                     <>
                       {!esConFlorEnvido && (
-                        <button onClick={() => handleResponderFlor('con_flor_envido')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-500 hover:to-blue-500 transition-all shadow-lg">
+                        <button onClick={() => handleResponderFlor('con_flor_envido')} disabled={loading} className="px-4 py-2 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-celeste-500 text-white hover:from-purple-500 hover:to-celeste-400 transition-all shadow-lg">
                           CON FLOR ENVIDO
                         </button>
                       )}

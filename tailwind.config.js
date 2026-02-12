@@ -8,18 +8,19 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Colores nacionales uruguayos
+        // Azul oficial de Uruguay #0038AF
         celeste: {
-          50: '#ecfeff',
-          100: '#cffafe',
-          200: '#a5f3fc',
-          300: '#67e8f9',
-          400: '#22d3ee',
-          500: '#00A1DE', // Celeste Uruguay
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
+          50: '#eef2ff',
+          100: '#dce4ff',
+          200: '#b8c9ff',
+          300: '#89a5ff',
+          400: '#5278e6',
+          500: '#0038AF', // Azul Uruguay oficial
+          600: '#002e90',
+          700: '#002372',
+          800: '#001a55',
+          900: '#00123d',
+          950: '#000a28',
         },
         // Fieltro verde de mesa
         felt: {
@@ -28,10 +29,10 @@ module.exports = {
           200: '#bbf7d0',
           300: '#6ee7b7',
           400: '#34d399',
-          500: '#166534', // Fieltro claro
+          500: '#166534',
           600: '#14532d',
           700: '#0f4024',
-          800: '#064e3b', // Fieltro oscuro
+          800: '#064e3b',
           900: '#052e23',
           950: '#031a13',
         },
@@ -42,25 +43,25 @@ module.exports = {
           200: '#e8cba4',
           300: '#d4a574',
           400: '#c48b53',
-          500: '#8b5a2b', // Cuero
-          600: '#6d4830', // Madera clara
+          500: '#8b5a2b',
+          600: '#6d4830',
           700: '#5a3b28',
-          800: '#3d2817', // Madera media
-          900: '#1a0f0a', // Madera oscura
-          950: '#0c0705', // Fondo más oscuro
+          800: '#3d2817',
+          900: '#1a0f0a',
+          950: '#0c0705',
         },
-        // Oro viejo / Sol de Mayo
+        // Amarillo Sol de Mayo / Uruguay #FCD116
         gold: {
-          50: '#fffbeb',
-          100: '#fef3c7',
-          200: '#fde68a',
-          300: '#fcd34d',
-          400: '#fbbf24',
-          500: '#f59e0b',
-          600: '#d97706',
-          700: '#ca8a04', // Oro viejo
-          800: '#92400e',
-          900: '#78350f',
+          50: '#fffef0',
+          100: '#fffac8',
+          200: '#fff490',
+          300: '#ffe85c',
+          400: '#FCD116', // Sol de Mayo Uruguay
+          500: '#e6b800',
+          600: '#c49500',
+          700: '#9c7300',
+          800: '#7a5a07',
+          900: '#5c4200',
         },
       },
       fontFamily: {
@@ -73,8 +74,8 @@ module.exports = {
         'card-hover': '0 12px 30px rgba(0,0,0,0.5), 0 4px 10px rgba(0,0,0,0.4)',
         'inner-glow': 'inset 0 0 30px rgba(0,0,0,0.4)',
         'table': '0 0 80px rgba(0,0,0,0.6)',
-        'gold-glow': '0 0 30px rgba(202,138,4,0.4), 0 0 60px rgba(202,138,4,0.2)',
-        'celeste-glow': '0 0 20px rgba(0,161,222,0.4), 0 0 40px rgba(0,161,222,0.2)',
+        'gold-glow': '0 0 30px rgba(252,209,22,0.4), 0 0 60px rgba(252,209,22,0.2)',
+        'celeste-glow': '0 0 20px rgba(0,56,175,0.4), 0 0 40px rgba(0,56,175,0.2)',
         'wood-border': 'inset 0 0 0 3px rgba(212,165,116,0.2), 0 0 0 4px #1a0f0a, 0 20px 50px rgba(0,0,0,0.6)',
       },
       borderRadius: {
@@ -124,8 +125,8 @@ module.exports = {
           '100%': { opacity: '1' },
         },
         pulseGlow: {
-          '0%, 100%': { boxShadow: '0 0 10px rgba(202,138,4,0.4)' },
-          '50%': { boxShadow: '0 0 30px rgba(202,138,4,0.8), 0 0 60px rgba(202,138,4,0.3)' },
+          '0%, 100%': { boxShadow: '0 0 10px rgba(252,209,22,0.4)' },
+          '50%': { boxShadow: '0 0 30px rgba(252,209,22,0.8), 0 0 60px rgba(252,209,22,0.3)' },
         },
         cardDeal: {
           '0%': { transform: 'translateY(-80px) rotate(-10deg) scale(0.7)', opacity: '0' },
@@ -176,8 +177,8 @@ module.exports = {
           '50%': { transform: 'scale(1.08)', opacity: '1' },
         },
         turnPulse: {
-          '0%, 100%': { boxShadow: '0 0 10px rgba(0,161,222,0.4), 0 0 20px rgba(0,161,222,0.2)' },
-          '50%': { boxShadow: '0 0 20px rgba(0,161,222,0.6), 0 0 40px rgba(0,161,222,0.4)' },
+          '0%, 100%': { boxShadow: '0 0 10px rgba(0,56,175,0.4), 0 0 20px rgba(0,56,175,0.2)' },
+          '50%': { boxShadow: '0 0 20px rgba(0,56,175,0.6), 0 0 40px rgba(0,56,175,0.4)' },
         },
         shuffle: {
           '0%': { transform: 'translateX(0) rotate(0deg)' },
@@ -211,8 +212,8 @@ module.exports = {
       backgroundImage: {
         'wood-texture': 'linear-gradient(135deg, rgba(109,72,48,0.1) 0%, transparent 50%)',
         'felt-texture': 'radial-gradient(ellipse at 50% 50%, rgba(30,120,60,0.4) 0%, transparent 70%)',
-        'gold-gradient': 'linear-gradient(135deg, #92400e 0%, #d97706 50%, #f59e0b 100%)',
-        'celeste-gradient': 'linear-gradient(135deg, #0369a1 0%, #00A1DE 50%, #38bdf8 100%)',
+        'gold-gradient': 'linear-gradient(135deg, #9c7300 0%, #e6b800 50%, #FCD116 100%)',
+        'celeste-gradient': 'linear-gradient(135deg, #002372 0%, #0038AF 50%, #5278e6 100%)',
       },
     },
   },

@@ -477,6 +477,11 @@ function getEstadoParaJugador(mesa, jugadorId) {
       puntos: f.equipo === miEquipo ? f.puntos : null,
     }));
   }
+  // Hide jugadoresConFlor from opponents - only reveal if the requesting player has flor
+  // This prevents opponents from knowing about flor before it's declared
+  if (copia.jugadoresConFlor && !copia.florYaCantada) {
+    copia.jugadoresConFlor = copia.jugadoresConFlor.filter(id => id === jugadorId);
+  }
   return copia;
 }
 
@@ -832,9 +837,17 @@ function calcularPuntosEnvidoTipo(mesa, tipo, puntosCustom = null) {
 function cantarEnvido(mesa, jugadorId, tipo, puntosCustom = null) {
   const jugador = mesa.jugadores.find(j => j.id === jugadorId);
   if (!jugador || mesa.estado !== 'jugando') return false;
+  if (mesa.fase !== 'jugando') return false;
 
   // El envido solo se puede cantar en la primera mano (mano 1)
   if (mesa.manoActual !== 1) return false;
+
+  // No se puede cantar envido si el equipo rival está todo al mazo
+  const equipoRival = jugador.equipo === 1 ? 2 : 1;
+  const rivalesActivos = mesa.jugadores.filter(
+    j => j.equipo === equipoRival && j.participaRonda !== false && !j.seVaAlMazo
+  );
+  if (rivalesActivos.length === 0) return false;
 
   // El jugador puede cantar envido antes de jugar SU propia carta en esta mano
   // Verificar si el jugador ya jugó una carta en la mano actual
@@ -2154,6 +2167,63 @@ function irseAlMazo(mesa, jugadorId) {
   );
 
   if (companerosActivos.length === 0) {
+    // Antes de finalizar: resolver flor pendiente si existe
+    if (!mesa.florYaCantada && mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0) {
+      // Hay jugadores con flor que no se resolvió aún
+      // El equipo que se va al mazo pierde su derecho a flor
+      // Resolver: dar 3 puntos por cada jugador con flor del equipo que queda
+      const equipoQueQueda = equipoContrario;
+      const florDelEquipoQueQueda = mesa.jugadoresConFlor.filter(id => {
+        const j = mesa.jugadores.find(jj => jj.id === id);
+        return j && j.equipo === equipoQueQueda;
+      });
+      const florDelEquipoQueSeVa = mesa.jugadoresConFlor.filter(id => {
+        const j = mesa.jugadores.find(jj => jj.id === id);
+        return j && j.equipo === jugador.equipo;
+      });
+
+      if (florDelEquipoQueQueda.length > 0) {
+        // El equipo que queda tiene flor: recibe 3 pts por flor (achicarse - no hay respuesta)
+        const puntosFlor = 3;
+        const equipo = mesa.equipos.find(e => e.id === equipoQueQueda);
+        if (equipo) equipo.puntaje += puntosFlor;
+        mesa.florYaCantada = true;
+        mesa.envidoYaCantado = true;
+        // Registrar las flores cantadas para el banner
+        florDelEquipoQueQueda.forEach(id => {
+          const jFlor = mesa.jugadores.find(jj => jj.id === id);
+          if (jFlor) {
+            mesa.floresCantadas.push({
+              jugadorId: id,
+              jugadorNombre: jFlor.nombre,
+              equipo: jFlor.equipo,
+              puntos: calcularPuntosFlor(jFlor, mesa.muestra),
+            });
+          }
+        });
+        // Guardar cartas de flor para mostrar en el banner de ronda
+        mesa.cartasFlorReveladas = florDelEquipoQueQueda.map(id => {
+          const jFlor = mesa.jugadores.find(jj => jj.id === id);
+          return {
+            jugadorId: id,
+            jugadorNombre: jFlor?.nombre || '',
+            equipo: jFlor?.equipo || 0,
+            puntos: jFlor ? calcularPuntosFlor(jFlor, mesa.muestra) : 0,
+            cartas: jFlor?.cartasOriginales || jFlor?.cartas || [],
+          };
+        });
+      } else if (florDelEquipoQueSeVa.length > 0) {
+        // Solo el equipo que se va tiene flor - no ganan nada (se fueron)
+        mesa.florYaCantada = true;
+        mesa.envidoYaCantado = true;
+      }
+    }
+
+    // Si no se cantó envido y nadie lo resolvió, el equipo que se va pierde ese derecho también
+    if (!mesa.envidoYaCantado) {
+      mesa.envidoYaCantado = true;
+    }
+
     // Todo el equipo se fue al mazo: finalizar la ronda
     finalizarRonda(mesa, equipoContrario);
     mesa.mensajeRonda = `Equipo ${jugador.equipo} se fue al mazo. Equipo ${equipoContrario} gana (+${mesa.puntosEnJuego} pts)`;
@@ -3172,10 +3242,13 @@ app.prepare().then(async () => {
         }
 
         // Respuesta final (todos respondieron o es 1v1)
+        const trucoRespAudioTipo = result.acepta ? 'quiero' : 'no-quiero';
+        const trucoRespAudioUrl = mesa.audiosCustom?.[socket.id]?.[trucoRespAudioTipo] || null;
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('truco-respondido', {
             jugadorId: socket.id,
             acepta: result.acepta,
+            audioCustomUrl: trucoRespAudioUrl,
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });
@@ -3413,10 +3486,13 @@ app.prepare().then(async () => {
         }
 
         // Notificar respuesta final
+        const envidoRespAudioTipo = result.acepta ? 'quiero' : 'no-quiero';
+        const envidoRespAudioUrl = mesa.audiosCustom?.[socket.id]?.[envidoRespAudioTipo] || null;
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('envido-respondido', {
             jugadorId: socket.id,
             acepta: result.acepta,
+            audioCustomUrl: envidoRespAudioUrl,
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });

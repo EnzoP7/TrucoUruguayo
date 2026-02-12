@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import socketService from '@/lib/socket';
 
 interface Partida {
@@ -377,17 +378,33 @@ export default function LobbyPage() {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-radial from-amber-500/5 to-transparent rounded-full blur-3xl" />
       </div>
 
+      {/* Decoraciones de fondo */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-24 left-6 opacity-[0.04] hidden xl:block">
+          <Image src="/Images/Tero.png" alt="" width={100} height={100} className="animate-float" style={{ animationDelay: '1s' }} />
+        </div>
+        <div className="absolute bottom-16 right-6 opacity-[0.04] hidden xl:block">
+          <Image src="/Images/LuisSuarez.png" alt="" width={90} height={90} className="animate-float" style={{ animationDelay: '2s' }} />
+        </div>
+      </div>
+
       <div className="relative z-10 max-w-5xl mx-auto">
         {/* Header */}
         <header className="text-center mb-8 sm:mb-10">
           <Link href="/" className="inline-block group">
-            <h1 className="font-[var(--font-cinzel)] text-4xl sm:text-5xl lg:text-6xl font-bold text-gold-400 mb-2 group-hover:text-gold-300 transition-colors">
-              Truco Uruguayo
-            </h1>
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <Image src="/Images/SolDeMayo.png" alt="Sol de Mayo" width={40} height={40} className="w-8 h-8 sm:w-10 sm:h-10 sun-glow" />
+              <h1 className="font-[var(--font-cinzel)] text-4xl sm:text-5xl lg:text-6xl font-bold text-gold-400 group-hover:text-gold-300 transition-colors">
+                Truco Uruguayo
+              </h1>
+              <Image src="/Images/SolDeMayo.png" alt="" width={40} height={40} className="w-8 h-8 sm:w-10 sm:h-10 sun-glow" />
+            </div>
           </Link>
           <div className="flex items-center justify-center gap-3">
             <div className="h-px w-8 bg-gold-700/40" />
+            <Image src="/Images/TermoYMate.png" alt="" width={20} height={20} className="w-5 h-5 opacity-40" />
             <p className="text-gold-500/60 text-sm tracking-widest uppercase">Lobby</p>
+            <Image src="/Images/TermoYMate.png" alt="" width={20} height={20} className="w-5 h-5 opacity-40 -scale-x-100" />
             <div className="h-px w-8 bg-gold-700/40" />
           </div>
         </header>
@@ -478,14 +495,14 @@ export default function LobbyPage() {
 
         {/* Tus Partidas - solo usuarios logueados */}
         {usuario && misPartidas.length > 0 && (
-          <div className="glass rounded-2xl p-6 sm:p-8 mb-6 animate-slide-up border border-blue-500/30 bg-blue-900/10">
+          <div className="glass rounded-2xl p-6 sm:p-8 mb-6 animate-slide-up border border-celeste-500/30 bg-celeste-900/10">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="font-[var(--font-cinzel)] text-2xl sm:text-3xl font-bold text-blue-400">
+              <h2 className="font-[var(--font-cinzel)] text-2xl sm:text-3xl font-bold text-celeste-400">
                 Tus Partidas
               </h2>
               <button
                 onClick={fetchMisPartidas}
-                className="text-sm text-blue-400/70 hover:text-blue-300 transition-colors flex items-center gap-1.5"
+                className="text-sm text-celeste-400/70 hover:text-celeste-300 transition-colors flex items-center gap-1.5"
               >
                 <ReconnectIcon className="w-4 h-4" />
                 Actualizar
@@ -499,11 +516,11 @@ export default function LobbyPage() {
                 return (
                   <div
                     key={partida.mesaId}
-                    className="glass rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-blue-500/40 bg-blue-900/20"
+                    className="glass rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-celeste-500/40 bg-celeste-900/20"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-xl flex items-center justify-center bg-blue-600/30">
-                        <span className="text-2xl font-bold text-blue-400">
+                      <div className="w-14 h-14 rounded-xl flex items-center justify-center bg-celeste-600/30">
+                        <span className="text-2xl font-bold text-celeste-400">
                           {partida.tamañoSala}
                         </span>
                       </div>
@@ -513,7 +530,7 @@ export default function LobbyPage() {
                           <h3 className="font-bold text-lg text-white">
                             Mesa {partida.mesaId.split('_')[1]?.slice(0, 6) || partida.mesaId.slice(0, 6)}
                           </h3>
-                          <span className="px-2 py-0.5 bg-blue-600/30 text-blue-300 rounded-full text-[10px] font-bold uppercase">
+                          <span className="px-2 py-0.5 bg-celeste-600/30 text-celeste-300 rounded-full text-[10px] font-bold uppercase">
                             Tu partida
                           </span>
                         </div>
@@ -529,7 +546,7 @@ export default function LobbyPage() {
                                 <div
                                   key={i}
                                   className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                                    i < partida.jugadoresCount ? 'bg-blue-400' : 'bg-gold-800/40'
+                                    i < partida.jugadoresCount ? 'bg-celeste-400' : 'bg-gold-800/40'
                                   }`}
                                 />
                               ))}
@@ -574,7 +591,7 @@ export default function LobbyPage() {
                       <button
                         onClick={() => handleReconectarPartidaUsuario(partida.mesaId)}
                         disabled={loading}
-                        className="px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 hover:scale-105 shadow-lg shadow-blue-600/20 active:scale-95 disabled:opacity-50"
+                        className="px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-gradient-to-r from-celeste-600 to-celeste-500 text-white hover:from-celeste-500 hover:to-celeste-400 hover:scale-105 shadow-lg shadow-celeste-600/20 active:scale-95 disabled:opacity-50"
                       >
                         <ReconnectIcon className="w-5 h-5" />
                         Volver
@@ -728,7 +745,7 @@ export default function LobbyPage() {
                     key={partida.mesaId}
                     className={`glass rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 border ${
                       soyJugador
-                        ? 'border-blue-500/50 bg-blue-900/10'
+                        ? 'border-celeste-500/50 bg-celeste-900/10'
                         : puedeUnirse
                           ? 'border-green-600/30 hover:border-green-500/50 hover:bg-green-900/10'
                           : 'border-gold-800/20 opacity-60'
@@ -738,7 +755,7 @@ export default function LobbyPage() {
                     <div className="flex items-center gap-4">
                       {/* Icono de mesa */}
                       <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
-                        soyJugador ? 'bg-blue-600/20' : puedeUnirse ? 'bg-green-600/20' : 'bg-gold-600/10'
+                        soyJugador ? 'bg-celeste-600/20' : puedeUnirse ? 'bg-green-600/20' : 'bg-gold-600/10'
                       }`}>
                         <span className="text-2xl font-bold text-gold-400">
                           {partida.mesaId.split('_')[1]?.slice(0, 2) || '#'}
@@ -756,7 +773,7 @@ export default function LobbyPage() {
                             </span>
                           )}
                           {soyJugador && !soyCreador && (
-                            <span className="px-2 py-0.5 bg-blue-600/30 text-blue-300 rounded-full text-[10px] font-bold uppercase">
+                            <span className="px-2 py-0.5 bg-celeste-600/30 text-celeste-300 rounded-full text-[10px] font-bold uppercase">
                               Estás aquí
                             </span>
                           )}
@@ -828,7 +845,7 @@ export default function LobbyPage() {
                         <button
                           onClick={() => handleReconectarPartida(partida.mesaId)}
                           disabled={loading}
-                          className="px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 hover:scale-105 shadow-lg shadow-blue-600/20 active:scale-95"
+                          className="px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-gradient-to-r from-celeste-600 to-celeste-500 text-white hover:from-celeste-500 hover:to-celeste-400 hover:scale-105 shadow-lg shadow-celeste-600/20 active:scale-95"
                         >
                           <ReconnectIcon className="w-5 h-5" />
                           Volver
@@ -866,15 +883,15 @@ export default function LobbyPage() {
         <footer className="mt-10 text-center animate-fade-in">
           <div className="inline-flex items-center gap-6 text-gold-600/30 text-xs tracking-wider">
             <span className="flex items-center gap-1.5">
-              <span className="text-base">⚡</span> Tiempo real
+              <Image src="/Images/Pelota.png" alt="" width={18} height={18} className="w-[18px] h-[18px] opacity-40" /> Tiempo real
             </span>
             <span className="w-1 h-1 rounded-full bg-gold-700/30" />
             <span className="flex items-center gap-1.5">
-              <span className="text-base">🎯</span> Fácil
+              <Image src="/Images/MonedaArtigas.png" alt="" width={18} height={18} className="w-[18px] h-[18px] opacity-40" /> Clasico
             </span>
             <span className="w-1 h-1 rounded-full bg-gold-700/30" />
             <span className="flex items-center gap-1.5">
-              <span className="text-base">🏆</span> Competitivo
+              <Image src="/Images/MapaUruguayBandera.png" alt="" width={18} height={18} className="w-[18px] h-[18px] opacity-40" /> Uruguayo
             </span>
           </div>
         </footer>

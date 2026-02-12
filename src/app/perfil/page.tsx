@@ -417,9 +417,9 @@ export default function PerfilPage() {
 
           {/* Stats grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-blue-900/20 rounded-xl p-3 text-center border border-blue-500/10">
-              <div className="text-2xl font-bold text-blue-400">{stats.partidas_jugadas}</div>
-              <div className="text-blue-300/50 text-xs">Jugadas</div>
+            <div className="bg-celeste-900/20 rounded-xl p-3 text-center border border-celeste-500/10">
+              <div className="text-2xl font-bold text-celeste-400">{stats.partidas_jugadas}</div>
+              <div className="text-celeste-300/50 text-xs">Jugadas</div>
             </div>
             <div className="bg-green-900/20 rounded-xl p-3 text-center border border-green-500/10">
               <div className="text-2xl font-bold text-green-400">{stats.partidas_ganadas}</div>
@@ -542,7 +542,7 @@ export default function PerfilPage() {
             {resultadosBusqueda.length > 0 && (
               <div className="mb-4 space-y-1">
                 {resultadosBusqueda.map(u => (
-                  <div key={u.id} className="flex items-center justify-between bg-blue-900/20 rounded-lg px-3 py-2">
+                  <div key={u.id} className="flex items-center justify-between bg-celeste-900/20 rounded-lg px-3 py-2">
                     <span className="text-white text-sm">{u.apodo}</span>
                     <button
                       onClick={() => handleAgregarAmigo(u.id)}
