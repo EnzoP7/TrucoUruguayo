@@ -148,8 +148,15 @@ export default function LobbyPage() {
             const savedPw = sessionStorage.getItem('truco_auth');
             if (savedPw) {
               const loginResult = await socketService.login(u.apodo, savedPw);
-              if (loginResult?.success && loginResult.partidasActivas) {
-                setMisPartidas(loginResult.partidasActivas);
+              if (loginResult?.success) {
+                // Actualizar usuario con datos frescos del servidor (avatar_url, etc.)
+                if (loginResult.usuario) {
+                  setUsuario(loginResult.usuario);
+                  sessionStorage.setItem('truco_usuario', JSON.stringify(loginResult.usuario));
+                }
+                if (loginResult.partidasActivas) {
+                  setMisPartidas(loginResult.partidasActivas);
+                }
               }
             }
           } catch { /* ignorar */ }
@@ -376,15 +383,17 @@ export default function LobbyPage() {
     <div className="min-h-screen bg-table-wood p-4 sm:p-6 lg:p-8">
       {/* Efectos de luz */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-radial from-amber-500/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-radial from-celeste-500/8 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[300px] bg-gradient-radial from-celeste-600/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute top-1/2 right-0 w-[300px] h-[400px] bg-gradient-radial from-celeste-500/4 to-transparent rounded-full blur-3xl" />
       </div>
 
       {/* Decoraciones de fondo */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-24 left-6 opacity-[0.04] hidden xl:block">
+        <div className="absolute top-24 left-6 opacity-[0.18] hidden xl:block">
           <Image src="/Images/Tero.png" alt="" width={100} height={100} className="animate-float" style={{ animationDelay: '1s' }} />
         </div>
-        <div className="absolute bottom-16 right-6 opacity-[0.04] hidden xl:block">
+        <div className="absolute bottom-16 right-6 opacity-[0.15] hidden xl:block">
           <Image src="/Images/LuisSuarez.png" alt="" width={90} height={90} className="animate-float" style={{ animationDelay: '2s' }} />
         </div>
       </div>
@@ -402,11 +411,11 @@ export default function LobbyPage() {
             </div>
           </Link>
           <div className="flex items-center justify-center gap-3">
-            <div className="h-px w-8 bg-gold-700/40" />
-            <Image src="/Images/TermoYMate.png" alt="" width={20} height={20} className="w-5 h-5 opacity-40" />
-            <p className="text-gold-500/60 text-sm tracking-widest uppercase">Lobby</p>
-            <Image src="/Images/TermoYMate.png" alt="" width={20} height={20} className="w-5 h-5 opacity-40 -scale-x-100" />
-            <div className="h-px w-8 bg-gold-700/40" />
+            <div className="h-px w-8 bg-celeste-500/40" />
+            <Image src="/Images/TermoYMate.png" alt="" width={20} height={20} className="w-5 h-5 opacity-50" />
+            <p className="text-celeste-400/70 text-sm tracking-widest uppercase">Lobby</p>
+            <Image src="/Images/TermoYMate.png" alt="" width={20} height={20} className="w-5 h-5 opacity-50 -scale-x-100" />
+            <div className="h-px w-8 bg-celeste-500/40" />
           </div>
         </header>
 
@@ -445,26 +454,26 @@ export default function LobbyPage() {
 
         {/* Barra de usuario o invitado */}
         {usuario ? (
-          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-gold-800/20">
+          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-celeste-500/30 bg-celeste-900/5">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-3">
                 {usuario.avatar_url ? (
-                  <img src={usuario.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-gold-600/50" />
+                  <img src={usuario.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-celeste-500/50 shadow-lg shadow-celeste-500/10" />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold text-lg">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-celeste-500 to-celeste-700 flex items-center justify-center text-white font-bold text-lg">
                     {usuario.apodo[0].toUpperCase()}
                   </div>
                 )}
                 <div>
-                  <div className="text-gold-300 font-bold">{usuario.apodo}</div>
-                  <div className="text-gold-500/50 text-xs">Jugador registrado</div>
+                  <div className="text-white font-bold">{usuario.apodo}</div>
+                  <div className="text-celeste-400/60 text-xs">Jugador registrado</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Link href="/perfil" className="px-3 py-1.5 rounded-lg text-xs text-gold-400/70 hover:text-gold-300 hover:bg-white/5 transition-all">
+                <Link href="/perfil" className="px-3 py-1.5 rounded-lg text-xs text-celeste-400/70 hover:text-celeste-300 hover:bg-celeste-500/10 transition-all">
                   Mi Perfil
                 </Link>
-                <Link href="/ranking" className="px-3 py-1.5 rounded-lg text-xs text-gold-400/70 hover:text-gold-300 hover:bg-white/5 transition-all">
+                <Link href="/ranking" className="px-3 py-1.5 rounded-lg text-xs text-celeste-400/70 hover:text-celeste-300 hover:bg-celeste-500/10 transition-all">
                   Ranking
                 </Link>
                 <button

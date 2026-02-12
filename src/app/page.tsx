@@ -17,30 +17,25 @@ export default function HomePage() {
       {/* Imagenes decorativas flotantes de fondo */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         {/* Tero arriba izquierda */}
-        <div className="absolute top-16 left-8 opacity-[0.07] hidden lg:block">
+        <div className="absolute top-16 left-8 opacity-[0.25] hidden lg:block">
           <Image src="/Images/Tero.png" alt="" width={120} height={120} className="animate-float" style={{ animationDelay: '1s' }} />
         </div>
         {/* Vaca abajo derecha */}
-        <div className="absolute bottom-12 right-8 opacity-[0.06] hidden lg:block">
+        <div className="absolute bottom-12 right-8 opacity-[0.22] hidden lg:block">
           <Image src="/Images/Vaca.png" alt="" width={140} height={100} className="animate-float" style={{ animationDelay: '2s' }} />
         </div>
         {/* Tambor abajo izquierda */}
-        <div className="absolute bottom-20 left-12 opacity-[0.06] hidden xl:block">
+        <div className="absolute bottom-20 left-12 opacity-[0.22] hidden xl:block">
           <Image src="/Images/Tambor.png" alt="" width={80} height={100} className="animate-float" style={{ animationDelay: '0.5s' }} />
         </div>
         {/* Faro arriba derecha */}
-        <div className="absolute top-20 right-16 opacity-[0.06] hidden xl:block">
+        <div className="absolute top-20 right-16 opacity-[0.22] hidden xl:block">
           <Image src="/Images/Faro.png" alt="" width={90} height={110} className="animate-float" style={{ animationDelay: '1.5s' }} />
         </div>
       </div>
 
       {/* Contenido principal */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 py-8">
-
-        {/* Sol de Mayo decorativo de fondo (rotando lento) */}
-        <div className="absolute top-8 right-8 opacity-10 pointer-events-none hidden lg:block">
-          <Image src="/Images/SolDeMayo.png" alt="" width={192} height={192} className="animate-rotate-slow" />
-        </div>
 
         {/* Hero Section */}
         <div className="text-center mb-8 animate-fade-in">
