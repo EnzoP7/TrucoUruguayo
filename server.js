@@ -4206,10 +4206,12 @@ app.prepare().then(async () => {
         };
 
         // Notificar a todos
+        const perrosAudioUrl = mesa.audiosCustom?.[socket.id]?.['perros'] || null;
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('perros-echados', {
             equipoQueEcha: miEquipo,
             estado: getEstadoParaJugador(mesa, p.socketId),
+            audioCustomUrl: perrosAudioUrl,
           });
         });
 

@@ -23,7 +23,8 @@
       "Bash(npx next lint:*)",
       "Read(//c/**)",
       "Bash(node -c:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(npm ls:*)"
     ]
   }
 }

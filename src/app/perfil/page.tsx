@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import socketService from '@/lib/socket';
+import { useUploadThing } from '@/lib/uploadthing';
 
 interface Stats {
   partidas_jugadas: number;
@@ -54,6 +55,7 @@ const TIPOS_AUDIO = [
   { key: 'quiero', label: 'Quiero' },
   { key: 'no-quiero', label: 'No Quiero' },
   { key: 'me-voy-al-mazo', label: 'Me voy al mazo' },
+  { key: 'perros', label: 'Echar los Perros' },
 ];
 
 export default function PerfilPage() {
@@ -71,12 +73,18 @@ export default function PerfilPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [audiosCustom, setAudiosCustom] = useState<AudioCustom[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadTipoTarget, setUploadTipoTarget] = useState<string | null>(null);
+
+  // Refs for dynamic headers in UploadThing hooks
+  const uploadTipoRef = useRef<string>('');
+  const userIdRef = useRef<string>('');
 
   const getUserId = (): number | null => {
     const saved = sessionStorage.getItem('truco_usuario');
@@ -87,6 +95,55 @@ export default function PerfilPage() {
       return null;
     }
   };
+
+  // UploadThing hooks
+  const { startUpload: startAudioUpload } = useUploadThing("audioUploader", {
+    headers: useCallback(() => ({
+      "x-user-id": userIdRef.current,
+      "x-tipo-audio": uploadTipoRef.current,
+    }), []),
+    onUploadProgress: useCallback((p: number) => {
+      setUploadProgress(p);
+    }, []),
+    onClientUploadComplete: useCallback(async () => {
+      // Refresh audios from server
+      try {
+        const result = await socketService.obtenerPerfil();
+        if (result.success) {
+          setAudiosCustom(result.audiosCustom || []);
+        }
+      } catch { /* ignore */ }
+      setUploading(null);
+      setUploadProgress(0);
+      setUploadError(null);
+    }, []),
+    onUploadError: useCallback((error: Error) => {
+      console.error('Upload error:', error);
+      setUploadError(error.message || 'Error al subir audio');
+      setUploading(null);
+      setUploadProgress(0);
+    }, []),
+  });
+
+  const { startUpload: startAvatarUpload } = useUploadThing("avatarUploader", {
+    headers: useCallback(() => ({
+      "x-user-id": userIdRef.current,
+    }), []),
+    onClientUploadComplete: useCallback(async () => {
+      try {
+        const result = await socketService.obtenerPerfil();
+        if (result.success) {
+          setAvatarUrl(result.avatar_url || null);
+        }
+      } catch { /* ignore */ }
+      setUploadingAvatar(false);
+    }, []),
+    onUploadError: useCallback((error: Error) => {
+      console.error('Avatar upload error:', error);
+      setUploadError(error.message || 'Error al subir avatar');
+      setUploadingAvatar(false);
+    }, []),
+  });
 
   useEffect(() => {
     const cargarPerfil = async () => {
@@ -176,58 +233,21 @@ export default function PerfilPage() {
     const userId = getUserId();
     if (!userId) return;
 
+    // Set refs for dynamic headers
+    userIdRef.current = String(userId);
+    uploadTipoRef.current = tipoAudio;
+
     setUploading(tipoAudio);
+    setUploadProgress(0);
+    setUploadError(null);
+
     try {
-      const formData = new FormData();
-      formData.append('files', file);
-
-      // Get presigned URL from uploadthing
-      const res = await fetch('/api/uploadthing', {
-        method: 'POST',
-        headers: {
-          'x-uploadthing-action': 'upload',
-          'x-user-id': String(userId),
-          'x-tipo-audio': tipoAudio,
-        },
-        body: formData,
-      });
-
-      if (!res.ok) {
-        // Fallback: try using uploadthing SDK endpoint
-        const utRes = await fetch(`/api/uploadthing?actionType=upload&slug=audioUploader`, {
-          method: 'POST',
-          headers: {
-            'x-user-id': String(userId),
-            'x-tipo-audio': tipoAudio,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            files: [{ name: file.name, size: file.size, type: file.type }],
-          }),
-        });
-
-        if (!utRes.ok) throw new Error('Upload failed');
-
-        const utData = await utRes.json();
-        if (utData?.[0]?.url) {
-          // Refresh audios
-          const result = await socketService.obtenerPerfil();
-          if (result.success) {
-            setAudiosCustom(result.audiosCustom || []);
-          }
-        }
-      } else {
-        // Refresh audios from profile
-        const result = await socketService.obtenerPerfil();
-        if (result.success) {
-          setAudiosCustom(result.audiosCustom || []);
-        }
-      }
+      await startAudioUpload([file]);
     } catch (err) {
       console.error('Error uploading audio:', err);
-      alert('Error al subir el audio. Verificar que sea un archivo de audio menor a 512KB.');
-    } finally {
+      setUploadError('Error al subir audio. Verifica formato y peso (max 512KB).');
       setUploading(null);
+      setUploadProgress(0);
     }
   };
 
@@ -235,35 +255,15 @@ export default function PerfilPage() {
     const userId = getUserId();
     if (!userId) return;
 
+    userIdRef.current = String(userId);
     setUploadingAvatar(true);
+    setUploadError(null);
+
     try {
-      const res = await fetch(`/api/uploadthing?actionType=upload&slug=avatarUploader`, {
-        method: 'POST',
-        headers: {
-          'x-user-id': String(userId),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          files: [{ name: file.name, size: file.size, type: file.type }],
-        }),
-      });
-
-      if (!res.ok) throw new Error('Avatar upload failed');
-
-      const data = await res.json();
-      if (data?.[0]?.url) {
-        setAvatarUrl(data[0].url);
-      }
-
-      // Refresh profile
-      const result = await socketService.obtenerPerfil();
-      if (result.success) {
-        setAvatarUrl(result.avatar_url || null);
-      }
+      await startAvatarUpload([file]);
     } catch (err) {
       console.error('Error uploading avatar:', err);
-      alert('Error al subir avatar. Verificar que sea una imagen menor a 1MB.');
-    } finally {
+      setUploadError('Error al subir avatar. Verifica formato y peso (max 1MB).');
       setUploadingAvatar(false);
     }
   };
@@ -605,80 +605,111 @@ export default function PerfilPage() {
               Subi audios personalizados para cada accion del juego. Cuando realices esa accion, todos los jugadores escucharan tu audio.
             </p>
 
+            {/* Error message */}
+            {uploadError && (
+              <div className="mb-3 p-3 rounded-xl bg-red-900/20 border border-red-500/20 flex items-center justify-between">
+                <span className="text-red-300 text-xs">{uploadError}</span>
+                <button onClick={() => setUploadError(null)} className="text-red-400/60 hover:text-red-300 text-xs ml-2">X</button>
+              </div>
+            )}
+
             <div className="space-y-2">
               {TIPOS_AUDIO.map(({ key, label }) => {
                 const audio = getAudioForTipo(key);
-                const isUploading = uploading === key;
+                const isThisUploading = uploading === key;
                 const isPlaying = playingAudio === key;
+                const isAnyUploading = uploading !== null;
 
                 return (
                   <div
                     key={key}
-                    className="flex items-center justify-between rounded-xl px-4 py-3 bg-white/5 border border-gold-700/10"
+                    className={`rounded-xl px-4 py-3 bg-white/5 border transition-all ${
+                      isThisUploading ? 'border-gold-500/30 bg-gold-900/10' : 'border-gold-700/10'
+                    }`}
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <span className="text-gold-300 text-sm font-medium w-28 shrink-0">{label}</span>
-                      {audio ? (
-                        <span className="text-green-400/60 text-xs truncate">Configurado</span>
-                      ) : (
-                        <span className="text-gold-500/30 text-xs">Sin audio</span>
-                      )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="text-gold-300 text-sm font-medium w-28 shrink-0">{label}</span>
+                        {isThisUploading ? (
+                          <span className="text-gold-400 text-xs animate-pulse">Subiendo...</span>
+                        ) : audio ? (
+                          <span className="text-green-400/60 text-xs truncate">Configurado</span>
+                        ) : (
+                          <span className="text-gold-500/30 text-xs">Sin audio</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Play button */}
+                        {audio && !isThisUploading && (
+                          <button
+                            onClick={() => handlePlayAudio(audio.url_archivo, key)}
+                            className={`p-1.5 rounded-lg transition-all ${
+                              isPlaying
+                                ? 'bg-green-600/30 text-green-300'
+                                : 'text-gold-400/50 hover:text-gold-300 hover:bg-white/10'
+                            }`}
+                            title={isPlaying ? 'Detener' : 'Reproducir'}
+                          >
+                            {isPlaying ? (
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <rect x="6" y="4" width="4" height="16" />
+                                <rect x="14" y="4" width="4" height="16" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Delete button */}
+                        {audio && !isThisUploading && (
+                          <button
+                            onClick={() => handleDeleteAudio(Number(audio.id))}
+                            className="p-1.5 rounded-lg text-red-400/50 hover:text-red-300 hover:bg-red-900/20 transition-all"
+                            title="Eliminar"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+
+                        {/* Upload button */}
+                        {!isThisUploading && (
+                          <button
+                            onClick={() => {
+                              setUploadTipoTarget(key);
+                              setUploadError(null);
+                              fileInputRef.current?.click();
+                            }}
+                            disabled={isAnyUploading}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                              isAnyUploading
+                                ? 'bg-gold-600/10 text-gold-400/30 cursor-not-allowed'
+                                : 'bg-gold-600/30 text-gold-300 hover:bg-gold-600/40 border border-gold-500/20'
+                            }`}
+                          >
+                            {audio ? 'Cambiar' : 'Subir'}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Play button */}
-                      {audio && (
-                        <button
-                          onClick={() => handlePlayAudio(audio.url_archivo, key)}
-                          className={`p-1.5 rounded-lg transition-all ${
-                            isPlaying
-                              ? 'bg-green-600/30 text-green-300'
-                              : 'text-gold-400/50 hover:text-gold-300 hover:bg-white/10'
-                          }`}
-                          title={isPlaying ? 'Detener' : 'Reproducir'}
-                        >
-                          {isPlaying ? (
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                              <rect x="6" y="4" width="4" height="16" />
-                              <rect x="14" y="4" width="4" height="16" />
-                            </svg>
-                          ) : (
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                          )}
-                        </button>
-                      )}
-
-                      {/* Delete button */}
-                      {audio && (
-                        <button
-                          onClick={() => handleDeleteAudio(Number(audio.id))}
-                          className="p-1.5 rounded-lg text-red-400/50 hover:text-red-300 hover:bg-red-900/20 transition-all"
-                          title="Eliminar"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
-
-                      {/* Upload button */}
-                      <button
-                        onClick={() => {
-                          setUploadTipoTarget(key);
-                          fileInputRef.current?.click();
-                        }}
-                        disabled={isUploading}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                          isUploading
-                            ? 'bg-gold-600/20 text-gold-400/40 cursor-wait'
-                            : 'bg-gold-600/30 text-gold-300 hover:bg-gold-600/40 border border-gold-500/20'
-                        }`}
-                      >
-                        {isUploading ? 'Subiendo...' : audio ? 'Cambiar' : 'Subir'}
-                      </button>
-                    </div>
+                    {/* Progress bar */}
+                    {isThisUploading && (
+                      <div className="mt-2">
+                        <div className="w-full bg-gold-900/30 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-gradient-to-r from-gold-500 to-amber-400 h-full rounded-full transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                        <div className="text-[10px] text-gold-400/50 mt-1 text-right">{uploadProgress}%</div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

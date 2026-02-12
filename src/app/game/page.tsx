@@ -1079,6 +1079,7 @@ function GamePage() {
           setPerrosActivos(true);
           setEquipoPerros(data.equipoQueEcha);
           setMensaje(`¡Equipo ${data.equipoQueEcha} echa los perros!`);
+          audioManager.playWithCustom('perros', data.audioCustomUrl);
           setTimeout(() => { if (mounted) setMensaje(null); }, 3000);
         });
 
@@ -1650,9 +1651,9 @@ function GamePage() {
     const isOculta = carta.valor === 0;
     // Tamaños responsive: mobile / tablet / desktop
     const sizeClasses = {
-      small: 'w-8 h-12 sm:w-12 sm:h-[4.5rem] lg:w-14 lg:h-20',
-      normal: 'w-12 h-[4.5rem] sm:w-16 sm:h-24 lg:w-20 lg:h-[7.5rem]',
-      large: 'w-[4.5rem] h-[6.75rem] sm:w-20 sm:h-[7.5rem] lg:w-24 lg:h-36',
+      small: 'w-8 h-12 sm:w-10 sm:h-[3.75rem] lg:w-12 lg:h-[4.5rem]',
+      normal: 'w-12 h-[4.5rem] sm:w-14 sm:h-[5.25rem] lg:w-16 lg:h-24',
+      large: 'w-[4.5rem] h-[6.75rem] sm:w-[4.5rem] sm:h-[6.75rem] lg:w-20 lg:h-[7.5rem]',
     };
 
     if (isOculta) {
@@ -1683,7 +1684,7 @@ function GamePage() {
 
   // Casilla de fósforos tradicional (solo visible en sm+)
   const Casilla = ({ count }: { count: number }) => {
-    const size = 'w-9 h-9';
+    const size = 'w-7 h-7';
     const matchColor = 'bg-amber-200';
     const matchThick = 'rounded-sm';
 
@@ -1728,14 +1729,14 @@ function GamePage() {
     const buenosResto = buenos % 5;
 
     return (
-      <div className={`score-panel rounded-xl p-1.5 sm:p-3 ${isMyTeam ? 'ring-2 ring-gold-500/50' : ''}`}>
-        <div className="text-center mb-0.5 sm:mb-1">
-          <span className={`text-[10px] sm:text-xs uppercase tracking-wider ${equipo === 1 ? 'text-blue-400' : 'text-red-400'}`}>
+      <div className={`score-panel rounded-xl p-1.5 sm:p-2 ${isMyTeam ? 'ring-2 ring-gold-500/50' : ''}`}>
+        <div className="text-center mb-0.5">
+          <span className={`text-[10px] sm:text-[11px] uppercase tracking-wider ${equipo === 1 ? 'text-blue-400' : 'text-red-400'}`}>
             Eq {equipo}
           </span>
           {isMyTeam && <span className="ml-1 text-gold-500 text-[8px] sm:text-[10px]">(Tu)</span>}
         </div>
-        <div className="text-xl sm:text-3xl font-bold text-center text-white mb-0.5 sm:mb-1">{puntos}</div>
+        <div className="text-xl sm:text-2xl font-bold text-center text-white mb-0.5">{puntos}</div>
 
         {/* Mobile: solo indicador buenas/malas con numeros */}
         <div className="sm:hidden text-center">
@@ -1753,16 +1754,16 @@ function GamePage() {
         {/* Desktop: palitos */}
         <div className="hidden sm:block">
           {enBuenas && (
-            <div className="text-center mb-1">
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-600/30 text-green-400 border border-green-500/40 animate-pulse">
+            <div className="text-center mb-0.5">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-600/30 text-green-400 border border-green-500/40 animate-pulse">
                 BUENAS
               </span>
             </div>
           )}
 
-          <div className="mb-1">
-            <div className="text-[10px] text-gold-500/50 text-center uppercase tracking-wider">Malos</div>
-            <div className="flex flex-wrap justify-center gap-1 min-h-[36px]">
+          <div className="mb-0.5">
+            <div className="text-[9px] text-gold-500/50 text-center uppercase tracking-wider">Malos</div>
+            <div className="flex flex-wrap justify-center gap-0.5 min-h-[28px]">
               {Array.from({ length: malosGrupos }).map((_, i) => (
                 <Casilla key={`m-${i}`} count={5} />
               ))}
@@ -1770,11 +1771,11 @@ function GamePage() {
             </div>
           </div>
 
-          <div className="border-t border-gold-700/30 my-1" />
+          <div className="border-t border-gold-700/30 my-0.5" />
 
           <div>
-            <div className="text-[10px] text-gold-500/50 text-center uppercase tracking-wider">Buenos</div>
-            <div className="flex flex-wrap justify-center gap-1 min-h-[36px]">
+            <div className="text-[9px] text-gold-500/50 text-center uppercase tracking-wider">Buenos</div>
+            <div className="flex flex-wrap justify-center gap-0.5 min-h-[28px]">
               {buenosGrupos > 0 && Array.from({ length: buenosGrupos }).map((_, i) => (
                 <Casilla key={`b-${i}`} count={5} />
               ))}
@@ -1782,7 +1783,7 @@ function GamePage() {
             </div>
           </div>
 
-          <div className="text-[8px] text-gold-600/30 text-center mt-1">a {limite} pts</div>
+          <div className="text-[8px] text-gold-600/30 text-center mt-0.5">a {limite} pts</div>
         </div>
       </div>
     );
@@ -2281,7 +2282,7 @@ function GamePage() {
             )}
           </div>
         )}
-        <div className={`inline-flex items-center ${compact ? 'gap-1 px-2' : 'gap-2 px-3'} py-1 rounded-lg ${compact ? 'text-xs' : 'text-sm'} font-medium ${compact ? 'mb-1' : 'mb-2'} ${
+        <div className={`inline-flex items-center ${compact ? 'gap-1 px-2' : 'gap-1.5 px-2'} py-0.5 rounded-lg ${compact ? 'text-xs' : 'text-xs sm:text-sm'} font-medium ${compact ? 'mb-0.5' : 'mb-1'} ${
           j.equipo === 1 ? 'equipo-1-light text-blue-300' : 'equipo-2-light text-red-300'
         } ${esSuTurno ? 'turn-glow' : ''}`}>
           {j.nombre}
@@ -2300,7 +2301,7 @@ function GamePage() {
             })
           ) : (
             j.cartas.map((_, i) => (
-              <div key={i} className={compact ? 'w-7 h-10 sm:w-8 sm:h-12 card-back rounded' : 'w-8 h-12 sm:w-10 sm:h-14 card-back rounded'} />
+              <div key={i} className={compact ? 'w-6 h-9 sm:w-7 sm:h-10 card-back rounded' : 'w-7 h-10 sm:w-8 sm:h-12 card-back rounded'} />
             ))
           )}
         </div>
@@ -2550,13 +2551,13 @@ function GamePage() {
         </div>
       )}
 
-      <div className="relative z-10 max-w-6xl mx-auto h-[calc(100vh-1rem)] sm:h-[calc(100vh-2rem)] flex flex-col">
+      <div className="relative z-10 max-w-5xl mx-auto h-[calc(100vh-1rem)] sm:h-[calc(100vh-1.5rem)] flex flex-col">
         {/* Header: Marcadores - Estilo Rústico */}
-        <div className="flex justify-between items-stretch gap-2 sm:gap-4 mb-2 sm:mb-4">
+        <div className="flex justify-between items-stretch gap-2 sm:gap-3 mb-1 sm:mb-2">
           <ScoreBoard equipo={1} puntos={mesa.equipos[0].puntaje} isMyTeam={miEquipo === 1} />
 
           {/* Info central - Panel Boliche */}
-          <div className="flex-1 flex flex-col items-center justify-center boliche-panel rounded-xl px-2 sm:px-4 py-2 border-gold-700/30 relative">
+          <div className="flex-1 flex flex-col items-center justify-center boliche-panel rounded-xl px-2 sm:px-3 py-1.5 border-gold-700/30 relative">
             {/* Control de audio - esquina izquierda */}
             <div className="absolute -top-1 -left-1 flex items-center gap-1 z-20">
               <button
@@ -2614,22 +2615,22 @@ function GamePage() {
               </button>
             )}
 
-            <div className="text-gold-400/70 text-xs sm:text-sm font-medium uppercase tracking-wider">
+            <div className="text-gold-400/70 text-[10px] sm:text-xs font-medium uppercase tracking-wider">
               Mano {mesa.manoActual}/3
             </div>
             {mesa.puntosEnJuego > 1 && (
-              <div className="text-gold-300 font-bold text-sm sm:text-base titulo-rustico">
+              <div className="text-gold-300 font-bold text-xs sm:text-sm titulo-rustico">
                 {mesa.nivelGritoAceptado ? getNombreGrito(mesa.nivelGritoAceptado) : ''} ({mesa.puntosEnJuego} pts)
               </div>
             )}
             {/* Indicadores de manos ganadas - Estilo fósforos */}
-            <div className="flex gap-1.5 mt-1.5">
+            <div className="flex gap-1 mt-1">
               {[1, 2, 3].map(m => {
                 const ganador = mesa.ganadoresManos[m - 1];
                 return (
                   <div
                     key={m}
-                    className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-300 ${
+                    className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
                       ganador === null ? 'bg-gray-500/80 border-gray-400/60 shadow-inner' :
                       ganador === 1 ? 'bg-blue-500 border-blue-400 shadow-lg shadow-blue-500/40' :
                       ganador === 2 ? 'bg-red-500 border-red-400 shadow-lg shadow-red-500/40' :
@@ -2647,7 +2648,7 @@ function GamePage() {
         {/* Mesa de juego */}
         <div className="flex-1 flex flex-col">
           {/* Top row players (opponents in 1v1, teammate in 2v2, TL-TC-TR in 3v3) */}
-          <div className="flex justify-center gap-4 sm:gap-8 mb-2 sm:mb-4">
+          <div className="flex justify-center gap-3 sm:gap-6 mb-1 sm:mb-2">
             {topRowPlayers.map(j => renderPlayerIndicator(j))}
           </div>
 
@@ -2655,13 +2656,13 @@ function GamePage() {
           <div className="flex-1 flex flex-row items-stretch gap-1 sm:gap-2">
             {/* Left side player (rival in 2v2/3v3) */}
             {leftSidePlayer && (
-              <div className="flex flex-col items-center justify-center w-20 sm:w-28">
+              <div className="flex flex-col items-center justify-center w-16 sm:w-24">
                 {renderPlayerIndicator(leftSidePlayer)}
               </div>
             )}
 
             {/* Mesa central con fieltro */}
-            <div className="flex-1 mesa-flat wood-border rounded-[2rem] sm:rounded-[3rem] p-4 sm:p-6 relative flex flex-col justify-center items-center min-h-[280px] sm:min-h-[340px] lg:min-h-[400px]">
+            <div className="flex-1 mesa-flat wood-border rounded-[2rem] sm:rounded-[3rem] p-3 sm:p-4 relative flex flex-col justify-center items-center min-h-[220px] sm:min-h-[260px] lg:min-h-[300px]">
             {/* Luz de lámpara */}
             <div className="lampara-glow" />
             <div className="pulperia-light rounded-[2rem] sm:rounded-[3rem]" />
@@ -2673,15 +2674,15 @@ function GamePage() {
                 <div className="flex flex-col items-center">
                   <div className="text-[8px] sm:text-[10px] lg:text-xs text-gold-400/40 font-medium mb-1 uppercase tracking-wider">Mazo</div>
                   <div className="relative">
-                    <div className="w-10 h-[3.75rem] sm:w-16 sm:h-24 lg:w-20 lg:h-[7.5rem] card-back rounded-lg shadow-lg" />
+                    <div className="w-10 h-[3.75rem] sm:w-14 sm:h-[5.25rem] lg:w-16 lg:h-24 card-back rounded-lg shadow-lg" />
                   </div>
                 </div>
                 {/* Muestra - a la derecha */}
                 <div className="flex flex-col items-center">
-                  <div className="text-[8px] sm:text-[10px] lg:text-xs text-gold-400/60 font-medium mb-1 uppercase tracking-wider">Muestra</div>
+                  <div className="text-[8px] sm:text-[10px] lg:text-[11px] text-gold-400/60 font-medium mb-1 uppercase tracking-wider">Muestra</div>
                   <div className="relative muestra-highlight">
-                    <div className="absolute -inset-2 sm:-inset-3 bg-gold-500/30 rounded-xl blur-lg animate-pulse" />
-                    <div className="absolute -inset-1 sm:-inset-1.5 border-2 border-gold-400/40 rounded-lg" />
+                    <div className="absolute -inset-1.5 sm:-inset-2 bg-gold-500/30 rounded-xl blur-lg animate-pulse" />
+                    <div className="absolute -inset-1 sm:-inset-1 border-2 border-gold-400/40 rounded-lg" />
                     <CartaImg carta={mesa.muestra} size="normal" />
                   </div>
                 </div>
@@ -2691,16 +2692,16 @@ function GamePage() {
             {/* Phase: Repartiendo - show dealing animation */}
             {(mesa.fase === 'repartiendo' || isDealing) && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ perspective: '1200px' }}>
-                <div className="text-gold-400 font-bold text-xl sm:text-2xl mb-6 animate-pulse drop-shadow-lg">
+                <div className="text-gold-400 font-bold text-lg sm:text-xl mb-4 animate-pulse drop-shadow-lg">
                   🃏 Repartiendo cartas... 🃏
                 </div>
 
                 {/* Mazo central grande desde donde salen las cartas */}
                 <div className="relative" style={{ transformStyle: 'preserve-3d' }}>
                   {/* Stack effect - multiple backs con efecto 3D */}
-                  <div className="absolute -top-2 -left-1 w-20 h-32 sm:w-28 sm:h-40 card-back rounded-lg opacity-50" style={{ transform: 'translateZ(-6px)' }} />
-                  <div className="absolute -top-1 -left-0.5 w-20 h-32 sm:w-28 sm:h-40 card-back rounded-lg opacity-70" style={{ transform: 'translateZ(-3px)' }} />
-                  <div className={`relative w-20 h-32 sm:w-28 sm:h-40 card-back rounded-lg shadow-2xl ${dealingCards.length > 0 ? 'mazo-dealing' : ''}`} />
+                  <div className="absolute -top-2 -left-1 w-16 h-24 sm:w-20 sm:h-32 card-back rounded-lg opacity-50" style={{ transform: 'translateZ(-6px)' }} />
+                  <div className="absolute -top-1 -left-0.5 w-16 h-24 sm:w-20 sm:h-32 card-back rounded-lg opacity-70" style={{ transform: 'translateZ(-3px)' }} />
+                  <div className={`relative w-16 h-24 sm:w-20 sm:h-32 card-back rounded-lg shadow-2xl ${dealingCards.length > 0 ? 'mazo-dealing' : ''}`} />
 
                   {/* Cartas volando hacia cada jugador - trayectoria extendida con perspectiva */}
                   {dealingCards.map((deal, idx) => {
@@ -2757,7 +2758,7 @@ function GamePage() {
                     return (
                       <div
                         key={`deal-${idx}`}
-                        className="absolute top-0 left-0 w-16 h-24 sm:w-20 sm:h-28 card-back rounded-lg shadow-xl animate-deal-card dealing-card"
+                        className="absolute top-0 left-0 w-14 h-20 sm:w-16 sm:h-24 card-back rounded-lg shadow-xl animate-deal-card dealing-card"
                         style={{
                           '--deal-x': `${targetX}px`,
                           '--deal-y': `${targetY}px`,
@@ -2774,8 +2775,8 @@ function GamePage() {
                 </div>
 
                 {/* Indicador de progreso mejorado */}
-                <div className="mt-8 flex flex-col items-center gap-3">
-                  <div className="text-gold-500/70 text-sm font-medium">
+                <div className="mt-4 flex flex-col items-center gap-2">
+                  <div className="text-gold-500/70 text-xs font-medium">
                     Vuelta {Math.floor(dealingCards.length / mesa.jugadores.length) + 1} de 3
                   </div>
                   <div className="flex gap-2">
@@ -2948,8 +2949,8 @@ function GamePage() {
 
             {/* Indicador de turno */}
             {mesa.estado === 'jugando' && mesa.fase === 'jugando' && !mesa.gritoActivo && !mesa.envidoActivo && (
-              <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-20">
-                <div className={`text-sm font-bold px-4 py-2 rounded-full ${
+              <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 z-20">
+                <div className={`text-xs sm:text-sm font-bold px-3 py-1.5 rounded-full ${
                   esMiTurno()
                     ? 'bg-gold-500 text-wood-950 turn-indicator'
                     : 'bg-black/40 text-white/70'
@@ -2962,7 +2963,7 @@ function GamePage() {
 
             {/* Right side player (rival in 2v2/3v3) */}
             {rightSidePlayer && (
-              <div className="flex flex-col items-center justify-center w-20 sm:w-28">
+              <div className="flex flex-col items-center justify-center w-16 sm:w-24">
                 {renderPlayerIndicator(rightSidePlayer)}
               </div>
             )}
@@ -2970,8 +2971,8 @@ function GamePage() {
 
           {/* Panel de respuesta a Truco */}
           {deboResponderGrito() && mesa.gritoActivo && (
-            <div className="glass-gold rounded-xl p-4 my-3 text-center border border-gold-600/40 animate-slide-up">
-              <p className="text-lg font-bold text-gold-300 mb-3">
+            <div className="glass-gold rounded-xl p-3 my-1.5 text-center border border-gold-600/40 animate-slide-up">
+              <p className="text-base font-bold text-gold-300 mb-2">
                 {mesa.jugadores.find(j => j.id === mesa.gritoActivo!.jugadorQueGrita)?.nombre} cantó {getNombreGrito(mesa.gritoActivo.tipo)}
               </p>
               <div className="flex justify-center gap-3">
@@ -3002,8 +3003,8 @@ function GamePage() {
             const mostrarFaltaEnvido = !tieneFaltaEnvido;
 
             return (
-              <div className="glass rounded-xl p-4 my-3 text-center border border-purple-600/40 animate-slide-up">
-                <p className="text-lg font-bold text-purple-300 mb-1">
+              <div className="glass rounded-xl p-3 my-1.5 text-center border border-purple-600/40 animate-slide-up">
+                <p className="text-base font-bold text-purple-300 mb-1">
                   {mesa.jugadores.find(j => j.id === mesa.envidoActivo!.jugadorQueCanta)?.nombre} cantó {getNombreEnvido(mesa.envidoActivo.tipos[mesa.envidoActivo.tipos.length - 1])}
                 </p>
                 <p className="text-sm text-purple-400/70 mb-3">En juego: {mesa.envidoActivo.puntosAcumulados} pts</p>
@@ -3055,8 +3056,8 @@ function GamePage() {
               : '¡Vos también tenés flor! ¿Qué querés hacer?';
 
             return (
-              <div className="glass rounded-xl p-4 my-3 text-center border border-pink-600/40 animate-slide-up">
-                <p className="text-lg font-bold text-pink-300 mb-1">
+              <div className="glass rounded-xl p-3 my-1.5 text-center border border-pink-600/40 animate-slide-up">
+                <p className="text-base font-bold text-pink-300 mb-1">
                   {titulo}
                 </p>
                 <p className="text-sm text-pink-400/70 mb-3">{subtitulo}</p>
@@ -3153,7 +3154,7 @@ function GamePage() {
           )}
 
           {/* Mis cartas y controles */}
-          <div className="glass rounded-xl p-3 sm:p-4 mt-1 sm:mt-2 relative z-10 border border-gold-800/20">
+          <div className="glass rounded-xl p-2 sm:p-3 mt-1 relative z-10 border border-gold-800/20">
             {/* Bocadillo de diálogo para mí */}
             {socketId && speechBubbles.find(b => b.jugadorId === socketId) && (() => {
               const bubble = speechBubbles.find(b => b.jugadorId === socketId)!;
@@ -3175,7 +3176,7 @@ function GamePage() {
             })()}
 
             {/* Barra superior con info y botones de cantos */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2">
             <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm ${
               miEquipo === 1 ? 'equipo-1 text-white' : 'equipo-2 text-white'
             }`}>
@@ -3271,7 +3272,7 @@ function GamePage() {
             </div>
 
             {/* Mis cartas */}
-            <div className="flex justify-center items-center gap-2 sm:gap-4">
+            <div className="flex justify-center items-center gap-2 sm:gap-3">
               {misCartas().map((carta, index) => (
                 <div
                   key={`${carta.palo}-${carta.valor}-${index}`}

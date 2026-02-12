@@ -1,13 +1,14 @@
 // Sistema de audio para Truco Uruguayo
 // Usa Web Audio API para sonidos sintetizados como placeholder.
 // Para reemplazar con sonidos propios: poner archivos MP3 en public/sounds/{nombre}.mp3
-// Nombres: card-play, truco, envido, flor, round-won, round-lost, game-won, game-lost, your-turn, notification, shuffle, cut
+// Nombres: card-play, truco, envido, flor, perros, round-won, round-lost, game-won, game-lost, your-turn, notification, shuffle, cut
 
 export type SoundType =
   | 'card-play'
   | 'truco'
   | 'envido'
   | 'flor'
+  | 'perros'
   | 'round-won'
   | 'round-lost'
   | 'game-won'
@@ -42,7 +43,17 @@ class AudioManager {
       this.ctx = new AudioContext();
     }
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
+    }
+    return this.ctx;
+  }
+
+  private async ensureContextReady(): Promise<AudioContext> {
+    if (!this.ctx) {
+      this.ctx = new AudioContext();
+    }
+    if (this.ctx.state === 'suspended') {
+      await this.ctx.resume();
     }
     return this.ctx;
   }
@@ -56,7 +67,7 @@ class AudioManager {
       const response = await fetch(`/sounds/${name}.mp3`);
       if (!response.ok) return null;
       const buffer = await response.arrayBuffer();
-      const ctx = this.getContext();
+      const ctx = await this.ensureContextReady();
       const audioBuffer = await ctx.decodeAudioData(buffer);
       this.mp3Cache.set(name, audioBuffer);
       return audioBuffer;
@@ -70,7 +81,7 @@ class AudioManager {
     // Intentar MP3 primero
     const mp3 = await this.tryLoadMp3(sound);
     if (mp3) {
-      const ctx = this.getContext();
+      const ctx = await this.ensureContextReady();
       const source = ctx.createBufferSource();
       source.buffer = mp3;
       const gain = ctx.createGain();
@@ -92,6 +103,7 @@ class AudioManager {
       case 'truco': this.synthTruco(ctx, vol); break;
       case 'envido': this.synthEnvido(ctx, vol); break;
       case 'flor': this.synthFlor(ctx, vol); break;
+      case 'perros': this.synthPerros(ctx, vol); break;
       case 'round-won': this.synthRoundWon(ctx, vol); break;
       case 'round-lost': this.synthRoundLost(ctx, vol); break;
       case 'game-won': this.synthGameWon(ctx, vol); break;
@@ -193,6 +205,51 @@ class AudioManager {
       osc.start(t + delay);
       osc.stop(t + delay + 0.3);
     });
+  }
+
+  private synthPerros(ctx: AudioContext, vol: number): void {
+    // Echar los perros: golpe grave agresivo + gruñido descendente + impacto
+    const t = ctx.currentTime;
+    // Golpe de impacto inicial
+    const noise = ctx.createBufferSource();
+    const bufferSize = ctx.sampleRate * 0.15;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
+    }
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 500;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(vol * 0.7, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    noise.connect(filter).connect(noiseGain).connect(ctx.destination);
+    noise.start(t);
+    noise.stop(t + 0.2);
+    // Gruñido grave descendente
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(60, t + 0.5);
+    const oscGain = ctx.createGain();
+    oscGain.gain.setValueAtTime(vol * 0.35, t + 0.05);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    osc.connect(oscGain).connect(ctx.destination);
+    osc.start(t + 0.05);
+    osc.stop(t + 0.5);
+    // Segundo golpe de énfasis
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(100, t + 0.15);
+    osc2.frequency.exponentialRampToValueAtTime(50, t + 0.4);
+    const osc2Gain = ctx.createGain();
+    osc2Gain.gain.setValueAtTime(vol * 0.5, t + 0.15);
+    osc2Gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+    osc2.connect(osc2Gain).connect(ctx.destination);
+    osc2.start(t + 0.15);
+    osc2.stop(t + 0.45);
   }
 
   private synthRoundWon(ctx: AudioContext, vol: number): void {
@@ -522,24 +579,33 @@ class AudioManager {
 
   // === Audio custom desde URL (para usuarios premium) ===
 
-  async playFromUrl(url: string): Promise<void> {
-    if (this.muted) return;
+  /** Intenta reproducir audio desde URL. Retorna true si tuvo éxito, false si falló. */
+  private async playFromUrl(url: string): Promise<boolean> {
+    if (this.muted) return true; // muted counts as "handled"
     try {
+      const ctx = await this.ensureContextReady();
+
       if (this.mp3Cache.has(url)) {
         const buffer = this.mp3Cache.get(url)!;
-        const ctx = this.getContext();
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         const gain = ctx.createGain();
         gain.gain.value = this.masterVolume;
         source.connect(gain).connect(ctx.destination);
         source.start();
-        return;
+        return true;
       }
-      const response = await fetch(url);
-      if (!response.ok) return;
+
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) {
+        console.warn(`[AudioManager] Failed to fetch custom audio: ${response.status} ${url}`);
+        return false;
+      }
       const arrayBuffer = await response.arrayBuffer();
-      const ctx = this.getContext();
+      if (arrayBuffer.byteLength === 0) {
+        console.warn(`[AudioManager] Empty audio response from ${url}`);
+        return false;
+      }
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
       this.mp3Cache.set(url, audioBuffer);
       const source = ctx.createBufferSource();
@@ -548,14 +614,21 @@ class AudioManager {
       gain.gain.value = this.masterVolume;
       source.connect(gain).connect(ctx.destination);
       source.start();
-    } catch {
-      // Silencioso si falla - el caller puede hacer fallback
+      return true;
+    } catch (err) {
+      console.warn(`[AudioManager] Error playing custom audio from ${url}:`, err);
+      return false;
     }
   }
 
+  /** Reproduce audio custom si existe, con fallback automático al sonido sintetizado/mp3 */
   async playWithCustom(sound: SoundType, customUrl?: string | null): Promise<void> {
     if (customUrl) {
-      await this.playFromUrl(customUrl);
+      const success = await this.playFromUrl(customUrl);
+      if (!success) {
+        // Fallback al sonido normal si el custom falló
+        await this.play(sound);
+      }
     } else {
       await this.play(sound);
     }
