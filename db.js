@@ -176,7 +176,12 @@ async function guardarPartida(modo, equipoGanador, puntajeEq1, puntajeEq2, durac
 
 async function obtenerHistorial(userId, limite = 20) {
   const result = await db.execute({
-    sql: `SELECT p.*, pj.equipo as mi_equipo
+    sql: `SELECT p.*, pj.equipo as mi_equipo,
+      (SELECT GROUP_CONCAT(u.apodo, ', ')
+       FROM partida_jugadores pj2
+       JOIN usuarios u ON u.id = pj2.usuario_id
+       WHERE pj2.partida_id = p.id AND pj2.equipo != pj.equipo
+      ) as rivales
       FROM partidas p
       JOIN partida_jugadores pj ON pj.partida_id = p.id
       WHERE pj.usuario_id = ?

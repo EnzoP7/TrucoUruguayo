@@ -12,6 +12,7 @@ export interface Jugador {
   equipo: number; // 1 o 2
   cartas: Carta[];
   esMano?: boolean;
+  avatarUrl?: string | null;
 }
 
 // Modelo de equipo

@@ -20,6 +20,7 @@ interface Jugador {
   esMano?: boolean;
   modoAyuda?: boolean;
   seVaAlMazo?: boolean;
+  avatarUrl?: string | null;
 }
 
 interface GritoActivo {
@@ -2232,6 +2233,13 @@ function GamePage() {
         <div className={`inline-flex items-center ${compact ? 'gap-1 px-2' : 'gap-1.5 px-2'} py-0.5 rounded-lg ${compact ? 'text-xs' : 'text-xs sm:text-sm'} font-medium ${compact ? 'mb-0.5' : 'mb-1'} ${
           j.equipo === 1 ? 'equipo-1-light text-celeste-300' : 'equipo-2-light text-red-300'
         } ${esSuTurno ? 'turn-glow' : ''}`}>
+          {j.avatarUrl ? (
+            <img src={j.avatarUrl} alt="" className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full object-cover border border-gold-600/50`} />
+          ) : (
+            <span className={`${compact ? 'w-5 h-5 text-[9px]' : 'w-6 h-6 text-[10px]'} rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold`}>
+              {j.nombre[0]?.toUpperCase()}
+            </span>
+          )}
           {j.nombre}
           {j.esMano && <MonedaMano isActive={true} />}
         </div>
@@ -3175,6 +3183,13 @@ function GamePage() {
             <div className={`hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm ${
               miEquipo === 1 ? 'equipo-1 text-white' : 'equipo-2 text-white'
             }`}>
+              {miJugador?.avatarUrl ? (
+                <img src={miJugador.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover border border-gold-600/50" />
+              ) : (
+                <span className="w-6 h-6 rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold text-[10px]">
+                  {miJugador?.nombre[0]?.toUpperCase()}
+                </span>
+              )}
               {miJugador?.nombre}
               {miJugador?.esMano && <MonedaMano isActive={true} />}
             </div>

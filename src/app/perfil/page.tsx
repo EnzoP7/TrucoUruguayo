@@ -24,6 +24,7 @@ interface Partida {
   mi_equipo: number;
   jugada_en: string;
   duracion_seg: number | null;
+  rivales: string | null;
 }
 
 interface Amigo {
@@ -490,15 +491,19 @@ export default function PerfilPage() {
                   const fecha = new Date(p.jugada_en).toLocaleDateString('es-UY', {
                     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
                   });
+                  const rivales = p.rivales || 'Invitado';
                   return (
                     <div key={p.id} className={`flex items-center justify-between rounded-xl px-4 py-3 ${
                       gane ? 'bg-green-900/15 border border-green-500/10' : 'bg-red-900/15 border border-red-500/10'
                     }`}>
-                      <div className="flex items-center gap-3">
-                        <span className={`text-sm font-bold ${gane ? 'text-green-400' : 'text-red-400'}`}>
-                          {gane ? 'Victoria' : 'Derrota'}
-                        </span>
-                        <span className="text-gold-500/40 text-xs">{p.modo}</span>
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-bold ${gane ? 'text-green-400' : 'text-red-400'}`}>
+                            {gane ? 'Victoria' : 'Derrota'}
+                          </span>
+                          <span className="text-gold-500/40 text-xs">{p.modo}</span>
+                        </div>
+                        <span className="text-celeste-400 text-xs">vs {rivales}</span>
                       </div>
                       <div className="flex items-center gap-4">
                         <span className="text-white text-sm font-medium">

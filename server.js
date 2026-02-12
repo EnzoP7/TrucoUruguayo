@@ -2697,7 +2697,7 @@ app.prepare().then(async () => {
         };
         lobbyRooms.set(mesaId, room);
 
-        const jugador = { id: socket.id, nombre, equipo: 1, cartas: [], modoAyuda: false, userId: usuarioCreador?.id || null };
+        const jugador = { id: socket.id, nombre, equipo: 1, cartas: [], modoAyuda: false, userId: usuarioCreador?.id || null, avatarUrl: usuarioCreador?.avatar_url || null };
         const mesa = crearEstadoMesa(mesaId, [jugador], 30, { modoAlternado, modoAyuda });
         engines.set(mesaId, mesa);
 
@@ -2852,7 +2852,7 @@ app.prepare().then(async () => {
 
         const halfPoint = Math.ceil(room.maxJugadores / 2);
         const equipo = (room.jugadores.length - 1) < halfPoint ? 1 : 2;
-        const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false, userId: usuarioAuth?.id || null };
+        const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false, userId: usuarioAuth?.id || null, avatarUrl: usuarioAuth?.avatar_url || null };
 
         mesa.jugadores.push(jugador);
         // Re-assign teams
@@ -2953,7 +2953,7 @@ app.prepare().then(async () => {
             room.jugadores.push({ socketId: socket.id, nombre, userId: usuarioAuth2?.id || null });
             const halfPoint = Math.ceil(room.maxJugadores / 2);
             const equipo = (room.jugadores.length - 1) < halfPoint ? 1 : 2;
-            const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false, userId: usuarioAuth2?.id || null };
+            const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false, userId: usuarioAuth2?.id || null, avatarUrl: usuarioAuth2?.avatar_url || null };
             mesa.jugadores.push(jugador);
             mesa.jugadores.forEach((j, idx) => {
               j.equipo = idx < halfPoint ? 1 : 2;
