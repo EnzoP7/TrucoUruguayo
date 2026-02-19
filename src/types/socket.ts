@@ -35,6 +35,8 @@ export interface ClientToServerEvents {
   'toggle-ayuda': (data: { modoAyuda: boolean }, callback: (success: boolean) => void) => void;
   'terminar-partida': (callback: (success: boolean, message?: string) => void) => void;
   'invitar-amigo': (data: { amigoId: number; mesaId: string }, callback: (result: { success: boolean; error?: string }) => void) => void;
+  // Chat
+  'enviar-mensaje': (data: { mensaje: string; tipo: 'general' | 'equipo' }, callback: (success: boolean) => void) => void;
 }
 
 // Eventos del servidor al cliente
@@ -84,6 +86,8 @@ export interface ServerToClientEvents {
   'anfitrion-desconectado': (data: { nombre: string }) => void;
   'jugador-desconectado': (data: { nombre: string; esAnfitrion: boolean; jugadorId: string }) => void;
   'invitacion-recibida': (data: { de: string; deUserId: number; mesaId: string; tamañoSala: string }) => void;
+  // Chat
+  'mensaje-recibido': (data: { jugadorId: string; jugadorNombre: string; equipo: number; mensaje: string; tipo: 'general' | 'equipo'; timestamp: number }) => void;
 }
 
 // Types for step-by-step envido

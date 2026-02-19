@@ -85,13 +85,19 @@ export default function HomePage() {
           />
         </div>
 
-        {/* Boton CTA principal */}
-        <div className="mb-16 animate-slide-up" style={{ animationDelay: '0.4s' }}>
+        {/* Botones CTA */}
+        <div className="mb-16 animate-slide-up flex flex-col sm:flex-row gap-4 items-center" style={{ animationDelay: '0.4s' }}>
           <Link href="/lobby" className="group relative inline-block">
             <div className="absolute -inset-1.5 bg-gradient-to-r from-gold-600 via-gold-400 to-gold-600 rounded-2xl opacity-60 group-hover:opacity-100 blur-md animate-pulse-glow transition-opacity duration-300" />
             <button className="relative px-12 md:px-16 py-5 md:py-6 bg-gradient-to-br from-gold-700 via-gold-600 to-gold-500 text-wood-950 text-xl md:text-2xl font-[var(--font-cinzel)] font-bold rounded-xl shadow-2xl transform transition-all duration-300 hover:scale-105 hover:-translate-y-1 active:scale-95 border-2 border-gold-400/30">
               <span className="relative z-10 drop-shadow-sm">Jugar Ahora</span>
             </button>
+          </Link>
+          <Link href="/tutorial" className="group inline-flex items-center gap-2 px-6 py-3 rounded-xl text-gold-400/80 hover:text-gold-300 hover:bg-white/5 transition-all border border-gold-700/30 hover:border-gold-500/50">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            <span className="font-medium">Tutorial</span>
           </Link>
         </div>
 
@@ -106,7 +112,7 @@ export default function HomePage() {
             <div className="glass relative rounded-xl p-6 md:p-8 hover:bg-white/10 transition-all duration-300 group cursor-pointer border border-gold-700/20 hover:border-gold-600/40">
               <div className="text-center">
                 <div className="flex justify-center mb-2">
-                  <Image src="/Images/Pelota.png" alt="" width={48} height={48} className="w-10 h-10 opacity-50 group-hover:opacity-80 transition-opacity" />
+                  <Image src="/Images/Vaca.png" alt="" width={48} height={48} className="w-10 h-10 opacity-50 group-hover:opacity-80 transition-opacity" />
                 </div>
                 <div className="text-4xl md:text-5xl font-[var(--font-cinzel)] font-bold text-gold-400 mb-2 group-hover:scale-110 transition-transform duration-300">
                   1v1
@@ -173,7 +179,7 @@ export default function HomePage() {
         <div className="mt-16 grid grid-cols-3 gap-8 max-w-2xl animate-fade-in" style={{ animationDelay: '0.8s' }}>
           <div className="text-center">
             <div className="flex justify-center mb-1">
-              <Image src="/Images/MonedaArtigas.png" alt="" width={36} height={36} className="w-9 h-9 opacity-70" />
+              <Image src="/Images/Vaca.png" alt="" width={36} height={36} className="w-9 h-9 opacity-70" />
             </div>
             <div className="text-2xl mb-1 text-gold-500 font-bold">30</div>
             <div className="text-xs text-gold-200/40 uppercase tracking-wider">Puntos</div>

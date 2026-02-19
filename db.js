@@ -64,6 +64,9 @@ async function initDB() {
     // Agregar columnas nuevas a usuarios (ignorar si ya existen)
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN es_premium INTEGER DEFAULT 0'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN avatar_url TEXT DEFAULT NULL'); } catch { /* ya existe */ }
+    // Personalización de mesa (premium)
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN tema_mesa TEXT DEFAULT "clasico"'); } catch { /* ya existe */ }
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN reverso_cartas TEXT DEFAULT "clasico"'); } catch { /* ya existe */ }
 
     console.log('[DB] Tablas inicializadas correctamente');
   } catch (err) {
@@ -114,6 +117,21 @@ async function actualizarAvatarUrl(userId, url) {
     sql: 'UPDATE usuarios SET avatar_url = ? WHERE id = ?',
     args: [url, userId],
   });
+}
+
+async function actualizarPersonalizacion(userId, temaMesa, reversoCartas) {
+  await db.execute({
+    sql: 'UPDATE usuarios SET tema_mesa = ?, reverso_cartas = ? WHERE id = ?',
+    args: [temaMesa, reversoCartas, userId],
+  });
+}
+
+async function obtenerPersonalizacion(userId) {
+  const result = await db.execute({
+    sql: 'SELECT tema_mesa, reverso_cartas FROM usuarios WHERE id = ?',
+    args: [userId],
+  });
+  return result.rows[0] || { tema_mesa: 'clasico', reverso_cartas: 'clasico' };
 }
 
 // ============ ESTADÍSTICAS ============
@@ -299,6 +317,8 @@ module.exports = {
   actualizarUltimoLogin,
   setPremium,
   actualizarAvatarUrl,
+  actualizarPersonalizacion,
+  obtenerPersonalizacion,
   obtenerEstadisticas,
   actualizarEstadisticas,
   guardarPartida,

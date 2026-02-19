@@ -21,6 +21,7 @@ interface Jugador {
   modoAyuda?: boolean;
   seVaAlMazo?: boolean;
   avatarUrl?: string | null;
+  isBot?: boolean;
 }
 
 interface GritoActivo {
@@ -686,6 +687,22 @@ function GamePage() {
     texto: string;
     puntos?: number;
   }[]>([]);
+  // Chat en partida
+  const [chatAbierto, setChatAbierto] = useState(false);
+  const [chatTab, setChatTab] = useState<'general' | 'equipo'>('general');
+  const [mensajesChat, setMensajesChat] = useState<{
+    jugadorId: string;
+    jugadorNombre: string;
+    equipo: number;
+    mensaje: string;
+    tipo: 'general' | 'equipo';
+    timestamp: number;
+  }[]>([]);
+  const [inputChat, setInputChat] = useState('');
+  const [enviadoChat, setEnviadoChat] = useState(false);
+  const [mensajesNoLeidos, setMensajesNoLeidos] = useState(0);
+  // Bots
+  const [agregandoBot, setAgregandoBot] = useState(false);
 
   const mostrarMensaje = useCallback((msg: string, duracion = 3000) => {
     setMensaje(msg);
@@ -1139,6 +1156,19 @@ function GamePage() {
           setTimeout(() => { if (mounted) setMensaje(null); }, 5000);
         });
 
+        // Chat en partida
+        socketService.onMensajeRecibido((data) => {
+          if (!mounted) return;
+          setMensajesChat(prev => [...prev.slice(-99), data]); // Mantener últimos 100 mensajes
+          // Si el chat está cerrado, incrementar contador de no leídos
+          setChatAbierto(abierto => {
+            if (!abierto) {
+              setMensajesNoLeidos(prev => prev + 1);
+            }
+            return abierto;
+          });
+        });
+
         // Obtener userId si está logueado
         let userId: number | undefined;
         try {
@@ -1466,6 +1496,38 @@ function GamePage() {
       await socketService.configurarPuntos(puntosLimite);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEnviarMensaje = async () => {
+    if (!inputChat.trim() || enviadoChat) return;
+    setEnviadoChat(true);
+    const success = await socketService.enviarMensaje(inputChat.trim(), chatTab);
+    if (success) {
+      setInputChat('');
+    }
+    setEnviadoChat(false);
+  };
+
+  const handleAgregarBot = async (dificultad: 'facil' | 'medio' | 'dificil', equipo?: 1 | 2) => {
+    setAgregandoBot(true);
+    try {
+      const result = await socketService.agregarBot(dificultad, equipo);
+      if (result.success) {
+        const equipoMsg = result.equipo ? ` - Equipo ${result.equipo}` : '';
+        mostrarMensaje(`Bot ${result.botNombre} agregado (${dificultad})${equipoMsg}`);
+      } else {
+        mostrarMensaje(result.error || 'Error al agregar bot');
+      }
+    } finally {
+      setAgregandoBot(false);
+    }
+  };
+
+  const handleQuitarBot = async (botId: string) => {
+    const result = await socketService.quitarBot(botId);
+    if (!result.success) {
+      mostrarMensaje(result.error || 'Error al quitar bot');
     }
   };
 
@@ -1958,6 +2020,7 @@ function GamePage() {
                               className="glass rounded-lg p-2.5 flex items-center justify-between border border-celeste-700/30 group"
                             >
                               <div className="flex items-center gap-2">
+                                {j.isBot && <span className="text-sm">🤖</span>}
                                 <span className="text-white text-sm font-medium">
                                   {j.nombre}
                                 </span>
@@ -1969,6 +2032,16 @@ function GamePage() {
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
+                                {/* Botón para quitar bot (solo anfitrión) */}
+                                {j.isBot && esAnfitrion() && (
+                                  <button
+                                    onClick={() => handleQuitarBot(j.id)}
+                                    className="text-xs px-2 py-1 rounded text-red-400/70 hover:text-red-300 hover:bg-red-900/30 transition-all"
+                                    title="Quitar bot"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                                 {j.id === socketId ? (
                                   <button
                                     onClick={() => socketService.toggleAyuda(!j.modoAyuda)}
@@ -1980,7 +2053,7 @@ function GamePage() {
                                 ) : (
                                   j.modoAyuda && <span className="text-[10px] bg-celeste-600/20 text-celeste-400/60 px-1.5 py-0.5 rounded">📚</span>
                                 )}
-                                {esAnfitrion() && (
+                                {esAnfitrion() && !j.isBot && (
                                   <button
                                     onClick={() => handleCambiarEquipo(j.id, 2)}
                                     disabled={loading}
@@ -2015,6 +2088,7 @@ function GamePage() {
                               className="glass rounded-lg p-2.5 flex items-center justify-between border border-red-700/30 group"
                             >
                               <div className="flex items-center gap-2">
+                                {j.isBot && <span className="text-sm">🤖</span>}
                                 <span className="text-white text-sm font-medium">
                                   {j.nombre}
                                 </span>
@@ -2026,6 +2100,16 @@ function GamePage() {
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
+                                {/* Botón para quitar bot (solo anfitrión) */}
+                                {j.isBot && esAnfitrion() && (
+                                  <button
+                                    onClick={() => handleQuitarBot(j.id)}
+                                    className="text-xs px-2 py-1 rounded text-red-400/70 hover:text-red-300 hover:bg-red-900/30 transition-all"
+                                    title="Quitar bot"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                                 {j.id === socketId ? (
                                   <button
                                     onClick={() => socketService.toggleAyuda(!j.modoAyuda)}
@@ -2037,7 +2121,7 @@ function GamePage() {
                                 ) : (
                                   j.modoAyuda && <span className="text-[10px] bg-celeste-600/20 text-celeste-400/60 px-1.5 py-0.5 rounded">📚</span>
                                 )}
-                                {esAnfitrion() && (
+                                {esAnfitrion() && !j.isBot && (
                                   <button
                                     onClick={() => handleCambiarEquipo(j.id, 1)}
                                     disabled={loading}
@@ -2074,12 +2158,23 @@ function GamePage() {
                       >
                         <div className="flex items-center gap-2">
                           <div className={`w-2.5 h-2.5 rounded-full ${j.equipo === 1 ? 'bg-celeste-500' : 'bg-red-500'}`} />
-                          <span className="text-white font-medium">
+                          <span className="text-white font-medium flex items-center gap-1.5">
+                            {j.isBot && <span className="text-lg">🤖</span>}
                             {j.nombre}
                             {j.id === socketId && <span className="text-gold-400 ml-2">(tú)</span>}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
+                          {/* Botón para quitar bot (solo anfitrión) */}
+                          {j.isBot && esAnfitrion() && (
+                            <button
+                              onClick={() => handleQuitarBot(j.id)}
+                              className="text-xs px-2 py-1 rounded text-red-400/70 hover:text-red-300 hover:bg-red-900/30 transition-all"
+                              title="Quitar bot"
+                            >
+                              ✕
+                            </button>
+                          )}
                           {j.id === socketId ? (
                             <button
                               onClick={() => socketService.toggleAyuda(!j.modoAyuda)}
@@ -2101,6 +2196,158 @@ function GamePage() {
                     ))}
                   </div>
                 )}
+
+                {/* Agregar bots (solo anfitrión, si hay espacio) */}
+                {esAnfitrion() && (() => {
+                  // Determinar máximo de jugadores según configuración
+                  const maxJugadores = mesa.jugadores.length > 2 ? 6 : 2;
+                  const eq1Count = mesa.jugadores.filter(j => j.equipo === 1).length;
+                  const eq2Count = mesa.jugadores.filter(j => j.equipo === 2).length;
+                  const maxPorEquipo = maxJugadores / 2;
+                  const hayEspacioEq1 = eq1Count < maxPorEquipo;
+                  const hayEspacioEq2 = eq2Count < maxPorEquipo;
+                  const hayEspacio = mesa.jugadores.length < maxJugadores;
+
+                  if (!hayEspacio) return null;
+
+                  // Para 1v1: botón simple para agregar oponente
+                  if (maxJugadores === 2) {
+                    return (
+                      <div className="mb-4 p-3 glass rounded-xl border border-celeste-500/20">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-celeste-300 text-sm font-medium flex items-center gap-1.5">
+                            <span className="text-lg">🤖</span> Agregar Bot Oponente
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <button
+                            onClick={() => handleAgregarBot('facil', 2)}
+                            disabled={agregandoBot}
+                            className="px-2 py-1.5 rounded-lg text-xs font-medium bg-green-600/30 text-green-300 hover:bg-green-600/50 border border-green-500/20 disabled:opacity-50 transition-all"
+                          >
+                            Fácil
+                          </button>
+                          <button
+                            onClick={() => handleAgregarBot('medio', 2)}
+                            disabled={agregandoBot}
+                            className="px-2 py-1.5 rounded-lg text-xs font-medium bg-yellow-600/30 text-yellow-300 hover:bg-yellow-600/50 border border-yellow-500/20 disabled:opacity-50 transition-all"
+                          >
+                            Medio
+                          </button>
+                          <button
+                            onClick={() => handleAgregarBot('dificil', 2)}
+                            disabled={agregandoBot}
+                            className="px-2 py-1.5 rounded-lg text-xs font-medium bg-red-600/30 text-red-300 hover:bg-red-600/50 border border-red-500/20 disabled:opacity-50 transition-all"
+                          >
+                            Difícil
+                          </button>
+                        </div>
+                        {agregandoBot && <p className="text-celeste-400/50 text-xs mt-2 text-center">Agregando...</p>}
+                      </div>
+                    );
+                  }
+
+                  // Para 2v2/3v3: botones por equipo
+                  return (
+                    <div className="mb-4 p-3 glass rounded-xl border border-celeste-500/20">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-celeste-300 text-sm font-medium flex items-center gap-1.5">
+                          <span className="text-lg">🤖</span> Agregar Bot
+                        </span>
+                        <span className="text-celeste-500/50 text-xs">
+                          ({mesa.jugadores.length}/{maxJugadores})
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Equipo 1 */}
+                        <div className={`rounded-lg p-2 border ${hayEspacioEq1 ? 'border-celeste-600/40 bg-celeste-950/30' : 'border-gray-700/30 bg-gray-900/30 opacity-50'}`}>
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-celeste-500" />
+                            <span className="text-celeste-400 text-xs font-medium">Equipo 1</span>
+                            <span className="text-celeste-500/50 text-[10px] ml-auto">{eq1Count}/{maxPorEquipo}</span>
+                          </div>
+                          {hayEspacioEq1 ? (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleAgregarBot('facil', 1)}
+                                disabled={agregandoBot}
+                                className="flex-1 px-1 py-1 rounded text-[10px] font-medium bg-green-600/30 text-green-300 hover:bg-green-600/50 disabled:opacity-50 transition-all"
+                                title="Bot Fácil"
+                              >
+                                🟢
+                              </button>
+                              <button
+                                onClick={() => handleAgregarBot('medio', 1)}
+                                disabled={agregandoBot}
+                                className="flex-1 px-1 py-1 rounded text-[10px] font-medium bg-yellow-600/30 text-yellow-300 hover:bg-yellow-600/50 disabled:opacity-50 transition-all"
+                                title="Bot Medio"
+                              >
+                                🟡
+                              </button>
+                              <button
+                                onClick={() => handleAgregarBot('dificil', 1)}
+                                disabled={agregandoBot}
+                                className="flex-1 px-1 py-1 rounded text-[10px] font-medium bg-red-600/30 text-red-300 hover:bg-red-600/50 disabled:opacity-50 transition-all"
+                                title="Bot Difícil"
+                              >
+                                🔴
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-gray-500 text-[10px]">Equipo lleno</span>
+                          )}
+                        </div>
+
+                        {/* Equipo 2 */}
+                        <div className={`rounded-lg p-2 border ${hayEspacioEq2 ? 'border-red-600/40 bg-red-950/30' : 'border-gray-700/30 bg-gray-900/30 opacity-50'}`}>
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-red-500" />
+                            <span className="text-red-400 text-xs font-medium">Equipo 2</span>
+                            <span className="text-red-500/50 text-[10px] ml-auto">{eq2Count}/{maxPorEquipo}</span>
+                          </div>
+                          {hayEspacioEq2 ? (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleAgregarBot('facil', 2)}
+                                disabled={agregandoBot}
+                                className="flex-1 px-1 py-1 rounded text-[10px] font-medium bg-green-600/30 text-green-300 hover:bg-green-600/50 disabled:opacity-50 transition-all"
+                                title="Bot Fácil"
+                              >
+                                🟢
+                              </button>
+                              <button
+                                onClick={() => handleAgregarBot('medio', 2)}
+                                disabled={agregandoBot}
+                                className="flex-1 px-1 py-1 rounded text-[10px] font-medium bg-yellow-600/30 text-yellow-300 hover:bg-yellow-600/50 disabled:opacity-50 transition-all"
+                                title="Bot Medio"
+                              >
+                                🟡
+                              </button>
+                              <button
+                                onClick={() => handleAgregarBot('dificil', 2)}
+                                disabled={agregandoBot}
+                                className="flex-1 px-1 py-1 rounded text-[10px] font-medium bg-red-600/30 text-red-300 hover:bg-red-600/50 disabled:opacity-50 transition-all"
+                                title="Bot Difícil"
+                              >
+                                🔴
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-gray-500 text-[10px]">Equipo lleno</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-center gap-3 mt-2 text-[10px] text-gray-500">
+                        <span>🟢 Fácil</span>
+                        <span>🟡 Medio</span>
+                        <span>🔴 Difícil</span>
+                      </div>
+                      {agregandoBot && <p className="text-celeste-400/50 text-xs mt-2 text-center">Agregando...</p>}
+                    </div>
+                  );
+                })()}
 
                 {esAnfitrion() ? (
                   <button
@@ -2310,6 +2557,105 @@ function GamePage() {
       {/* Panel de ayuda - siempre disponible durante el juego */}
       {mesa.estado === 'jugando' && misCartas().length > 0 && (
         <PanelAyuda cartas={misCartas()} muestra={mesa.muestra} envidoYaCantado={mesa.envidoYaCantado} florYaCantada={!!mesa.florYaCantada} />
+      )}
+
+      {/* Chat en partida */}
+      {mesa.estado === 'jugando' && (
+        <>
+          {/* Botón flotante para abrir chat */}
+          {!chatAbierto && (
+            <button
+              onClick={() => { setChatAbierto(true); setMensajesNoLeidos(0); }}
+              className="fixed bottom-24 right-3 z-40 glass rounded-full w-12 h-12 flex items-center justify-center border border-celeste-500/30 bg-celeste-950/60 shadow-lg hover:bg-celeste-900/70 transition-all"
+              title="Abrir chat"
+            >
+              <span className="text-xl">💬</span>
+              {mensajesNoLeidos > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {mensajesNoLeidos > 9 ? '9+' : mensajesNoLeidos}
+                </span>
+              )}
+            </button>
+          )}
+          {/* Panel de chat */}
+          {chatAbierto && (
+            <div className="fixed bottom-24 right-3 z-40 w-72 sm:w-80 max-h-80 glass rounded-xl border border-celeste-500/30 bg-celeste-950/80 shadow-xl flex flex-col overflow-hidden animate-slide-up">
+              {/* Header */}
+              <div className="flex items-center justify-between px-3 py-2 border-b border-celeste-500/20 bg-celeste-900/40">
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setChatTab('general')}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      chatTab === 'general'
+                        ? 'bg-celeste-600 text-white'
+                        : 'text-celeste-400 hover:bg-celeste-800/50'
+                    }`}
+                  >
+                    General
+                  </button>
+                  <button
+                    onClick={() => setChatTab('equipo')}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      chatTab === 'equipo'
+                        ? 'bg-green-600 text-white'
+                        : 'text-celeste-400 hover:bg-celeste-800/50'
+                    }`}
+                  >
+                    Mi Equipo
+                  </button>
+                </div>
+                <button
+                  onClick={() => setChatAbierto(false)}
+                  className="text-celeste-400/60 hover:text-celeste-300 text-sm px-2 py-1 rounded hover:bg-celeste-800/30 transition-all"
+                  title="Cerrar chat"
+                >
+                  ✕
+                </button>
+              </div>
+              {/* Mensajes */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5 max-h-48 scrollbar-thin scrollbar-thumb-celeste-700 scrollbar-track-transparent">
+                {mensajesChat
+                  .filter(m => chatTab === 'general' ? m.tipo === 'general' : m.tipo === 'equipo')
+                  .map((m, i) => {
+                    const esMio = m.jugadorId === socketId;
+                    const colorEquipo = m.equipo === 1 ? 'text-blue-300' : 'text-orange-300';
+                    return (
+                      <div key={i} className={`text-xs ${esMio ? 'text-right' : ''}`}>
+                        <span className={`font-medium ${esMio ? 'text-celeste-300' : colorEquipo}`}>
+                          {esMio ? 'Vos' : m.jugadorNombre}:
+                        </span>{' '}
+                        <span className="text-white/90">{m.mensaje}</span>
+                      </div>
+                    );
+                  })}
+                {mensajesChat.filter(m => chatTab === 'general' ? m.tipo === 'general' : m.tipo === 'equipo').length === 0 && (
+                  <div className="text-celeste-500/50 text-xs text-center py-4">
+                    {chatTab === 'equipo' ? 'Chat privado con tu equipo' : 'Sin mensajes aún'}
+                  </div>
+                )}
+              </div>
+              {/* Input */}
+              <div className="p-2 border-t border-celeste-500/20 flex gap-2">
+                <input
+                  type="text"
+                  value={inputChat}
+                  onChange={e => setInputChat(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleEnviarMensaje()}
+                  placeholder={chatTab === 'equipo' ? 'Mensaje al equipo...' : 'Escribí un mensaje...'}
+                  className="flex-1 bg-celeste-900/50 border border-celeste-600/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-celeste-500/50 focus:outline-none focus:border-celeste-500/50"
+                  maxLength={200}
+                />
+                <button
+                  onClick={handleEnviarMensaje}
+                  disabled={!inputChat.trim() || enviadoChat}
+                  className="px-3 py-1.5 rounded-lg bg-celeste-600 hover:bg-celeste-500 text-white text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  ➤
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Banner de Pico a Pico */}

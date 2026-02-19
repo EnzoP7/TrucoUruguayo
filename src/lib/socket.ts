@@ -283,6 +283,19 @@ class SocketService {
     });
   }
 
+  // === CHAT ===
+
+  async enviarMensaje(mensaje: string, tipo: 'general' | 'equipo'): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('enviar-mensaje', { mensaje, tipo }, (success: boolean) => resolve(success));
+    });
+  }
+
+  onMensajeRecibido(callback: (data: { jugadorId: string; jugadorNombre: string; equipo: number; mensaje: string; tipo: 'general' | 'equipo'; timestamp: number }) => void): void {
+    this.socket?.on('mensaje-recibido', callback);
+  }
+
   // === AUTH ===
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -366,6 +379,35 @@ class SocketService {
     if (!this.socket) return { success: false, error: 'Sin conexión' };
     return new Promise((resolve) => {
       this.socket!.emit('eliminar-audio-custom' as any, { audioId }, (result: any) => resolve(result));
+    });
+  }
+
+  async actualizarPersonalizacion(temaMesa: string, reversoCartas: string): Promise<{ success: boolean; temaMesa?: string; reversoCartas?: string; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('actualizar-personalizacion' as any, { temaMesa, reversoCartas }, (result: any) => resolve(result));
+    });
+  }
+
+  async obtenerPersonalizacion(): Promise<{ success: boolean; tema_mesa?: string; reverso_cartas?: string; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-personalizacion' as any, (result: any) => resolve(result));
+    });
+  }
+
+  // === BOTS ===
+  async agregarBot(dificultad: 'facil' | 'medio' | 'dificil' = 'medio', equipo?: 1 | 2): Promise<{ success: boolean; botNombre?: string; dificultad?: string; equipo?: number; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('agregar-bot' as any, { dificultad, equipo }, (result: any) => resolve(result));
+    });
+  }
+
+  async quitarBot(botId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('quitar-bot' as any, { botId }, (result: any) => resolve(result));
     });
   }
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -563,7 +605,8 @@ class SocketService {
       'envido-declarado', 'envido-resuelto',
       'flor-cantada', 'flor-resuelta',
       'tirar-reyes-resultado',
-      'perros-echados', 'perros-cancelados', 'perros-respondidos'
+      'perros-echados', 'perros-cancelados', 'perros-respondidos',
+      'mensaje-recibido'
     ];
     events.forEach(e => this.socket?.off(e));
   }

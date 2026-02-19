@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import socketService from '@/lib/socket';
+import audioManager from '@/lib/audioManager';
 
 interface Partida {
   mesaId: string;
@@ -96,6 +97,7 @@ export default function LobbyPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteSent, setInviteSent] = useState<Set<number>>(new Set());
   const [invitacion, setInvitacion] = useState<{ de: string; mesaId: string; tamañoSala: string } | null>(null);
+  const [notificacionesPermitidas, setNotificacionesPermitidas] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Restaurar sesión guardada
@@ -133,10 +135,20 @@ export default function LobbyPage() {
           });
         });
 
-        // Listener de invitaciones
+        // Listener de invitaciones con notificaciones mejoradas
         socketService.onInvitacionRecibida((data) => {
           setInvitacion(data);
-          setTimeout(() => setInvitacion(null), 15000);
+          // Reproducir sonido de notificación
+          audioManager.play('notification');
+          // Notificación del navegador si está permitido
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Truco Uruguayo - Invitación', {
+              body: `${data.de} te invitó a una partida ${data.tamañoSala}`,
+              icon: '/icon-192.png',
+              tag: 'invitacion-' + data.mesaId,
+            });
+          }
+          setTimeout(() => setInvitacion(null), 20000);
         });
 
         await socketService.joinLobby();
@@ -174,6 +186,20 @@ export default function LobbyPage() {
       socketService.off('partida-nueva');
       socketService.off('invitacion-recibida');
     };
+  }, []);
+
+  // Verificar permisos de notificaciones
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificacionesPermitidas(Notification.permission === 'granted');
+    }
+  }, []);
+
+  const solicitarPermisosNotificacion = useCallback(async () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      setNotificacionesPermitidas(permission === 'granted');
+    }
   }, []);
 
   const handleCerrarSesion = () => {
@@ -419,6 +445,24 @@ export default function LobbyPage() {
           </div>
         </header>
 
+        {/* Banner de notificaciones */}
+        {notificacionesPermitidas === false && 'Notification' in (typeof window !== 'undefined' ? window : {}) && (
+          <div className="glass rounded-xl p-3 mb-4 animate-slide-up border border-celeste-500/30 bg-celeste-900/20">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🔔</span>
+                <p className="text-celeste-300 text-sm">Activá las notificaciones para recibir invitaciones de amigos</p>
+              </div>
+              <button
+                onClick={solicitarPermisosNotificacion}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-celeste-600 hover:bg-celeste-500 text-white transition-all flex-shrink-0"
+              >
+                Activar
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Banner de reconexión (solo invitados) */}
         {!usuario && partidaGuardada && nombre.trim() && (
           <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-amber-500/30 bg-amber-900/10">
@@ -470,6 +514,9 @@ export default function LobbyPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Link href="/tutorial" className="px-3 py-1.5 rounded-lg text-xs text-green-400/70 hover:text-green-300 hover:bg-green-500/10 transition-all">
+                  Tutorial
+                </Link>
                 <Link href="/perfil" className="px-3 py-1.5 rounded-lg text-xs text-celeste-400/70 hover:text-celeste-300 hover:bg-celeste-500/10 transition-all">
                   Mi Perfil
                 </Link>
@@ -953,28 +1000,47 @@ export default function LobbyPage() {
         </div>
       )}
 
-      {/* Toast de invitación recibida */}
+      {/* Toast de invitación recibida - mejorado */}
       {invitacion && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 glass rounded-xl px-5 py-4 border border-green-500/40 bg-green-900/20 shadow-xl shadow-green-600/10 animate-slide-down max-w-sm w-full">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-green-300 font-bold">{invitacion.de} te invita a jugar</p>
-              <p className="text-gold-400/60 text-sm">Partida {invitacion.tamañoSala}</p>
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-slide-down max-w-md w-full px-4">
+          <div className="glass rounded-2xl overflow-hidden border-2 border-green-500/50 shadow-2xl shadow-green-600/20">
+            {/* Barra de progreso */}
+            <div className="h-1 bg-green-900/30">
+              <div className="h-full bg-gradient-to-r from-green-400 to-green-500 animate-shrink-width" style={{ animationDuration: '20s' }} />
             </div>
-            <div className="flex gap-2 flex-shrink-0">
-              <button
-                onClick={() => setInvitacion(null)}
-                className="px-3 py-1.5 rounded-lg text-sm text-gold-500/60 hover:text-gold-400 hover:bg-white/5 transition-all"
-              >
-                Ignorar
-              </button>
-              <button
-                onClick={() => { handleUnirsePartida(invitacion.mesaId); setInvitacion(null); }}
-                disabled={loading || !nombre.trim()}
-                className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50"
-              >
-                Unirse
-              </button>
+            <div className="p-4">
+              <div className="flex items-start gap-4">
+                {/* Icono animado */}
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center animate-pulse">
+                  <span className="text-2xl">🎴</span>
+                </div>
+                {/* Contenido */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-green-300 font-bold text-lg truncate">{invitacion.de}</p>
+                  <p className="text-gold-300 text-sm">Te invita a una partida</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="px-2 py-0.5 rounded-full bg-green-600/30 text-green-300 text-xs font-medium">
+                      {invitacion.tamañoSala}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {/* Botones */}
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => setInvitacion(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-gold-400/70 hover:text-gold-300 bg-white/5 hover:bg-white/10 transition-all"
+                >
+                  Ignorar
+                </button>
+                <button
+                  onClick={() => { handleUnirsePartida(invitacion.mesaId); setInvitacion(null); }}
+                  disabled={loading || !nombre.trim()}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 transition-all shadow-lg shadow-green-600/30 disabled:opacity-50"
+                >
+                  ¡Unirse!
+                </button>
+              </div>
             </div>
           </div>
         </div>
