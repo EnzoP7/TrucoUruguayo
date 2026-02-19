@@ -165,7 +165,7 @@ const LECCIONES: Leccion[] = [
   {
     id: 'truco',
     titulo: 'El Truco',
-    descripcion: 'Aprende a cantar truco y subir la apuesta',
+    descripcion: 'Aprende a gritar truco y subir la apuesta',
     icono: '2',
     cartasJugador: [
       { valor: 1, palo: 'basto', poder: 13 },   // Mata
@@ -181,12 +181,12 @@ const LECCIONES: Leccion[] = [
     pasos: [
       {
         titulo: 'Que es el Truco?',
-        descripcion: 'El truco es un "grito" o apuesta. Normalmente, ganar una ronda vale 1 punto. Pero si cantas "Truco" y el rival acepta, la ronda vale 2 puntos!',
+        descripcion: 'El truco es un "grito" o apuesta. Normalmente, ganar una ronda vale 1 punto. Pero si gritas "Truco" y el rival acepta, la ronda vale 2 puntos!',
         accion: 'siguiente',
       },
       {
         titulo: 'Escalar la Apuesta',
-        descripcion: 'Si te cantan Truco, podes:\n- Quiero: aceptar (2 puntos en juego)\n- No Quiero: rendirte (rival gana 1 punto)\n- Retruco: subir a 3 puntos\n- Vale Cuatro: subir a 4 puntos\n\nIMPORTANTE: Los gritos se alternan! Si vos cantas Truco, no podes cantar Retruco. Te "guardas la palabra" y el rival es quien puede subir la apuesta.',
+        descripcion: 'Si te gritan Truco, podes:\n- Quiero: aceptar (2 puntos en juego)\n- No Quiero: rendirte (rival gana 1 punto)\n- Retruco: subir a 3 puntos\n- Vale Cuatro: subir a 4 puntos\n\nIMPORTANTE: Los gritos se alternan! Si vos gritas Truco, no podes gritar Retruco. Te "guardas la palabra" y el rival es quien puede subir la apuesta.',
         accion: 'siguiente',
       },
       {
@@ -197,15 +197,8 @@ const LECCIONES: Leccion[] = [
         explicacion: 'Bien! El 12 es carta comun pero te permite ver que juega el rival.',
       },
       {
-        titulo: 'El Rival Responde',
-        descripcion: 'El rival tiro el 6 de Basto. Tu 12 le gana! Ganaste la primera mano.',
-        accion: 'siguiente',
-        cartaRivalJuega: 2,
-        mostrarCartasRival: true,
-      },
-      {
-        titulo: 'El Rival Canta Truco',
-        descripcion: 'El rival canto "Truco"! Tienes el 1 de Basto que es MATA (no hay piezas en juego). Que haces?\n\nPista: Tienes buenas cartas, no te rindas!',
+        titulo: 'El Rival Grita Truco!',
+        descripcion: 'Antes de tirar su carta, el rival grito "Truco"! Tienes el 1 de Basto que es MATA (no hay piezas en juego). Que haces?\n\nPista: Tienes buenas cartas, no te rindas!',
         accion: 'cantar',
         opcionesCantar: ['Quiero', 'No Quiero', 'Retruco'],
         respuestaCorrecta: 'Retruco',
@@ -215,8 +208,15 @@ const LECCIONES: Leccion[] = [
         mostrarCartasRival: true,
       },
       {
+        titulo: 'El Rival Acepta y Responde',
+        descripcion: 'El rival acepto el Retruco (ahora vale 3 puntos) y tiro el 6 de Basto. Tu 12 le gana! Ganaste la primera mano.',
+        accion: 'siguiente',
+        cartaRivalJuega: 2,
+        mostrarCartasRival: true,
+      },
+      {
         titulo: 'Segunda Mano - Tu Turno',
-        descripcion: 'El rival acepto el Retruco. Ahora la ronda vale 3 puntos! Ganaste la primera mano, asi que arrancas vos. Tira el 3 (carta alta).',
+        descripcion: 'Ganaste la primera mano, asi que arrancas vos. Tira el 3 (carta alta).',
         accion: 'seleccionar-carta',
         respuestaCorrecta: 1,
         explicacion: 'Perfecto! El 3 es la carta COMUN mas alta.',
@@ -224,7 +224,7 @@ const LECCIONES: Leccion[] = [
       },
       {
         titulo: 'El Rival Responde',
-        descripcion: 'El rival tiro el 2 de Copa. Tu 3 le gana! Ganaste la segunda mano y con eso la ronda!',
+        descripcion: 'El rival tiro el 2 de Copa. Tu 3 le gana! Ganaste la segunda mano y la ronda!',
         accion: 'siguiente',
         cartaRivalJuega: 1,
         mostrarCartasRival: true,
@@ -234,120 +234,225 @@ const LECCIONES: Leccion[] = [
         descripcion: 'Ganaste 2 de 3 manos. Con el Retruco aceptado, sumas 3 puntos en vez de 1!\n\nTu MATA (1 de Basto) ni siquiera fue necesaria.',
         accion: 'siguiente',
         limpiarMesa: true,
+        cartasIlustrativas: [
+          { valor: 3, palo: 'espada', etiqueta: 'Tu 3' },
+          { valor: 2, palo: 'copa', etiqueta: 'Su 2' },
+        ],
       },
       {
         titulo: 'Leccion Completada',
         descripcion: 'Aprendiste el Truco:\n- Truco = 2 puntos (1 si no quieren)\n- Retruco = 3 puntos (2 si no quieren)\n- Vale 4 = 4 puntos (3 si no quieren)\n\nRecorda: podes farolear aunque no tengas buenas cartas!',
         accion: 'siguiente',
+        limpiarMesa: true,
       },
     ],
   },
   {
     id: 'envido',
     titulo: 'El Envido',
-    descripcion: 'Aprende a cantar envido y calcular puntos',
+    descripcion: 'Aprende a tocar envido y calcular puntos',
     icono: '3',
-    cartasJugador: [
-      { valor: 7, palo: 'oro', poder: 11 },
-      { valor: 6, palo: 'oro', poder: 0 },
-      { valor: 4, palo: 'espada', poder: 0 },
-    ],
-    cartasRival: [
-      { valor: 5, palo: 'basto', poder: 0 },
-      { valor: 3, palo: 'basto', poder: 9 },
-      { valor: 12, palo: 'copa', poder: 0 },
-    ],
-    muestra: { valor: 1, palo: 'copa', poder: 2 },
     pasos: [
       {
         titulo: 'Que es el Envido?',
-        descripcion: 'El envido es una apuesta sobre quien tiene mas "puntos de envido". Solo se puede cantar en la primera mano, antes de jugar la segunda carta.',
+        descripcion: 'El envido es una apuesta sobre quien tiene mas "puntos de envido". Se toca ANTES de tirar la primera carta de la ronda.\n\nEs independiente de quien gana las manos!',
         accion: 'siguiente',
       },
       {
-        titulo: 'Como Calcular Envido (Sin Piezas)',
-        descripcion: 'Si no tenes PIEZAS (cartas del palo de la muestra):\n\n1. Busca 2 cartas del mismo palo\n2. Suma sus valores + 20\n\nEjemplo: 7 de Oro + 6 de Oro = 7 + 6 + 20 = 33 puntos!',
+        titulo: 'Regla Basica: 2 Cartas + 20',
+        descripcion: 'Para calcular tu envido:\n\n1. Busca 2 cartas del MISMO PALO\n2. Suma sus valores + 20\n\nEjemplo: 7 + 6 del mismo palo = 7 + 6 + 20 = 33 puntos!',
         accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 7, palo: 'oro', etiqueta: '7' },
+          { valor: 6, palo: 'oro', etiqueta: '+ 6' },
+        ],
       },
       {
-        titulo: 'Tu Envido',
-        descripcion: 'Tienes 7 y 6 de Oro (mismo palo). Tu envido es: 7 + 6 + 20 = 33 puntos. Esto es muy alto! El maximo sin piezas es 33 (7+6+20).',
+        titulo: 'Ejemplo: Envido de 33',
+        descripcion: 'Con 7 y 6 de Oro tienes el MAXIMO envido sin piezas:\n\n7 + 6 + 20 = 33 puntos\n\nEste es un envido MUY fuerte!',
         accion: 'siguiente',
-        cartasResaltadas: [0, 1],
+        cartasIlustrativas: [
+          { valor: 7, palo: 'oro', etiqueta: '7' },
+          { valor: 6, palo: 'oro', etiqueta: '6' },
+          { valor: 4, palo: 'espada', etiqueta: 'No cuenta' },
+        ],
+      },
+      {
+        titulo: 'Ejemplo: Envido de 28',
+        descripcion: 'Con 5 y 3 de Basto:\n\n5 + 3 + 20 = 28 puntos\n\nEs un buen envido, pero no el mejor.',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 5, palo: 'basto', etiqueta: '5' },
+          { valor: 3, palo: 'basto', etiqueta: '3' },
+          { valor: 12, palo: 'copa', etiqueta: 'No cuenta' },
+        ],
+      },
+      {
+        titulo: 'Sin Cartas del Mismo Palo',
+        descripcion: 'Si NO tienes 2 cartas del mismo palo, tu envido es el valor de tu carta mas alta.\n\nEjemplo: Con 3 palos distintos, si tu carta mas alta es un 7, tu envido es solo 7.',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 7, palo: 'oro', etiqueta: '= 7 pts' },
+          { valor: 5, palo: 'basto', etiqueta: '' },
+          { valor: 3, palo: 'copa', etiqueta: '' },
+        ],
       },
       {
         titulo: 'Las PIEZAS y el Envido',
-        descripcion: 'Si tenes una PIEZA (carta del palo de la muestra), su valor de envido es especial:\n- 2 de la muestra = 30 puntos\n- 4 de la muestra = 29 puntos\n- 5 de la muestra = 28 puntos\n- 10/11 de la muestra = 27 puntos\n\nEl envido maximo es 37 (2 de muestra + 7 del mismo palo)!',
+        descripcion: 'Las PIEZAS (cartas del palo de la muestra) tienen valores ESPECIALES de envido:\n\n- 2 de la muestra = 30 puntos\n- 4 de la muestra = 29 puntos\n- 5 de la muestra = 28 puntos\n- 10 u 11 de la muestra = 27 puntos',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'copa', etiqueta: '30 pts' },
+          { valor: 4, palo: 'copa', etiqueta: '29 pts' },
+          { valor: 5, palo: 'copa', etiqueta: '28 pts' },
+          { valor: 11, palo: 'copa', etiqueta: '27 pts' },
+        ],
+      },
+      {
+        titulo: 'Envido Maximo: 37 Puntos!',
+        descripcion: 'El MAXIMO envido posible es 37:\n\n2 de la muestra (30) + cualquier 7 del mismo palo (7) = 37\n\nEsto es casi imposible de perder!',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'copa', etiqueta: '30' },
+          { valor: 7, palo: 'copa', etiqueta: '+ 7 = 37' },
+        ],
+      },
+      {
+        titulo: 'Otro Ejemplo con Pieza',
+        descripcion: 'Si la muestra es Copa y tienes:\n\n4 de Copa (pieza = 29) + 6 de Copa = 29 + 6 = 35 puntos!\n\nLas piezas son muy valiosas para el envido.',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 4, palo: 'copa', etiqueta: '29 (Pieza)' },
+          { valor: 6, palo: 'copa', etiqueta: '+ 6' },
+        ],
+      },
+      {
+        titulo: 'Tocar Envido - Opciones',
+        descripcion: 'Cuando tocas envido, el rival puede:\n\n- "Quiero": Se comparan puntos\n- "No Quiero": Ganas 1 punto automatico\n- Subir la apuesta: Envido → Real Envido → Falta Envido',
         accion: 'siguiente',
       },
       {
-        titulo: 'Cantar Envido',
-        descripcion: 'Con 33 puntos de envido, deberias cantarlo! Opciones:\n- Envido: 2 puntos (1 si no quieren)\n- Real Envido: 3 puntos (2 si no quieren)\n- Falta Envido: lo que falta para ganar',
-        accion: 'cantar',
-        opcionesCantar: ['Envido', 'Real Envido', 'Falta Envido', 'No Cantar'],
-        respuestaCorrecta: 'Real Envido',
-        explicacion: 'Con 33, ir a Real Envido es seguro! El Falta Envido es muy arriesgado para el rival asi que probablemente no lo acepte.',
+        titulo: 'Valores del Envido',
+        descripcion: 'Puntos en juego segun el canto:\n\n- Envido: 2 pts (1 si no quieren)\n- Real Envido: 3 pts (2 si no quieren)\n- Falta Envido: Lo que falta para ganar!\n\nSe pueden combinar: Envido + Real Envido = 5 pts',
+        accion: 'siguiente',
       },
       {
-        titulo: 'El Rival Acepta',
-        descripcion: 'El rival tenia 28 de envido (5+3+20 de Basto). Tu 33 le gana! Sumaste 3 puntos por el Real Envido.',
+        titulo: 'Cuando Tocar?',
+        descripcion: 'Guia rapida:\n\n- 30+ puntos: Siempre toca!\n- 27-29: Toca con confianza\n- 24-26: Toca pero cuidado\n- 20-23: Solo si te animas a farolear\n- Menos de 20: Mejor no tocar',
         accion: 'siguiente',
-        mostrarCartasRival: true,
       },
       {
         titulo: 'Leccion Completada',
-        descripcion: 'Aprendiste el Envido:\n- 2 cartas mismo palo + 20\n- Las PIEZAS tienen valores especiales (30, 29, 28, 27)\n- Maximo posible: 37\n- Con 27+ puntos, siempre canta!',
+        descripcion: 'Resumen del Envido:\n\n- 2 cartas mismo palo + 20\n- Piezas: 2=30, 4=29, 5=28, 10/11=27\n- Maximo: 37 (2 pieza + 7)\n- Con 27+ siempre toca!',
         accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 7, palo: 'oro', etiqueta: '7+6+20=33' },
+          { valor: 6, palo: 'oro', etiqueta: '' },
+          { valor: 2, palo: 'copa', etiqueta: 'Pieza=30' },
+        ],
       },
     ],
   },
   {
     id: 'flor',
     titulo: 'La Flor',
-    descripcion: 'Aprende sobre la flor y su valor',
+    descripcion: 'Aprende a cantar flor y cuando la tienes',
     icono: '4',
-    cartasJugador: [
-      { valor: 7, palo: 'espada', poder: 12 },
-      { valor: 4, palo: 'espada', poder: 0 },
-      { valor: 2, palo: 'espada', poder: 6 },
-    ],
-    cartasRival: [
-      { valor: 1, palo: 'oro', poder: 2 },
-      { valor: 3, palo: 'basto', poder: 9 },
-      { valor: 12, palo: 'copa', poder: 0 },
-    ],
-    muestra: { valor: 5, palo: 'oro', poder: 0 },
     pasos: [
       {
         titulo: 'Que es la Flor?',
-        descripcion: 'Tienes FLOR cuando:\n- Las 3 cartas son del mismo palo, O\n- Tienes al menos 2 PIEZAS, O\n- Tienes 1 PIEZA y las otras 2 del mismo palo\n\nLa FLOR es OBLIGATORIA cantarla! Vale 3 puntos minimo.',
+        descripcion: 'Tienes FLOR cuando las 3 cartas son del MISMO PALO.\n\nLa FLOR es OBLIGATORIA cantarla! Si no la cantas y te descubren, perdes puntos.',
         accion: 'siguiente',
       },
       {
-        titulo: 'Tu Flor',
-        descripcion: 'Tienes 7, 4 y 2 de Espada. Las 3 son del mismo palo = FLOR!\n\nValor de tu flor: 7 + 4 + 2 = 13 puntos base.',
+        titulo: 'Caso 1: Flor Simple',
+        descripcion: 'Las 3 cartas del mismo palo = FLOR!\n\nEjemplo: 7, 4 y 2 de Espada.\nValor: 7 + 4 + 2 + 20 = 33 puntos de flor.',
         accion: 'siguiente',
-        cartasResaltadas: [0, 1, 2],
+        cartasIlustrativas: [
+          { valor: 7, palo: 'espada', etiqueta: '7' },
+          { valor: 4, palo: 'espada', etiqueta: '4' },
+          { valor: 2, palo: 'espada', etiqueta: '2' },
+        ],
+      },
+      {
+        titulo: 'Caso 2: Flor con Piezas',
+        descripcion: 'Si tenes 2 o mas PIEZAS (cartas del palo de la muestra) = FLOR!\n\nEjemplo: Si la muestra es Copa, tener 2 y 4 de Copa es FLOR aunque la tercera sea de otro palo.',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'copa', etiqueta: 'Pieza' },
+          { valor: 4, palo: 'copa', etiqueta: 'Pieza' },
+          { valor: 7, palo: 'espada', etiqueta: 'Otro palo' },
+        ],
+      },
+      {
+        titulo: 'Caso 3: Pieza + 2 del Mismo Palo',
+        descripcion: 'Si tenes 1 PIEZA y las otras 2 cartas del mismo palo (cualquiera) = FLOR!\n\nEjemplo: 2 de Copa (pieza) + 7 y 5 de Oro.',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'copa', etiqueta: 'Pieza' },
+          { valor: 7, palo: 'oro', etiqueta: 'Mismo' },
+          { valor: 5, palo: 'oro', etiqueta: 'palo' },
+        ],
+      },
+      {
+        titulo: 'NO es Flor',
+        descripcion: 'Cuidado! Esto NO es flor:\n\n- 2 cartas del mismo palo + 1 de otro (sin piezas)\n- 1 pieza + 2 cartas de palos distintos',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 7, palo: 'oro', etiqueta: '' },
+          { valor: 5, palo: 'oro', etiqueta: '' },
+          { valor: 3, palo: 'basto', etiqueta: 'NO FLOR' },
+        ],
       },
       {
         titulo: 'Calcular Puntos de Flor',
-        descripcion: 'Para calcular la FLOR:\n- Si tenes PIEZAS: usa el valor completo de la pieza mas alta, y solo el ultimo digito de las otras piezas\n- Las "negras" (10, 11, 12) valen 0 si no son piezas\n\nMaximo posible: 47 (2+4+5 de la muestra = 30+9+8)',
+        descripcion: 'Para calcular el valor de tu flor:\n\n- Suma los valores de las 3 cartas + 20\n- Las "negras" (10, 11, 12) valen 0\n- Las PIEZAS valen su valor especial (30, 29, 28, 27)',
         accion: 'siguiente',
       },
       {
+        titulo: 'Ejemplo: Flor de 33',
+        descripcion: 'Con 7, 4 y 2 de Espada (sin piezas):\n\n7 + 4 + 2 + 20 = 33 puntos\n\nEsta es una flor muy buena!',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 7, palo: 'espada', etiqueta: '7' },
+          { valor: 4, palo: 'espada', etiqueta: '4' },
+          { valor: 2, palo: 'espada', etiqueta: '2' },
+        ],
+      },
+      {
+        titulo: 'Flor Maxima: 47 Puntos!',
+        descripcion: 'La FLOR maxima es 47:\n\n2 (pieza=30) + 4 (pieza=9) + 5 (pieza=8) del palo de la muestra.\n\n30 + 9 + 8 = 47 puntos!',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'copa', etiqueta: '30' },
+          { valor: 4, palo: 'copa', etiqueta: '9' },
+          { valor: 5, palo: 'copa', etiqueta: '8' },
+        ],
+      },
+      {
         titulo: 'Flor Anula el Envido',
-        descripcion: 'IMPORTANTE: Si hay FLOR en la mesa, NO se puede cantar envido. La flor tiene prioridad absoluta.',
+        descripcion: 'IMPORTANTE: Si hay FLOR en la mesa, NO se puede tocar envido.\n\nLa flor tiene prioridad absoluta sobre el envido.',
         accion: 'siguiente',
       },
       {
         titulo: 'Respuestas a la Flor',
-        descripcion: 'Si el rival tambien tiene flor, puede responder:\n- Flor: comparan valores (3 puntos al ganador)\n- Con Flor Envido: 3 + puntos del envido\n- Contra Flor al Resto: se juega todo!',
+        descripcion: 'Si cantas flor y el rival tambien tiene, puede responder:\n\n- "Con Flor": comparan valores (3 pts al ganador)\n- "Con Flor Quiero": acepta comparar\n- "Contra Flor al Resto": se juega todo lo que falta!',
+        accion: 'siguiente',
+      },
+      {
+        titulo: 'Puntos de la Flor',
+        descripcion: 'Puntos segun la situacion:\n\n- Flor sin respuesta: 3 pts\n- Con Flor (ambos tienen): 3 pts al ganador\n- Contra Flor: 6 pts\n- Contra Flor al Resto: lo que falta para ganar!',
         accion: 'siguiente',
       },
       {
         titulo: 'Leccion Completada',
-        descripcion: 'Aprendiste la Flor:\n- 3 cartas mismo palo O 2+ piezas\n- Es OBLIGATORIO cantarla\n- Anula el envido\n- Vale 3 puntos minimo\n- Maximo: 47 puntos',
+        descripcion: 'Resumen de la Flor:\n\n- 3 cartas mismo palo = FLOR\n- 2+ piezas = FLOR\n- 1 pieza + 2 mismo palo = FLOR\n- Es OBLIGATORIO cantarla\n- Anula el envido\n- Maximo: 47 puntos',
         accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 7, palo: 'espada', etiqueta: 'Flor' },
+          { valor: 4, palo: 'espada', etiqueta: 'mismo' },
+          { valor: 2, palo: 'espada', etiqueta: 'palo' },
+        ],
       },
     ],
   },
@@ -545,6 +650,12 @@ export default function TutorialPage() {
   const [cartaRivalAnimando, setCartaRivalAnimando] = useState<number | null>(null);
   const [cartasEnMesa, setCartasEnMesa] = useState<{jugador: Carta | null, rival: Carta | null}>({ jugador: null, rival: null });
   const [mensajeError, setMensajeError] = useState<string | null>(null);
+  // Historial para poder volver atras correctamente
+  const [historialPasos, setHistorialPasos] = useState<{
+    cartasUsadas: number[];
+    cartasRivalUsadas: number[];
+    cartasEnMesa: {jugador: Carta | null, rival: Carta | null};
+  }[]>([]);
 
   // Cargar progreso
   useEffect(() => {
@@ -589,21 +700,24 @@ export default function TutorialPage() {
   const handleSiguiente = () => {
     if (!leccion) return;
 
-    const pasoActualData = leccion.pasos[pasoActual];
     const siguientePaso = leccion.pasos[pasoActual + 1];
 
     // Limpiar mensaje de error
     setMensajeError(null);
 
-    // Determinar si debemos preservar las cartas en mesa:
-    // - Si el siguiente paso tiene preservarCartasEnMesa = true
-    // - Si el siguiente paso tiene cartaRivalJuega (rival va a tirar, preservar carta del jugador)
-    // - Si el siguiente paso es seleccionar-carta y el paso actual tiro carta del rival (jugador va a responder)
-    const preservarMesa = siguientePaso?.preservarCartasEnMesa ||
-                          siguientePaso?.cartaRivalJuega !== undefined ||
-                          (siguientePaso?.accion === 'seleccionar-carta' && pasoActualData?.cartaRivalJuega !== undefined);
+    // Guardar estado actual en historial antes de avanzar
+    setHistorialPasos(prev => {
+      const nuevoHistorial = [...prev];
+      nuevoHistorial[pasoActual] = {
+        cartasUsadas: [...cartasUsadas],
+        cartasRivalUsadas: [...cartasRivalUsadas],
+        cartasEnMesa: { ...cartasEnMesa },
+      };
+      return nuevoHistorial;
+    });
 
-    if (!preservarMesa) {
+    // Si el siguiente paso limpia la mesa, limpiarla
+    if (siguientePaso?.limpiarMesa) {
       setCartasEnMesa({ jugador: null, rival: null });
     }
 
@@ -618,18 +732,28 @@ export default function TutorialPage() {
       setCartasUsadas([]);
       setCartasRivalUsadas([]);
       setCartasEnMesa({ jugador: null, rival: null });
+      setHistorialPasos([]);
     }
   };
 
   const handleAtras = () => {
     if (pasoActual > 0) {
-      // Limpiar estado al retroceder
-      setCartasEnMesa({ jugador: null, rival: null });
+      const pasoAnterior = pasoActual - 1;
+      const estadoAnterior = historialPasos[pasoAnterior];
+
+      // Restaurar estado del paso anterior si existe
+      if (estadoAnterior) {
+        setCartasUsadas(estadoAnterior.cartasUsadas);
+        setCartasRivalUsadas(estadoAnterior.cartasRivalUsadas);
+        setCartasEnMesa(estadoAnterior.cartasEnMesa);
+      } else {
+        // Si no hay historial, limpiar
+        setCartasEnMesa({ jugador: null, rival: null });
+      }
+
       setMostrarExplicacion(false);
       setMensajeError(null);
-      setPasoActual(pasoActual - 1);
-      // Nota: No reseteamos cartasUsadas/cartasRivalUsadas para mantener consistencia
-      // en lecciones con cartas interactivas (el usuario debera reiniciar la leccion si quiere repetir)
+      setPasoActual(pasoAnterior);
     }
   };
 
@@ -685,6 +809,7 @@ export default function TutorialPage() {
     setCartaRivalAnimando(null);
     setCartasEnMesa({ jugador: null, rival: null });
     setMensajeError(null);
+    setHistorialPasos([]);
   };
 
   // Pantalla de seleccion de leccion
