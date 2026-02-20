@@ -592,19 +592,19 @@ function LobbyPageContent() {
           </div>
         ) : (
           <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-white/20 bg-white/5">
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-celeste-900/50 border border-celeste-500/30 flex items-center justify-center text-celeste-300/70 text-lg">
                   ?
                 </div>
-                <div>
+                <div className="text-center sm:text-left">
                   <div className="text-white/80 font-medium">Modo invitado</div>
                   <div className="text-white/50 text-xs">Sin estadísticas ni ranking</div>
                 </div>
               </div>
               <Link
                 href="/login"
-                className="px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-celeste-500 to-celeste-600 text-white hover:from-celeste-400 hover:to-celeste-500 transition-all shadow-lg shadow-celeste-600/30"
+                className="w-full sm:w-auto text-center px-4 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-celeste-500 to-celeste-600 text-white hover:from-celeste-400 hover:to-celeste-500 transition-all shadow-lg shadow-celeste-600/30"
               >
                 Iniciar sesión / Registrarse
               </Link>

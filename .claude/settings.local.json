@@ -26,7 +26,8 @@
       "Bash(node -e:*)",
       "Bash(npm ls:*)",
       "Bash(find:*)",
-      "Bash(if exist \".next\" rmdir /s /q \".next\")"
+      "Bash(if exist \".next\" rmdir /s /q \".next\")",
+      "Bash(grep:*)"
     ]
   }
 }

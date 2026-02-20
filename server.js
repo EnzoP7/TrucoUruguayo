@@ -570,64 +570,79 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
 
   // === CANTAR ENVIDO (solo en primera mano, antes de jugar primera carta) ===
   if (!mesa.envidoYaCantado && mesa.manoActual === 1 && mesa.cartasMesa.length === 0) {
-    const puntosEq1 = mesa.equipos[0].puntaje;
-    const puntosEq2 = mesa.equipos[1].puntaje;
-    const decisionEnvido = await bot.decidirCantarEnvido(mesa.envidoYaCantado, puntosEq1, puntosEq2);
+    try {
+      const puntosEq1 = mesa.equipos[0].puntaje;
+      const puntosEq2 = mesa.equipos[1].puntaje;
+      const decisionEnvido = await bot.decidirCantarEnvido(mesa.envidoYaCantado, puntosEq1, puntosEq2);
 
-    if (decisionEnvido.cantar) {
-      console.log(`[Bot] ${bot.nombre} canta ${decisionEnvido.tipo}!`);
+      if (decisionEnvido && decisionEnvido.cantar) {
+        console.log(`[Bot] ${bot.nombre} canta ${decisionEnvido.tipo}!`);
 
-      const success = cantarEnvido(mesa, bot.id, decisionEnvido.tipo);
-      if (success) {
-        // Notificar a todos
-        room.jugadores.forEach(p => {
-          if (!p.isBot) {
-            io.to(p.socketId).emit('envido-cantado', {
-              jugadorId: bot.id,
-              tipo: decisionEnvido.tipo,
-              estado: getEstadoParaJugador(mesa, p.socketId),
-            });
-          }
-        });
+        const success = cantarEnvido(mesa, bot.id, decisionEnvido.tipo);
+        if (success) {
+          // Notificar a todos
+          room.jugadores.forEach(p => {
+            if (!p.isBot) {
+              io.to(p.socketId).emit('envido-cantado', {
+                jugadorId: bot.id,
+                tipo: decisionEnvido.tipo,
+                estado: getEstadoParaJugador(mesa, p.socketId),
+              });
+            }
+          });
 
-        // Si hay bots en el otro equipo, hacer que respondan
-        setTimeout(() => botResponderEnvido(mesaId, io), 800);
-        return; // Esperar respuesta antes de jugar carta
+          // Si hay bots en el otro equipo, hacer que respondan
+          setTimeout(() => botResponderEnvido(mesaId, io), 800);
+          return; // Esperar respuesta antes de jugar carta
+        }
       }
+    } catch (err) {
+      console.error(`[Bot] Error en decidirCantarEnvido: ${err.message}`);
+      // Continuar sin cantar envido
     }
   }
 
   // === CANTAR TRUCO ===
   if (!mesa.gritoActivo && mesa.cartasMesa.length > 0) {
-    const puntosEq1 = mesa.equipos[0].puntaje;
-    const puntosEq2 = mesa.equipos[1].puntaje;
-    const decisionTruco = await bot.decidirCantarTruco(mesa.nivelGritoAceptado, puntosEq1, puntosEq2);
+    try {
+      const puntosEq1 = mesa.equipos[0].puntaje;
+      const puntosEq2 = mesa.equipos[1].puntaje;
+      const decisionTruco = await bot.decidirCantarTruco(mesa.nivelGritoAceptado, puntosEq1, puntosEq2);
 
-    if (decisionTruco.cantar) {
-      console.log(`[Bot] ${bot.nombre} canta ${decisionTruco.tipo}!`);
+      if (decisionTruco && decisionTruco.cantar) {
+        console.log(`[Bot] ${bot.nombre} canta ${decisionTruco.tipo}!`);
 
-      const success = cantarTruco(mesa, bot.id, decisionTruco.tipo);
-      if (success) {
-        // Notificar a todos
-        room.jugadores.forEach(p => {
-          if (!p.isBot) {
-            io.to(p.socketId).emit('truco-cantado', {
-              jugadorId: bot.id,
-              tipo: decisionTruco.tipo,
-              estado: getEstadoParaJugador(mesa, p.socketId),
-            });
-          }
-        });
+        const success = cantarTruco(mesa, bot.id, decisionTruco.tipo);
+        if (success) {
+          // Notificar a todos
+          room.jugadores.forEach(p => {
+            if (!p.isBot) {
+              io.to(p.socketId).emit('truco-cantado', {
+                jugadorId: bot.id,
+                tipo: decisionTruco.tipo,
+                estado: getEstadoParaJugador(mesa, p.socketId),
+              });
+            }
+          });
 
-        // Si hay bots en el otro equipo, hacer que respondan
-        setTimeout(() => botResponderTruco(mesaId, io), 800);
-        return; // Esperar respuesta
+          // Si hay bots en el otro equipo, hacer que respondan
+          setTimeout(() => botResponderTruco(mesaId, io), 800);
+          return; // Esperar respuesta
+        }
       }
+    } catch (err) {
+      console.error(`[Bot] Error en decidirCantarTruco: ${err.message}`);
+      // Continuar sin cantar truco
     }
   }
 
   // === JUGAR CARTA ===
-  let carta = await bot.decidirCarta(mesa.cartasMesa, mesa.manoActual, mesa.manoActual === 1);
+  let carta = null;
+  try {
+    carta = await bot.decidirCarta(mesa.cartasMesa, mesa.manoActual, mesa.manoActual === 1);
+  } catch (err) {
+    console.error(`[Bot] Error en decidirCarta: ${err.message}`);
+  }
 
   // Fallback: si el bot no puede decidir, elegir carta aleatoria de las disponibles
   if (!carta && jugadorActual.cartas && jugadorActual.cartas.length > 0) {
@@ -1149,14 +1164,26 @@ function procesarCorteBot(mesaId, io) {
   const room = lobbyRooms.get(mesaId);
   const bots = activeBots.get(mesaId) || [];
 
-  if (!mesa || !room || bots.length === 0) return;
-  if (!mesa.esperandoCorte) return;
+  if (!mesa || !room || bots.length === 0) {
+    console.log(`[Bot] procesarCorteBot: mesa/room/bots no disponibles`);
+    return;
+  }
+  if (!mesa.esperandoCorte) {
+    console.log(`[Bot] procesarCorteBot: no esperandoCorte`);
+    return;
+  }
 
   const cortador = mesa.jugadores[mesa.indiceJugadorCorta];
-  if (!cortador || !cortador.isBot) return;
+  if (!cortador || !cortador.isBot) {
+    console.log(`[Bot] procesarCorteBot: cortador no es bot o no existe`);
+    return;
+  }
 
   const bot = bots.find(b => b.id === cortador.id);
-  if (!bot) return;
+  if (!bot) {
+    console.log(`[Bot] procesarCorteBot: bot no encontrado en activeBots`);
+    return;
+  }
 
   console.log(`[Bot] ${bot.nombre} va a cortar el mazo...`);
 

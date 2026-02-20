@@ -356,14 +356,14 @@ class TrucoBot {
 
         let probabilidad = 0;
 
-        // Probabilidad base según puntos de envido
-        if (envido >= 31) probabilidad = 0.95;
-        else if (envido >= 29) probabilidad = 0.85;
-        else if (envido >= 27) probabilidad = 0.70;
-        else if (envido >= 25) probabilidad = 0.50;
-        else if (envido >= 23) probabilidad = 0.30;
-        else if (envido >= 20) probabilidad = 0.15 + mentiroso * 0.3; // Farol
-        else probabilidad = mentiroso * 0.2; // Solo si soy mentiroso
+        // Probabilidad base según puntos de envido (más agresivo)
+        if (envido >= 31) probabilidad = 0.98;
+        else if (envido >= 29) probabilidad = 0.92;
+        else if (envido >= 27) probabilidad = 0.85;
+        else if (envido >= 25) probabilidad = 0.75;
+        else if (envido >= 23) probabilidad = 0.60;
+        else if (envido >= 20) probabilidad = 0.40 + mentiroso * 0.3; // Farol
+        else probabilidad = 0.15 + mentiroso * 0.25; // Farol con envido malo
 
         // Ajustar por agresividad
         probabilidad *= (0.7 + agresividad * 0.6);
@@ -380,13 +380,36 @@ class TrucoBot {
         const cantar = Math.random() < Math.min(0.95, probabilidad);
 
         if (cantar) {
-          // Decidir qué tipo de envido
+          // ===== MAXIMIZAR PUNTOS: Escalar envido con buenos puntos =====
           let tipo = 'envido';
-          if (envido >= 31 && Math.random() < 0.4) tipo = 'real_envido';
-          if (envido >= 33 && Math.random() < 0.3) tipo = 'falta_envido';
-          // Farol con falta envido
-          if (envido < 25 && mentiroso > 0.3 && Math.random() < mentiroso * 0.3) {
-            tipo = 'falta_envido';
+
+          // Con envido excelente (33): ir directo a falta envido
+          if (envido === 33) {
+            if (Math.random() < 0.70) tipo = 'falta_envido';
+            else if (Math.random() < 0.85) tipo = 'real_envido';
+          }
+          // Con envido muy bueno (31-32): alta chance de escalar
+          else if (envido >= 31) {
+            if (Math.random() < 0.50) tipo = 'falta_envido';
+            else if (Math.random() < 0.70) tipo = 'real_envido';
+          }
+          // Con envido bueno (29-30): considerar real envido
+          else if (envido >= 29) {
+            if (Math.random() < 0.55) tipo = 'real_envido';
+            else if (Math.random() < 0.25) tipo = 'falta_envido';
+          }
+          // Con envido decente (27-28): a veces real envido
+          else if (envido >= 27) {
+            if (Math.random() < 0.35) tipo = 'real_envido';
+          }
+
+          // ===== FAROLEO: Mentir con envido malo =====
+          if (envido < 25 && mentiroso > 0.2) {
+            const chanceFarol = mentiroso * 0.6;
+            if (Math.random() < chanceFarol) {
+              // Farol agresivo: real envido o falta envido
+              tipo = Math.random() < 0.6 ? 'real_envido' : 'falta_envido';
+            }
           }
 
           resolve({ cantar: true, tipo });
@@ -430,17 +453,38 @@ class TrucoBot {
 
         const acepta = Math.random() < probabilidad;
 
-        // Considerar subir (incluso de farol)
+        // ===== MAXIMIZAR PUNTOS: Escalar cuando tengo buen envido =====
         let escalar = null;
-        if (acepta && envido >= 29 && tipoEnvido === 'envido' && Math.random() < 0.4) {
-          escalar = 'real_envido';
-        }
-        if (acepta && envido >= 31 && Math.random() < 0.3) {
-          escalar = 'falta_envido';
-        }
-        // Farol: subir con envido malo para asustar
-        if (acepta && envido < 25 && mentiroso > 0.25 && Math.random() < mentiroso * 0.4) {
-          escalar = tipoEnvido === 'envido' ? 'real_envido' : 'falta_envido';
+
+        if (acepta) {
+          // Envido excelente (33): ir a falta envido
+          if (envido === 33) {
+            if (tipoEnvido === 'envido' && Math.random() < 0.80) escalar = 'real_envido';
+            if (tipoEnvido === 'real_envido' && Math.random() < 0.70) escalar = 'falta_envido';
+            if (tipoEnvido === 'envido' && Math.random() < 0.50) escalar = 'falta_envido'; // Saltar directo
+          }
+          // Envido muy bueno (31-32)
+          else if (envido >= 31) {
+            if (tipoEnvido === 'envido' && Math.random() < 0.65) escalar = 'real_envido';
+            if (tipoEnvido === 'real_envido' && Math.random() < 0.50) escalar = 'falta_envido';
+          }
+          // Envido bueno (29-30)
+          else if (envido >= 29) {
+            if (tipoEnvido === 'envido' && Math.random() < 0.50) escalar = 'real_envido';
+            if (tipoEnvido === 'real_envido' && Math.random() < 0.30) escalar = 'falta_envido';
+          }
+          // Envido decente (27-28)
+          else if (envido >= 27) {
+            if (tipoEnvido === 'envido' && Math.random() < 0.35) escalar = 'real_envido';
+          }
+
+          // ===== FAROLEO: Escalar con envido malo para asustar =====
+          if (envido < 25 && mentiroso > 0.15) {
+            const chanceFarol = mentiroso * 0.7;
+            if (Math.random() < chanceFarol) {
+              escalar = tipoEnvido === 'envido' ? 'real_envido' : 'falta_envido';
+            }
+          }
         }
 
         resolve({ acepta, escalar });
@@ -461,26 +505,47 @@ class TrucoBot {
 
         let probabilidad = 0;
 
-        // Probabilidad base según fuerza
-        if (fuerza >= 70) probabilidad = 0.90;
-        else if (fuerza >= 55) probabilidad = 0.70;
-        else if (fuerza >= 40) probabilidad = 0.45;
-        else if (fuerza >= 30) probabilidad = 0.25;
-        else probabilidad = mentiroso * 0.35; // Solo farol
+        // ===== ESTRATEGIA: Cantar según fuerza de mano =====
+        // Con mano fuerte: cantar para maximizar puntos
+        if (fuerza >= 70) probabilidad = 0.95;      // Mano excelente, casi siempre cantar
+        else if (fuerza >= 55) probabilidad = 0.80; // Mano muy buena
+        else if (fuerza >= 40) probabilidad = 0.55; // Mano buena
+        else if (fuerza >= 30) probabilidad = 0.30; // Mano regular
+        else probabilidad = mentiroso * 0.50;       // Mano mala: farol según personalidad
 
         // Ajustar por agresividad
         probabilidad *= (0.6 + agresividad * 0.8);
 
-        // Si voy ganando las manos, más probable
+        // Si voy ganando las manos, más probable (tengo ventaja)
         if (this.manosGanadas[0] > this.manosGanadas[1]) {
-          probabilidad *= 1.3;
+          probabilidad *= 1.4;
         }
 
-        // Reducir si ya hay truco/retruco
-        if (nivelActual === 'truco') probabilidad *= 0.6;
-        if (nivelActual === 'retruco') probabilidad *= 0.4;
+        // ===== ESCALAR: Con buena mano, buscar retruco/vale4 =====
+        if (nivelActual === 'truco') {
+          // Para cantar retruco: solo si tengo buena mano
+          if (fuerza >= 60) {
+            probabilidad *= 0.95; // Casi no reduce, mano fuerte
+          } else if (fuerza >= 45) {
+            probabilidad *= 0.75; // Reduce un poco
+          } else {
+            // Mano mala pero soy mentiroso? Farol de retruco
+            probabilidad = mentiroso * 0.6;
+          }
+        }
+        if (nivelActual === 'retruco') {
+          // Para cantar vale4: necesito mano muy fuerte o ser muy mentiroso
+          if (fuerza >= 65) {
+            probabilidad *= 0.90; // Casi no reduce
+          } else if (fuerza >= 50) {
+            probabilidad *= 0.65;
+          } else {
+            // Farol de vale4 con mano mala
+            probabilidad = mentiroso * 0.45;
+          }
+        }
 
-        const cantar = Math.random() < Math.min(0.90, probabilidad);
+        const cantar = Math.random() < Math.min(0.95, probabilidad);
 
         if (cantar) {
           let tipo = 'truco';
@@ -526,21 +591,46 @@ class TrucoBot {
 
         const acepta = Math.random() < probabilidad;
 
-        // Considerar subir (re-truco, vale 4)
+        // ===== MAXIMIZAR PUNTOS: Escalar cuando tengo buena mano =====
         let escalar = null;
-        if (acepta && fuerza >= 55) {
-          if (tipoTruco === 'truco' && Math.random() < 0.35) {
+
+        // Con mano MUY fuerte (fuerza >= 65): SIEMPRE intentar sacar el máximo
+        if (acepta && fuerza >= 65) {
+          if (tipoTruco === 'truco') {
+            // 85% chance de retruco con mano muy fuerte
+            escalar = Math.random() < 0.85 ? 'retruco' : null;
+          } else if (tipoTruco === 'retruco') {
+            // 75% chance de vale4 con mano muy fuerte
+            escalar = Math.random() < 0.75 ? 'vale4' : null;
+          }
+        }
+        // Con mano fuerte (fuerza >= 50): Alta probabilidad de escalar
+        else if (acepta && fuerza >= 50) {
+          if (tipoTruco === 'truco' && Math.random() < 0.70) {
             escalar = 'retruco';
-          } else if (tipoTruco === 'retruco' && Math.random() < 0.25) {
+          } else if (tipoTruco === 'retruco' && Math.random() < 0.60) {
             escalar = 'vale4';
           }
         }
-        // Farol: subir con mano mala para asustar al rival
-        if (acepta && fuerza < 40 && mentiroso > 0.2 && Math.random() < mentiroso * 0.5) {
-          if (tipoTruco === 'truco') {
+        // Con mano decente (fuerza >= 35): A veces escalar
+        else if (acepta && fuerza >= 35) {
+          if (tipoTruco === 'truco' && Math.random() < 0.40) {
             escalar = 'retruco';
-          } else if (tipoTruco === 'retruco') {
+          } else if (tipoTruco === 'retruco' && Math.random() < 0.30) {
             escalar = 'vale4';
+          }
+        }
+
+        // ===== FAROLEO: Mentir con mano mala para asustar =====
+        // Si tengo mano mala pero soy mentiroso, puedo escalar de farol
+        if (acepta && fuerza < 35 && mentiroso > 0.1) {
+          const chanceDefarol = mentiroso * 0.8; // Más mentiroso = más faroles
+          if (Math.random() < chanceDefarol) {
+            if (tipoTruco === 'truco') {
+              escalar = 'retruco';
+            } else if (tipoTruco === 'retruco') {
+              escalar = 'vale4';
+            }
           }
         }
 
