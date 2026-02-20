@@ -131,6 +131,8 @@ const lobbyRooms = new Map(); // mesaId -> LobbyRoom
 const engines = new Map();    // mesaId -> game state object
 const activeBots = new Map(); // mesaId -> TrucoBot[] (bots activos en la partida)
 const botTurnTimeouts = new Map(); // mesaId -> timeoutId (timeout de seguridad para turnos de bot)
+const botResponseTimeouts = new Map(); // mesaId -> timeoutId (timeout de seguridad para respuestas de bot)
+const lastBotAction = new Map(); // mesaId -> timestamp de última acción de bot
 
 function getMaxJugadores(tamaño) {
   switch (tamaño) {
@@ -552,6 +554,9 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
 
   botTurnTimeouts.set(mesaId, timeoutId);
 
+  // Marcar última acción del bot
+  lastBotAction.set(mesaId, Date.now());
+
   // Sincronizar cartas del bot
   bot.setCartas(jugadorActual.cartas.filter(c => c.valor !== 0));
 
@@ -733,11 +738,17 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
   }
 }
 
-// Función para hacer que el bot responda a truco
+// Función para hacer que el bot responda a truco con timeout de seguridad
 async function botResponderTruco(mesaId, io) {
   const mesa = engines.get(mesaId);
   const room = lobbyRooms.get(mesaId);
   const bots = activeBots.get(mesaId) || [];
+
+  // Limpiar timeout anterior si existe
+  if (botResponseTimeouts.has(mesaId)) {
+    clearTimeout(botResponseTimeouts.get(mesaId));
+    botResponseTimeouts.delete(mesaId);
+  }
 
   if (!mesa || !room || bots.length === 0 || !mesa.gritoActivo) return;
 
@@ -745,188 +756,163 @@ async function botResponderTruco(mesaId, io) {
   const equipoResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
   const botsQueResponden = bots.filter(b => b.equipo === equipoResponde);
 
-  if (botsQueResponden.length === 0) return;
+  // Verificar que el bot no haya respondido ya
+  const botsQueFaltanResponder = botsQueResponden.filter(b =>
+    mesa.respuestasTruco?.[b.id] === undefined
+  );
 
-  const bot = botsQueResponden[0];
-  // Sincronizar cartas del bot
-  const jugadorBot = mesa.jugadores.find(j => j.id === bot.id);
-  if (jugadorBot) {
-    bot.setCartas(jugadorBot.cartas.filter(c => c.valor !== 0));
-  }
+  if (botsQueFaltanResponder.length === 0) return;
 
-  const decision = await bot.decidirResponderTruco(mesa.gritoActivo.tipo);
+  const bot = botsQueFaltanResponder[0];
 
-  console.log(`[Bot] ${bot.nombre} responde al truco: ${decision.acepta ? 'QUIERO' : 'NO QUIERO'}${decision.escalar ? ` y sube a ${decision.escalar}` : ''}`);
+  // Timeout de seguridad: si el bot no responde en 6 segundos, forzar respuesta
+  const timeoutId = setTimeout(() => {
+    const currentMesa = engines.get(mesaId);
+    const currentRoom = lobbyRooms.get(mesaId);
+    if (!currentMesa || !currentRoom || !currentMesa.gritoActivo) return;
 
-  // Usar la función responderTruco del servidor
-  const result = responderTruco(mesa, bot.id, decision.acepta, decision.escalar || null);
+    console.log(`[Bot TIMEOUT] ${bot.nombre} no respondió al truco en 6s, forzando NO QUIERO`);
 
-  if (!result.success) {
-    console.log(`[Bot] Error respondiendo truco: ${result.error}`);
-    return;
-  }
-
-  // Notificar respuesta
-  room.jugadores.forEach(p => {
-    if (!p.isBot) {
-      io.to(p.socketId).emit('truco-respondido', {
-        jugadorId: bot.id,
-        jugadorNombre: bot.nombre,
-        acepta: result.acepta,
-        estado: getEstadoParaJugador(mesa, p.socketId),
-      });
-    }
-  });
-
-  // Si escaló, emitir el nuevo grito
-  if (result.escalar && mesa.gritoActivo) {
-    room.jugadores.forEach(p => {
-      if (!p.isBot) {
-        io.to(p.socketId).emit('truco-cantado', {
-          jugadorId: bot.id,
-          tipo: result.escalar,
-          estado: getEstadoParaJugador(mesa, p.socketId),
-        });
-      }
-    });
-    // Si escaló, el otro equipo debe responder
-    setTimeout(() => botResponderTruco(mesaId, io), 800);
-    return;
-  }
-
-  // Manejar resultado
-  if (!result.acepta && mesa.fase === 'finalizada') {
-    // No quiso y la ronda terminó
-    room.jugadores.forEach(p => {
-      if (!p.isBot) {
-        io.to(p.socketId).emit('ronda-finalizada', {
-          ganadorEquipo: mesa.winnerRonda,
-          puntosGanados: mesa.puntosEnJuego,
-          estado: getEstadoParaJugador(mesa, p.socketId),
-        });
-      }
-    });
-
-    if (mesa.winnerJuego !== null) {
-      room.estado = 'terminado';
-      guardarResultadoPartida(room, mesa);
-      room.jugadores.forEach(p => {
+    // Forzar respuesta "no quiero"
+    const result = responderTruco(currentMesa, bot.id, false, null);
+    if (result.success && !result.parcial) {
+      currentRoom.jugadores.forEach(p => {
         if (!p.isBot) {
-          io.to(p.socketId).emit('juego-finalizado', {
-            ganadorEquipo: mesa.winnerJuego,
-            estado: getEstadoParaJugador(mesa, p.socketId),
+          io.to(p.socketId).emit('truco-respondido', {
+            jugadorId: bot.id,
+            jugadorNombre: bot.nombre,
+            acepta: false,
+            estado: getEstadoParaJugador(currentMesa, p.socketId),
           });
         }
       });
-      broadcastLobby(io);
-    } else {
-      scheduleNextRound(io, room);
-    }
-  } else if (result.acepta) {
-    // Aceptó, continuar el juego
-    setTimeout(() => procesarTurnoBot(mesaId, io), 500);
-  }
-}
 
-// Función para hacer que el bot responda a envido
-async function botResponderEnvido(mesaId, io) {
-  const mesa = engines.get(mesaId);
-  const room = lobbyRooms.get(mesaId);
-  const bots = activeBots.get(mesaId) || [];
-
-  if (!mesa || !room || bots.length === 0 || !mesa.envidoActivo) return;
-
-  // Encontrar bots del equipo que debe responder
-  const equipoResponde = mesa.envidoActivo.equipoQueCanta === 1 ? 2 : 1;
-  const botsQueResponden = bots.filter(b => b.equipo === equipoResponde);
-
-  if (botsQueResponden.length === 0) return;
-
-  const bot = botsQueResponden[0];
-  // Sincronizar cartas del bot
-  const jugadorBot = mesa.jugadores.find(j => j.id === bot.id);
-  if (jugadorBot) {
-    bot.setCartas(jugadorBot.cartas.filter(c => c.valor !== 0));
-  }
-
-  const tipoEnvido = mesa.envidoActivo.tipos[mesa.envidoActivo.tipos.length - 1];
-  const decision = await bot.decidirResponderEnvido(tipoEnvido);
-
-  console.log(`[Bot] ${bot.nombre} responde al envido: ${decision.acepta ? 'QUIERO' : 'NO QUIERO'}`);
-
-  // Usar la función responderEnvido del servidor
-  const result = responderEnvido(mesa, bot.id, decision.acepta);
-
-  if (!result.success) {
-    console.log(`[Bot] Error respondiendo envido: ${result.error}`);
-    // Continuar el juego de todas formas
-    setTimeout(() => procesarTurnoBot(mesaId, io), 500);
-    return;
-  }
-
-  // Notificar respuesta
-  room.jugadores.forEach(p => {
-    if (!p.isBot) {
-      io.to(p.socketId).emit('envido-respondido', {
-        jugadorId: bot.id,
-        jugadorNombre: bot.nombre,
-        acepta: result.acepta,
-        estado: getEstadoParaJugador(mesa, p.socketId),
-      });
-    }
-  });
-
-  // Si aceptó y hay resultado automático
-  if (result.acepta && result.automatico && result.resultado) {
-    const declaraciones = result.resultado.declaraciones;
-
-    // Emitir declaraciones con delay
-    declaraciones.forEach((decl, index) => {
-      setTimeout(() => {
-        room.jugadores.forEach(p => {
+      if (currentMesa.fase === 'finalizada') {
+        currentRoom.jugadores.forEach(p => {
           if (!p.isBot) {
-            io.to(p.socketId).emit('envido-declarado', {
-              jugadorId: decl.jugadorId,
-              declaracion: decl,
-              estado: getEstadoParaJugador(mesa, p.socketId),
+            io.to(p.socketId).emit('ronda-finalizada', {
+              ganadorEquipo: currentMesa.winnerRonda,
+              puntosGanados: currentMesa.puntosEnJuego,
+              estado: getEstadoParaJugador(currentMesa, p.socketId),
             });
           }
         });
-      }, (index + 1) * 1000); // 1s entre declaraciones (más rápido)
-    });
-
-    // Después de las declaraciones, resolver
-    setTimeout(() => {
-      const currentMesa = engines.get(mesaId);
-      const currentRoom = lobbyRooms.get(mesaId);
-      if (!currentMesa || !currentRoom) return;
-
-      // Sumar puntos
-      const ganador = result.resultado.ganador;
-      const puntosGanados = result.resultado.puntosGanados;
-      const equipo = currentMesa.equipos.find(e => e.id === ganador);
-      if (equipo) {
-        equipo.puntaje += puntosGanados;
-        if (equipo.puntaje >= currentMesa.puntosLimite) {
-          currentMesa.winnerJuego = ganador;
-          currentMesa.estado = 'terminado';
-          currentMesa.fase = 'finalizada';
+        if (currentMesa.winnerJuego !== null) {
+          currentRoom.estado = 'terminado';
+          guardarResultadoPartida(currentRoom, currentMesa);
+          setTimeout(() => {
+            currentRoom.jugadores.forEach(p => {
+              if (!p.isBot) {
+                io.to(p.socketId).emit('juego-finalizado', {
+                  ganadorEquipo: currentMesa.winnerJuego,
+                  estado: getEstadoParaJugador(currentMesa, p.socketId),
+                });
+              }
+            });
+            broadcastLobby(io);
+          }, 1000);
+        } else {
+          scheduleNextRound(io, currentRoom);
         }
       }
+    }
+  }, 6000);
 
-      currentRoom.jugadores.forEach(p => {
+  botResponseTimeouts.set(mesaId, timeoutId);
+
+  // Marcar última acción del bot
+  lastBotAction.set(mesaId, Date.now());
+
+  try {
+    // Sincronizar cartas del bot
+    const jugadorBot = mesa.jugadores.find(j => j.id === bot.id);
+    if (jugadorBot) {
+      bot.setCartas(jugadorBot.cartas.filter(c => c.valor !== 0));
+    }
+
+    const decision = await bot.decidirResponderTruco(mesa.gritoActivo.tipo);
+
+    // Limpiar timeout ya que el bot respondió
+    if (botResponseTimeouts.has(mesaId)) {
+      clearTimeout(botResponseTimeouts.get(mesaId));
+      botResponseTimeouts.delete(mesaId);
+    }
+
+    // Re-verificar que el grito sigue activo
+    const currentMesa = engines.get(mesaId);
+    if (!currentMesa || !currentMesa.gritoActivo) return;
+
+    console.log(`[Bot] ${bot.nombre} responde al truco: ${decision.acepta ? 'QUIERO' : 'NO QUIERO'}${decision.escalar ? ` y sube a ${decision.escalar}` : ''}`);
+
+    // Usar la función responderTruco del servidor
+    const result = responderTruco(currentMesa, bot.id, decision.acepta, decision.escalar || null);
+
+    if (!result.success) {
+      console.log(`[Bot] Error respondiendo truco: ${result.error}`);
+      return;
+    }
+
+    // Si es respuesta parcial (esperando más compañeros humanos)
+    if (result.parcial) {
+      room.jugadores.forEach(p => {
         if (!p.isBot) {
-          io.to(p.socketId).emit('envido-resuelto', {
-            resultado: result.resultado,
+          io.to(p.socketId).emit('truco-respuesta-parcial', {
+            jugadorId: bot.id,
+            acepta: decision.acepta,
+            faltanResponder: result.faltanResponder,
+            estado: getEstadoParaJugador(currentMesa, p.socketId),
+          });
+        }
+      });
+      // Hay compañeros humanos que deben responder, esperar
+      return;
+    }
+
+    // Notificar respuesta final
+    room.jugadores.forEach(p => {
+      if (!p.isBot) {
+        io.to(p.socketId).emit('truco-respondido', {
+          jugadorId: bot.id,
+          jugadorNombre: bot.nombre,
+          acepta: result.acepta,
+          estado: getEstadoParaJugador(currentMesa, p.socketId),
+        });
+      }
+    });
+
+    // Si escaló, emitir el nuevo grito
+    if (result.escalar && currentMesa.gritoActivo) {
+      room.jugadores.forEach(p => {
+        if (!p.isBot) {
+          io.to(p.socketId).emit('truco-cantado', {
+            jugadorId: bot.id,
+            tipo: result.escalar,
+            estado: getEstadoParaJugador(currentMesa, p.socketId),
+          });
+        }
+      });
+      // Si escaló, el otro equipo debe responder
+      setTimeout(() => botResponderTruco(mesaId, io), 800);
+      return;
+    }
+
+    // Manejar resultado
+    if (!result.acepta && currentMesa.fase === 'finalizada') {
+      // No quiso y la ronda terminó
+      room.jugadores.forEach(p => {
+        if (!p.isBot) {
+          io.to(p.socketId).emit('ronda-finalizada', {
+            ganadorEquipo: currentMesa.winnerRonda,
+            puntosGanados: currentMesa.puntosEnJuego,
             estado: getEstadoParaJugador(currentMesa, p.socketId),
           });
         }
       });
 
       if (currentMesa.winnerJuego !== null) {
-        currentRoom.estado = 'terminado';
-        guardarResultadoPartida(currentRoom, currentMesa);
-        currentRoom.jugadores.forEach(p => {
+        room.estado = 'terminado';
+        guardarResultadoPartida(room, currentMesa);
+        room.jugadores.forEach(p => {
           if (!p.isBot) {
             io.to(p.socketId).emit('juego-finalizado', {
               ganadorEquipo: currentMesa.winnerJuego,
@@ -936,12 +922,217 @@ async function botResponderEnvido(mesaId, io) {
         });
         broadcastLobby(io);
       } else {
-        // Continuar el juego
-        setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+        scheduleNextRound(io, room);
       }
-    }, (declaraciones.length + 1) * 1000);
-  } else {
-    // No quiso o no hay resultado automático - continuar el juego
+    } else if (result.acepta) {
+      // Aceptó, continuar el juego
+      setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+    }
+  } catch (err) {
+    console.error(`[Bot] Error en botResponderTruco: ${err}`);
+    // Limpiar timeout
+    if (botResponseTimeouts.has(mesaId)) {
+      clearTimeout(botResponseTimeouts.get(mesaId));
+      botResponseTimeouts.delete(mesaId);
+    }
+  }
+}
+
+// Función para hacer que el bot responda a envido con timeout de seguridad
+async function botResponderEnvido(mesaId, io) {
+  const mesa = engines.get(mesaId);
+  const room = lobbyRooms.get(mesaId);
+  const bots = activeBots.get(mesaId) || [];
+
+  // Limpiar timeout de respuesta anterior (usar key diferente para envido)
+  const envidoTimeoutKey = `${mesaId}-envido`;
+  if (botResponseTimeouts.has(envidoTimeoutKey)) {
+    clearTimeout(botResponseTimeouts.get(envidoTimeoutKey));
+    botResponseTimeouts.delete(envidoTimeoutKey);
+  }
+
+  if (!mesa || !room || bots.length === 0 || !mesa.envidoActivo) return;
+
+  // Encontrar bots del equipo que debe responder
+  const equipoResponde = mesa.envidoActivo.equipoQueCanta === 1 ? 2 : 1;
+  const botsQueResponden = bots.filter(b => b.equipo === equipoResponde);
+
+  // Verificar que el bot no haya respondido ya
+  const botsQueFaltanResponder = botsQueResponden.filter(b =>
+    mesa.respuestasEnvido?.[b.id] === undefined
+  );
+
+  if (botsQueFaltanResponder.length === 0) return;
+
+  const bot = botsQueFaltanResponder[0];
+
+  // Timeout de seguridad: si el bot no responde en 6 segundos, forzar respuesta
+  const timeoutId = setTimeout(() => {
+    const currentMesa = engines.get(mesaId);
+    const currentRoom = lobbyRooms.get(mesaId);
+    if (!currentMesa || !currentRoom || !currentMesa.envidoActivo) return;
+
+    console.log(`[Bot TIMEOUT] ${bot.nombre} no respondió al envido en 6s, forzando NO QUIERO`);
+
+    // Forzar respuesta "no quiero"
+    const result = responderEnvido(currentMesa, bot.id, false);
+    if (result.success && !result.parcial) {
+      currentRoom.jugadores.forEach(p => {
+        if (!p.isBot) {
+          io.to(p.socketId).emit('envido-respondido', {
+            jugadorId: bot.id,
+            jugadorNombre: bot.nombre,
+            acepta: false,
+            estado: getEstadoParaJugador(currentMesa, p.socketId),
+          });
+        }
+      });
+      // Continuar el juego
+      setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+    }
+  }, 6000);
+
+  botResponseTimeouts.set(envidoTimeoutKey, timeoutId);
+
+  // Marcar última acción del bot
+  lastBotAction.set(mesaId, Date.now());
+
+  try {
+    // Sincronizar cartas del bot
+    const jugadorBot = mesa.jugadores.find(j => j.id === bot.id);
+    if (jugadorBot) {
+      bot.setCartas(jugadorBot.cartas.filter(c => c.valor !== 0));
+    }
+
+    const tipoEnvido = mesa.envidoActivo.tipos[mesa.envidoActivo.tipos.length - 1];
+    const decision = await bot.decidirResponderEnvido(tipoEnvido);
+
+    // Limpiar timeout ya que el bot respondió
+    if (botResponseTimeouts.has(envidoTimeoutKey)) {
+      clearTimeout(botResponseTimeouts.get(envidoTimeoutKey));
+      botResponseTimeouts.delete(envidoTimeoutKey);
+    }
+
+    // Re-verificar que el envido sigue activo
+    const currentMesa = engines.get(mesaId);
+    if (!currentMesa || !currentMesa.envidoActivo) return;
+
+    console.log(`[Bot] ${bot.nombre} responde al envido: ${decision.acepta ? 'QUIERO' : 'NO QUIERO'}`);
+
+    // Usar la función responderEnvido del servidor
+    const result = responderEnvido(currentMesa, bot.id, decision.acepta);
+
+    if (!result.success) {
+      console.log(`[Bot] Error respondiendo envido: ${result.error}`);
+      // Continuar el juego de todas formas
+      setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+      return;
+    }
+
+    // Si es respuesta parcial (esperando más compañeros humanos)
+    if (result.parcial) {
+      room.jugadores.forEach(p => {
+        if (!p.isBot) {
+          io.to(p.socketId).emit('envido-respuesta-parcial', {
+            jugadorId: bot.id,
+            acepta: decision.acepta,
+            faltanResponder: result.faltanResponder,
+            estado: getEstadoParaJugador(currentMesa, p.socketId),
+          });
+        }
+      });
+      // Hay compañeros humanos que deben responder, esperar
+      return;
+    }
+
+    // Notificar respuesta final
+    room.jugadores.forEach(p => {
+      if (!p.isBot) {
+        io.to(p.socketId).emit('envido-respondido', {
+          jugadorId: bot.id,
+          jugadorNombre: bot.nombre,
+          acepta: result.acepta,
+          estado: getEstadoParaJugador(currentMesa, p.socketId),
+        });
+      }
+    });
+
+    // Si aceptó y hay resultado automático
+    if (result.acepta && result.automatico && result.resultado) {
+      const declaraciones = result.resultado.declaraciones;
+
+      // Emitir declaraciones con delay
+      declaraciones.forEach((decl, index) => {
+        setTimeout(() => {
+          room.jugadores.forEach(p => {
+            if (!p.isBot) {
+              io.to(p.socketId).emit('envido-declarado', {
+                jugadorId: decl.jugadorId,
+                declaracion: decl,
+                estado: getEstadoParaJugador(currentMesa, p.socketId),
+              });
+            }
+          });
+        }, (index + 1) * 1000); // 1s entre declaraciones (más rápido)
+      });
+
+      // Después de las declaraciones, resolver
+      setTimeout(() => {
+        const finalMesa = engines.get(mesaId);
+        const finalRoom = lobbyRooms.get(mesaId);
+        if (!finalMesa || !finalRoom) return;
+
+        // Sumar puntos
+        const ganador = result.resultado.ganador;
+        const puntosGanados = result.resultado.puntosGanados;
+        const equipo = finalMesa.equipos.find(e => e.id === ganador);
+        if (equipo) {
+          equipo.puntaje += puntosGanados;
+          if (equipo.puntaje >= finalMesa.puntosLimite) {
+            finalMesa.winnerJuego = ganador;
+            finalMesa.estado = 'terminado';
+            finalMesa.fase = 'finalizada';
+          }
+        }
+
+        finalRoom.jugadores.forEach(p => {
+          if (!p.isBot) {
+            io.to(p.socketId).emit('envido-resuelto', {
+              resultado: result.resultado,
+              estado: getEstadoParaJugador(finalMesa, p.socketId),
+            });
+          }
+        });
+
+        if (finalMesa.winnerJuego !== null) {
+          finalRoom.estado = 'terminado';
+          guardarResultadoPartida(finalRoom, finalMesa);
+          finalRoom.jugadores.forEach(p => {
+            if (!p.isBot) {
+              io.to(p.socketId).emit('juego-finalizado', {
+                ganadorEquipo: finalMesa.winnerJuego,
+                estado: getEstadoParaJugador(finalMesa, p.socketId),
+              });
+            }
+          });
+          broadcastLobby(io);
+        } else {
+          // Continuar el juego
+          setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+        }
+      }, (declaraciones.length + 1) * 1000);
+    } else {
+      // No quiso o no hay resultado automático - continuar el juego
+      setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+    }
+  } catch (err) {
+    console.error(`[Bot] Error en botResponderEnvido: ${err}`);
+    // Limpiar timeout
+    if (botResponseTimeouts.has(envidoTimeoutKey)) {
+      clearTimeout(botResponseTimeouts.get(envidoTimeoutKey));
+      botResponseTimeouts.delete(envidoTimeoutKey);
+    }
+    // Continuar el juego
     setTimeout(() => procesarTurnoBot(mesaId, io), 500);
   }
 }
@@ -3048,6 +3239,68 @@ app.prepare().then(async () => {
     }
   }
 
+  // Watchdog: verificar cada 5 segundos si hay bots que deberían responder pero no lo han hecho
+  setInterval(() => {
+    engines.forEach((mesa, mesaId) => {
+      const bots = activeBots.get(mesaId) || [];
+      const room = lobbyRooms.get(mesaId);
+
+      if (!room || bots.length === 0 || mesa.estado === 'terminado') return;
+
+      // Verificar si hay grito de truco esperando respuesta de bot
+      if (mesa.gritoActivo && mesa.fase === 'jugando') {
+        const equipoResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
+        const botsDelEquipo = bots.filter(b => b.equipo === equipoResponde);
+
+        if (botsDelEquipo.length > 0) {
+          const lastAction = lastBotAction.get(mesaId) || 0;
+          const tiempoSinAccion = Date.now() - lastAction;
+
+          // Si han pasado más de 10 segundos sin acción del bot, forzar respuesta
+          if (tiempoSinAccion > 10000) {
+            console.log(`[Watchdog] Bot trancado en truco para mesa ${mesaId}, forzando respuesta`);
+            lastBotAction.set(mesaId, Date.now());
+            botResponderTruco(mesaId, io);
+          }
+        }
+      }
+
+      // Verificar si hay envido esperando respuesta de bot
+      if (mesa.envidoActivo && mesa.fase === 'jugando') {
+        const equipoResponde = mesa.envidoActivo.equipoQueCanta === 1 ? 2 : 1;
+        const botsDelEquipo = bots.filter(b => b.equipo === equipoResponde);
+
+        if (botsDelEquipo.length > 0) {
+          const lastAction = lastBotAction.get(mesaId) || 0;
+          const tiempoSinAccion = Date.now() - lastAction;
+
+          // Si han pasado más de 10 segundos sin acción del bot, forzar respuesta
+          if (tiempoSinAccion > 10000) {
+            console.log(`[Watchdog] Bot trancado en envido para mesa ${mesaId}, forzando respuesta`);
+            lastBotAction.set(mesaId, Date.now());
+            botResponderEnvido(mesaId, io);
+          }
+        }
+      }
+
+      // Verificar si es turno de un bot y no está jugando
+      if (mesa.fase === 'jugando' && !mesa.gritoActivo && !mesa.envidoActivo && !mesa.esperandoRespuestaFlor) {
+        const jugadorActual = mesa.jugadores[mesa.turnoActual];
+        if (jugadorActual && jugadorActual.isBot) {
+          const lastAction = lastBotAction.get(mesaId) || 0;
+          const tiempoSinAccion = Date.now() - lastAction;
+
+          // Si han pasado más de 10 segundos sin acción del bot, forzar turno
+          if (tiempoSinAccion > 10000) {
+            console.log(`[Watchdog] Bot trancado en turno para mesa ${mesaId}, forzando turno`);
+            lastBotAction.set(mesaId, Date.now());
+            procesarTurnoBot(mesaId, io);
+          }
+        }
+      }
+    });
+  }, 5000);
+
   io.on('connection', (socket) => {
     console.log(`[Socket.IO] Connected: ${socket.id}`);
 
@@ -4115,6 +4368,14 @@ app.prepare().then(async () => {
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           });
+
+          // Si hay bots que faltan responder, hacerlos responder automáticamente
+          const bots = activeBots.get(room.mesaId) || [];
+          const botsFaltantes = bots.filter(b => result.faltanResponder.includes(b.id));
+          if (botsFaltantes.length > 0) {
+            setTimeout(() => botResponderTruco(room.mesaId, io), 800);
+          }
+
           callback(true);
           return;
         }
@@ -4386,6 +4647,14 @@ app.prepare().then(async () => {
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           });
+
+          // Si hay bots que faltan responder, hacerlos responder automáticamente
+          const bots = activeBots.get(room.mesaId) || [];
+          const botsFaltantes = bots.filter(b => result.faltanResponder.includes(b.id));
+          if (botsFaltantes.length > 0) {
+            setTimeout(() => botResponderEnvido(room.mesaId, io), 800);
+          }
+
           callback(true);
           return;
         }
@@ -5668,10 +5937,45 @@ app.prepare().then(async () => {
             }
           }
         } else if (tieneFlor && !quiereContraFlor) {
-          // Rejected contra flor - equipo que echó gana 3 puntos de su flor
-          // "se pasa" = no quiere la contra flor, el que rechazó pierde su flor
+          // Rejected contra flor - verificar si el echador tiene flor
           const equipoEchador = mesa.perrosConfig.equipoQueEcha;
-          mesa.equipos.find(e => e.id === equipoEchador).puntaje += 3; // 3 pts por flor no querida
+          const jugadoresEquipoEchador = mesa.jugadores.filter(j => j.equipo === equipoEchador);
+          const floresDelEchador = jugadoresEquipoEchador.filter(j =>
+            mesa.jugadoresConFlor && mesa.jugadoresConFlor.includes(j.id)
+          );
+
+          if (floresDelEchador.length > 0) {
+            // El echador tiene flor - gana 3 puntos por su flor (el respondedor se pasó)
+            mesa.equipos.find(e => e.id === equipoEchador).puntaje += floresDelEchador.length * 3;
+            // Guardar cartas de flor del echador para mostrar
+            mesa.cartasFlorReveladas = floresDelEchador.map(j => ({
+              jugadorId: j.id,
+              jugadorNombre: j.nombre,
+              equipo: j.equipo,
+              puntos: calcularPuntosFlor(j, mesa.muestra),
+              cartas: (j.cartasOriginales && j.cartasOriginales.length === 3
+                ? j.cartasOriginales
+                : j.cartas).map(c => ({ ...c })),
+            }));
+          } else {
+            // El echador NO tiene flor - el respondedor gana 3 puntos por su flor automáticamente
+            // (ya que el echador no puede contestar la flor)
+            const floresRespondedor = mesa.jugadores.filter(j =>
+              j.equipo === jugador.equipo && mesa.jugadoresConFlor && mesa.jugadoresConFlor.includes(j.id)
+            );
+            const puntosFlor = floresRespondedor.length * 3;
+            mesa.equipos.find(e => e.id === jugador.equipo).puntaje += puntosFlor;
+            // Guardar cartas de flor del respondedor para mostrar
+            mesa.cartasFlorReveladas = floresRespondedor.map(j => ({
+              jugadorId: j.id,
+              jugadorNombre: j.nombre,
+              equipo: j.equipo,
+              puntos: calcularPuntosFlor(j, mesa.muestra),
+              cartas: (j.cartasOriginales && j.cartasOriginales.length === 3
+                ? j.cartasOriginales
+                : j.cartas).map(c => ({ ...c })),
+            }));
+          }
           mesa.envidoYaCantado = true; // Deshabilitar envido para esta ronda
           mesa.florYaCantada = true; // Flor también queda resuelta
         } else if (!tieneFlor && !quiereFaltaEnvido) {
@@ -5755,8 +6059,15 @@ app.prepare().then(async () => {
           });
         });
 
-        // If flor was auto-resolved in perros (contra flor al resto), emit result
-        if (tieneFlor && quiereContraFlor && mesa.florYaCantada && mesa.cartasFlorReveladas) {
+        // If flor was auto-resolved in perros (contra flor al resto con AMBOS equipos teniendo flor), emit result
+        // Solo emitir flor-resuelta si AMBOS equipos tenían flor (contra flor al resto real)
+        const equipoEchadorParaFlor = mesa.perrosConfig?.equipoQueEcha;
+        const echadorTeniaFlor = equipoEchadorParaFlor && mesa.jugadores.some(j =>
+          j.equipo === equipoEchadorParaFlor && mesa.jugadoresConFlor?.includes(j.id)
+        );
+
+        if (tieneFlor && quiereContraFlor && echadorTeniaFlor && mesa.florYaCantada && mesa.cartasFlorReveladas) {
+          // Solo emitir cuando AMBOS equipos tenían flor (contra flor al resto real)
           setTimeout(() => {
             room.jugadores.forEach(p => {
               io.to(p.socketId).emit('flor-resuelta', {
