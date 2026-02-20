@@ -59,6 +59,63 @@ async function initDB() {
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(usuario_id, tipo_audio)
       );
+
+      CREATE TABLE IF NOT EXISTS logros (
+        id TEXT PRIMARY KEY,
+        nombre TEXT NOT NULL,
+        descripcion TEXT,
+        icono TEXT,
+        categoria TEXT DEFAULT 'general',
+        puntos_exp INTEGER DEFAULT 50,
+        oculto INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS usuario_logros (
+        usuario_id INTEGER REFERENCES usuarios(id),
+        logro_id TEXT REFERENCES logros(id),
+        desbloqueado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (usuario_id, logro_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS estadisticas_detalladas (
+        usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id),
+        envidos_cantados INTEGER DEFAULT 0,
+        envidos_ganados INTEGER DEFAULT 0,
+        trucos_cantados INTEGER DEFAULT 0,
+        trucos_ganados INTEGER DEFAULT 0,
+        flores_cantadas INTEGER DEFAULT 0,
+        flores_ganadas INTEGER DEFAULT 0,
+        partidas_1v1 INTEGER DEFAULT 0,
+        partidas_2v2 INTEGER DEFAULT 0,
+        partidas_3v3 INTEGER DEFAULT 0,
+        victorias_1v1 INTEGER DEFAULT 0,
+        victorias_2v2 INTEGER DEFAULT 0,
+        victorias_3v3 INTEGER DEFAULT 0,
+        matas_jugadas INTEGER DEFAULT 0,
+        partidas_perfectas INTEGER DEFAULT 0,
+        idas_al_mazo INTEGER DEFAULT 0,
+        nivel INTEGER DEFAULT 1,
+        experiencia INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS cosmeticos (
+        id TEXT PRIMARY KEY,
+        tipo TEXT NOT NULL,
+        nombre TEXT NOT NULL,
+        descripcion TEXT,
+        imagen_preview TEXT,
+        precio_monedas INTEGER DEFAULT 0,
+        nivel_requerido INTEGER DEFAULT 1,
+        es_premium INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS usuario_cosmeticos (
+        usuario_id INTEGER REFERENCES usuarios(id),
+        cosmetico_id TEXT REFERENCES cosmeticos(id),
+        equipado INTEGER DEFAULT 0,
+        obtenido_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (usuario_id, cosmetico_id)
+      );
     `);
 
     // Agregar columnas nuevas a usuarios (ignorar si ya existen)
@@ -67,6 +124,10 @@ async function initDB() {
     // Personalización de mesa (premium)
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN tema_mesa TEXT DEFAULT "clasico"'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN reverso_cartas TEXT DEFAULT "clasico"'); } catch { /* ya existe */ }
+    // Google Auth columns (sin UNIQUE porque SQLite no lo soporta en ALTER TABLE)
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN email TEXT'); } catch { /* ya existe */ }
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN google_id TEXT'); } catch { /* ya existe */ }
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN auth_provider TEXT DEFAULT "local"'); } catch { /* ya existe */ }
 
     console.log('[DB] Tablas inicializadas correctamente');
   } catch (err) {
@@ -96,6 +157,59 @@ async function buscarUsuarioPorApodo(apodo) {
     args: [apodo],
   });
   return result.rows[0] || null;
+}
+
+async function buscarUsuarioPorGoogleId(googleId) {
+  const result = await db.execute({
+    sql: 'SELECT * FROM usuarios WHERE google_id = ?',
+    args: [googleId],
+  });
+  return result.rows[0] || null;
+}
+
+async function buscarUsuarioPorEmail(email) {
+  const result = await db.execute({
+    sql: 'SELECT * FROM usuarios WHERE email = ?',
+    args: [email],
+  });
+  return result.rows[0] || null;
+}
+
+async function crearUsuarioGoogle(googleId, email, nombre, avatarUrl) {
+  // Generar apodo único basado en el nombre
+  let apodo = nombre.substring(0, 20).trim();
+  let existente = await buscarUsuarioPorApodo(apodo);
+  let contador = 1;
+
+  while (existente) {
+    const sufijo = `_${contador}`;
+    apodo = nombre.substring(0, 20 - sufijo.length).trim() + sufijo;
+    existente = await buscarUsuarioPorApodo(apodo);
+    contador++;
+  }
+
+  const result = await db.execute({
+    sql: `INSERT INTO usuarios (apodo, password_hash, email, google_id, auth_provider, avatar_url)
+          VALUES (?, '', ?, ?, 'google', ?)`,
+    args: [apodo, email, googleId, avatarUrl || null],
+  });
+
+  const userId = Number(result.lastInsertRowid);
+
+  // Crear estadísticas iniciales
+  await db.execute({
+    sql: 'INSERT INTO estadisticas (usuario_id) VALUES (?)',
+    args: [userId],
+  });
+
+  return { userId, apodo };
+}
+
+async function vincularGoogle(userId, googleId, email) {
+  await db.execute({
+    sql: 'UPDATE usuarios SET google_id = ?, email = ?, auth_provider = CASE WHEN password_hash = "" THEN "google" ELSE "both" END WHERE id = ?',
+    args: [googleId, email, userId],
+  });
 }
 
 async function actualizarUltimoLogin(userId) {
@@ -267,6 +381,454 @@ async function buscarUsuarios(termino, excludeUserId) {
   return result.rows;
 }
 
+// ============ ESTADÍSTICAS DETALLADAS ============
+
+async function obtenerEstadisticasDetalladas(userId) {
+  const result = await db.execute({
+    sql: 'SELECT * FROM estadisticas_detalladas WHERE usuario_id = ?',
+    args: [userId],
+  });
+  if (result.rows[0]) {
+    return result.rows[0];
+  }
+  // Crear registro si no existe
+  await db.execute({
+    sql: 'INSERT OR IGNORE INTO estadisticas_detalladas (usuario_id) VALUES (?)',
+    args: [userId],
+  });
+  const newResult = await db.execute({
+    sql: 'SELECT * FROM estadisticas_detalladas WHERE usuario_id = ?',
+    args: [userId],
+  });
+  return newResult.rows[0] || null;
+}
+
+async function actualizarEstadisticasDetalladas(userId, stats) {
+  // stats es un objeto con los campos a incrementar
+  const campos = [];
+  const args = [];
+
+  for (const [key, value] of Object.entries(stats)) {
+    if (typeof value === 'number' && value > 0) {
+      campos.push(`${key} = ${key} + ?`);
+      args.push(value);
+    }
+  }
+
+  if (campos.length === 0) return;
+
+  args.push(userId);
+  await db.execute({
+    sql: `UPDATE estadisticas_detalladas SET ${campos.join(', ')} WHERE usuario_id = ?`,
+    args,
+  });
+}
+
+async function agregarExperiencia(userId, exp) {
+  // Obtener estado actual
+  const stats = await obtenerEstadisticasDetalladas(userId);
+  if (!stats) return { nivel: 1, experiencia: 0, subioNivel: false };
+
+  let { nivel, experiencia } = stats;
+  experiencia += exp;
+
+  // Calcular si sube de nivel (cada nivel requiere nivel * 100 XP)
+  let subioNivel = false;
+  let expRequerida = nivel * 100;
+
+  while (experiencia >= expRequerida) {
+    experiencia -= expRequerida;
+    nivel += 1;
+    subioNivel = true;
+    expRequerida = nivel * 100;
+  }
+
+  await db.execute({
+    sql: 'UPDATE estadisticas_detalladas SET nivel = ?, experiencia = ? WHERE usuario_id = ?',
+    args: [nivel, experiencia, userId],
+  });
+
+  return { nivel, experiencia, subioNivel, expRequerida };
+}
+
+// ============ LOGROS ============
+
+async function inicializarLogros() {
+  // Insertar logros predefinidos si no existen
+  const logros = [
+    // Primeros pasos
+    { id: 'primera_victoria', nombre: 'Primera Victoria', descripcion: 'Gana tu primera partida', icono: '🏆', categoria: 'primeros_pasos', puntos_exp: 50 },
+    { id: 'primer_truco', nombre: 'Truco!', descripcion: 'Canta tu primer truco', icono: '🎯', categoria: 'primeros_pasos', puntos_exp: 25 },
+    { id: 'primer_envido', nombre: 'Envido!', descripcion: 'Canta tu primer envido', icono: '🎲', categoria: 'primeros_pasos', puntos_exp: 25 },
+    { id: 'primera_flor', nombre: 'Flor!', descripcion: 'Canta tu primera flor', icono: '🌸', categoria: 'primeros_pasos', puntos_exp: 30 },
+
+    // Victorias
+    { id: 'victorias_10', nombre: 'Jugador Dedicado', descripcion: 'Gana 10 partidas', icono: '⭐', categoria: 'victorias', puntos_exp: 100 },
+    { id: 'victorias_50', nombre: 'Veterano', descripcion: 'Gana 50 partidas', icono: '🌟', categoria: 'victorias', puntos_exp: 250 },
+    { id: 'victorias_100', nombre: 'Maestro del Truco', descripcion: 'Gana 100 partidas', icono: '💫', categoria: 'victorias', puntos_exp: 500 },
+    { id: 'victorias_500', nombre: 'Leyenda', descripcion: 'Gana 500 partidas', icono: '👑', categoria: 'victorias', puntos_exp: 1000 },
+
+    // Rachas
+    { id: 'racha_3', nombre: 'En Racha', descripcion: 'Gana 3 partidas seguidas', icono: '🔥', categoria: 'rachas', puntos_exp: 75 },
+    { id: 'racha_5', nombre: 'Imparable', descripcion: 'Gana 5 partidas seguidas', icono: '💥', categoria: 'rachas', puntos_exp: 150 },
+    { id: 'racha_10', nombre: 'Invencible', descripcion: 'Gana 10 partidas seguidas', icono: '⚡', categoria: 'rachas', puntos_exp: 300 },
+
+    // Habilidad
+    { id: 'partida_perfecta', nombre: 'Partida Perfecta', descripcion: 'Gana 30-0 a tu rival', icono: '💎', categoria: 'habilidad', puntos_exp: 200 },
+    { id: 'trucos_ganados_50', nombre: 'Trucazo', descripcion: 'Gana 50 trucos', icono: '🎯', categoria: 'habilidad', puntos_exp: 150 },
+    { id: 'envidos_ganados_50', nombre: 'Rey del Envido', descripcion: 'Gana 50 envidos', icono: '🎲', categoria: 'habilidad', puntos_exp: 150 },
+    { id: 'flores_ganadas_25', nombre: 'Florista', descripcion: 'Gana 25 flores', icono: '🌺', categoria: 'habilidad', puntos_exp: 150 },
+
+    // Modos de juego
+    { id: 'modo_1v1_maestro', nombre: 'Duelista', descripcion: 'Gana 25 partidas 1v1', icono: '⚔️', categoria: 'modos', puntos_exp: 200 },
+    { id: 'modo_2v2_maestro', nombre: 'Compañero Ideal', descripcion: 'Gana 25 partidas 2v2', icono: '🤝', categoria: 'modos', puntos_exp: 200 },
+    { id: 'modo_3v3_maestro', nombre: 'Líder de Equipo', descripcion: 'Gana 25 partidas 3v3', icono: '👥', categoria: 'modos', puntos_exp: 200 },
+
+    // Especiales
+    { id: 'al_mazo_5', nombre: 'Prudente', descripcion: 'Ve al mazo 5 veces', icono: '📦', categoria: 'especiales', puntos_exp: 50 },
+    { id: 'nivel_10', nombre: 'Experimentado', descripcion: 'Alcanza el nivel 10', icono: '🎖️', categoria: 'niveles', puntos_exp: 200 },
+    { id: 'nivel_25', nombre: 'Experto', descripcion: 'Alcanza el nivel 25', icono: '🏅', categoria: 'niveles', puntos_exp: 400 },
+    { id: 'nivel_50', nombre: 'Gran Maestro', descripcion: 'Alcanza el nivel 50', icono: '🥇', categoria: 'niveles', puntos_exp: 750 },
+  ];
+
+  for (const logro of logros) {
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO logros (id, nombre, descripcion, icono, categoria, puntos_exp, oculto)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [logro.id, logro.nombre, logro.descripcion, logro.icono, logro.categoria, logro.puntos_exp, logro.oculto || 0],
+    });
+  }
+}
+
+async function obtenerTodosLosLogros() {
+  const result = await db.execute({
+    sql: 'SELECT * FROM logros WHERE oculto = 0 ORDER BY categoria, puntos_exp',
+    args: [],
+  });
+  return result.rows;
+}
+
+async function obtenerLogrosUsuario(userId) {
+  const result = await db.execute({
+    sql: `SELECT l.*, ul.desbloqueado_en
+      FROM logros l
+      LEFT JOIN usuario_logros ul ON ul.logro_id = l.id AND ul.usuario_id = ?
+      WHERE l.oculto = 0
+      ORDER BY l.categoria, l.puntos_exp`,
+    args: [userId],
+  });
+  return result.rows;
+}
+
+async function desbloquearLogro(userId, logroId) {
+  // Verificar si ya tiene el logro
+  const existing = await db.execute({
+    sql: 'SELECT 1 FROM usuario_logros WHERE usuario_id = ? AND logro_id = ?',
+    args: [userId, logroId],
+  });
+
+  if (existing.rows.length > 0) return null; // Ya lo tiene
+
+  // Obtener info del logro
+  const logroResult = await db.execute({
+    sql: 'SELECT * FROM logros WHERE id = ?',
+    args: [logroId],
+  });
+
+  if (!logroResult.rows[0]) return null;
+  const logro = logroResult.rows[0];
+
+  // Desbloquear
+  await db.execute({
+    sql: 'INSERT INTO usuario_logros (usuario_id, logro_id) VALUES (?, ?)',
+    args: [userId, logroId],
+  });
+
+  // Dar experiencia
+  const nivelInfo = await agregarExperiencia(userId, logro.puntos_exp);
+
+  return { logro, experienciaGanada: logro.puntos_exp, ...nivelInfo };
+}
+
+async function verificarYDesbloquearLogros(userId, stats, estadisticasBasicas) {
+  const logrosDesbloqueados = [];
+
+  // Obtener estadísticas detalladas actuales
+  const ed = await obtenerEstadisticasDetalladas(userId);
+  if (!ed) return logrosDesbloqueados;
+
+  // Primera victoria
+  if (estadisticasBasicas?.partidas_ganadas >= 1) {
+    const r = await desbloquearLogro(userId, 'primera_victoria');
+    if (r) logrosDesbloqueados.push(r);
+  }
+
+  // Victorias múltiples
+  if (estadisticasBasicas?.partidas_ganadas >= 10) {
+    const r = await desbloquearLogro(userId, 'victorias_10');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (estadisticasBasicas?.partidas_ganadas >= 50) {
+    const r = await desbloquearLogro(userId, 'victorias_50');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (estadisticasBasicas?.partidas_ganadas >= 100) {
+    const r = await desbloquearLogro(userId, 'victorias_100');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (estadisticasBasicas?.partidas_ganadas >= 500) {
+    const r = await desbloquearLogro(userId, 'victorias_500');
+    if (r) logrosDesbloqueados.push(r);
+  }
+
+  // Rachas
+  if (estadisticasBasicas?.mejor_racha >= 3) {
+    const r = await desbloquearLogro(userId, 'racha_3');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (estadisticasBasicas?.mejor_racha >= 5) {
+    const r = await desbloquearLogro(userId, 'racha_5');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (estadisticasBasicas?.mejor_racha >= 10) {
+    const r = await desbloquearLogro(userId, 'racha_10');
+    if (r) logrosDesbloqueados.push(r);
+  }
+
+  // Primer truco/envido/flor
+  if (ed.trucos_cantados >= 1) {
+    const r = await desbloquearLogro(userId, 'primer_truco');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (ed.envidos_cantados >= 1) {
+    const r = await desbloquearLogro(userId, 'primer_envido');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (ed.flores_cantadas >= 1) {
+    const r = await desbloquearLogro(userId, 'primera_flor');
+    if (r) logrosDesbloqueados.push(r);
+  }
+
+  // Habilidades
+  if (ed.trucos_ganados >= 50) {
+    const r = await desbloquearLogro(userId, 'trucos_ganados_50');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (ed.envidos_ganados >= 50) {
+    const r = await desbloquearLogro(userId, 'envidos_ganados_50');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (ed.flores_ganadas >= 25) {
+    const r = await desbloquearLogro(userId, 'flores_ganadas_25');
+    if (r) logrosDesbloqueados.push(r);
+  }
+
+  // Partidas perfectas
+  if (ed.partidas_perfectas >= 1) {
+    const r = await desbloquearLogro(userId, 'partida_perfecta');
+    if (r) logrosDesbloqueados.push(r);
+  }
+
+  // Modos de juego
+  if (ed.victorias_1v1 >= 25) {
+    const r = await desbloquearLogro(userId, 'modo_1v1_maestro');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (ed.victorias_2v2 >= 25) {
+    const r = await desbloquearLogro(userId, 'modo_2v2_maestro');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (ed.victorias_3v3 >= 25) {
+    const r = await desbloquearLogro(userId, 'modo_3v3_maestro');
+    if (r) logrosDesbloqueados.push(r);
+  }
+
+  // Al mazo
+  if (ed.idas_al_mazo >= 5) {
+    const r = await desbloquearLogro(userId, 'al_mazo_5');
+    if (r) logrosDesbloqueados.push(r);
+  }
+
+  // Niveles
+  if (ed.nivel >= 10) {
+    const r = await desbloquearLogro(userId, 'nivel_10');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (ed.nivel >= 25) {
+    const r = await desbloquearLogro(userId, 'nivel_25');
+    if (r) logrosDesbloqueados.push(r);
+  }
+  if (ed.nivel >= 50) {
+    const r = await desbloquearLogro(userId, 'nivel_50');
+    if (r) logrosDesbloqueados.push(r);
+  }
+
+  return logrosDesbloqueados;
+}
+
+// ============ COSMÉTICOS ============
+
+async function inicializarCosmeticos() {
+  const cosmeticos = [
+    // Temas de mesa
+    { id: 'mesa_clasico', tipo: 'tema_mesa', nombre: 'Clásico', descripcion: 'El tapete verde tradicional', imagen_preview: '/temas/clasico.png', precio_monedas: 0, nivel_requerido: 1 },
+    { id: 'mesa_noche', tipo: 'tema_mesa', nombre: 'Noche', descripcion: 'Tapete azul oscuro elegante', imagen_preview: '/temas/noche.png', precio_monedas: 500, nivel_requerido: 5 },
+    { id: 'mesa_rojo', tipo: 'tema_mesa', nombre: 'Casino', descripcion: 'Tapete rojo estilo casino', imagen_preview: '/temas/rojo.png', precio_monedas: 750, nivel_requerido: 10 },
+    { id: 'mesa_dorado', tipo: 'tema_mesa', nombre: 'Dorado', descripcion: 'Tapete dorado premium', imagen_preview: '/temas/dorado.png', precio_monedas: 1500, nivel_requerido: 20, es_premium: 1 },
+
+    // Reversos de cartas
+    { id: 'reverso_clasico', tipo: 'reverso_cartas', nombre: 'Clásico', descripcion: 'Reverso tradicional', imagen_preview: '/reversos/clasico.png', precio_monedas: 0, nivel_requerido: 1 },
+    { id: 'reverso_azul', tipo: 'reverso_cartas', nombre: 'Azul Elegante', descripcion: 'Diseño azul con patrones', imagen_preview: '/reversos/azul.png', precio_monedas: 300, nivel_requerido: 3 },
+    { id: 'reverso_rojo', tipo: 'reverso_cartas', nombre: 'Rojo Fuego', descripcion: 'Diseño rojo intenso', imagen_preview: '/reversos/rojo.png', precio_monedas: 300, nivel_requerido: 3 },
+    { id: 'reverso_dorado', tipo: 'reverso_cartas', nombre: 'Dorado Real', descripcion: 'Reverso dorado premium', imagen_preview: '/reversos/dorado.png', precio_monedas: 1000, nivel_requerido: 15, es_premium: 1 },
+
+    // Marcos de avatar
+    { id: 'marco_ninguno', tipo: 'marco_avatar', nombre: 'Sin Marco', descripcion: 'Avatar sin marco', imagen_preview: '/marcos/ninguno.png', precio_monedas: 0, nivel_requerido: 1 },
+    { id: 'marco_bronce', tipo: 'marco_avatar', nombre: 'Bronce', descripcion: 'Marco de bronce', imagen_preview: '/marcos/bronce.png', precio_monedas: 200, nivel_requerido: 5 },
+    { id: 'marco_plata', tipo: 'marco_avatar', nombre: 'Plata', descripcion: 'Marco plateado', imagen_preview: '/marcos/plata.png', precio_monedas: 500, nivel_requerido: 10 },
+    { id: 'marco_oro', tipo: 'marco_avatar', nombre: 'Oro', descripcion: 'Marco dorado', imagen_preview: '/marcos/oro.png', precio_monedas: 1000, nivel_requerido: 20 },
+    { id: 'marco_diamante', tipo: 'marco_avatar', nombre: 'Diamante', descripcion: 'Marco de diamante premium', imagen_preview: '/marcos/diamante.png', precio_monedas: 2500, nivel_requerido: 30, es_premium: 1 },
+  ];
+
+  for (const c of cosmeticos) {
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO cosmeticos (id, tipo, nombre, descripcion, imagen_preview, precio_monedas, nivel_requerido, es_premium)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [c.id, c.tipo, c.nombre, c.descripcion, c.imagen_preview, c.precio_monedas, c.nivel_requerido, c.es_premium || 0],
+    });
+  }
+}
+
+async function obtenerTodosLosCosmeticos() {
+  const result = await db.execute({
+    sql: 'SELECT * FROM cosmeticos ORDER BY tipo, nivel_requerido, precio_monedas',
+    args: [],
+  });
+  return result.rows;
+}
+
+async function obtenerCosmeticosUsuario(userId) {
+  const result = await db.execute({
+    sql: `SELECT c.*, uc.equipado, uc.obtenido_en,
+      CASE WHEN uc.usuario_id IS NOT NULL THEN 1 ELSE 0 END as desbloqueado
+      FROM cosmeticos c
+      LEFT JOIN usuario_cosmeticos uc ON uc.cosmetico_id = c.id AND uc.usuario_id = ?
+      ORDER BY c.tipo, c.nivel_requerido, c.precio_monedas`,
+    args: [userId],
+  });
+  return result.rows;
+}
+
+async function comprarCosmetico(userId, cosmeticoId) {
+  // Verificar si ya lo tiene
+  const existing = await db.execute({
+    sql: 'SELECT 1 FROM usuario_cosmeticos WHERE usuario_id = ? AND cosmetico_id = ?',
+    args: [userId, cosmeticoId],
+  });
+
+  if (existing.rows.length > 0) {
+    return { error: 'Ya tienes este cosmético' };
+  }
+
+  // Obtener info del cosmético
+  const cosmeticoResult = await db.execute({
+    sql: 'SELECT * FROM cosmeticos WHERE id = ?',
+    args: [cosmeticoId],
+  });
+
+  if (!cosmeticoResult.rows[0]) {
+    return { error: 'Cosmético no encontrado' };
+  }
+
+  const cosmetico = cosmeticoResult.rows[0];
+
+  // Verificar nivel
+  const stats = await obtenerEstadisticasDetalladas(userId);
+  if (stats.nivel < cosmetico.nivel_requerido) {
+    return { error: `Necesitas nivel ${cosmetico.nivel_requerido}` };
+  }
+
+  // Por ahora no hay sistema de monedas, dar gratis si cumple nivel
+  // Desequipar otros del mismo tipo primero
+  await db.execute({
+    sql: `UPDATE usuario_cosmeticos SET equipado = 0
+      WHERE usuario_id = ? AND cosmetico_id IN (SELECT id FROM cosmeticos WHERE tipo = ?)`,
+    args: [userId, cosmetico.tipo],
+  });
+
+  // Insertar y equipar automáticamente
+  await db.execute({
+    sql: 'INSERT INTO usuario_cosmeticos (usuario_id, cosmetico_id, equipado) VALUES (?, ?, 1)',
+    args: [userId, cosmeticoId],
+  });
+
+  return { success: true, cosmetico };
+}
+
+async function equiparCosmetico(userId, cosmeticoId, autoDesbloquear = false) {
+  console.log(`[DB] equiparCosmetico: userId=${userId}, cosmeticoId=${cosmeticoId}, autoDesbloquear=${autoDesbloquear}`);
+
+  // Verificar que lo tiene
+  const existing = await db.execute({
+    sql: 'SELECT 1 FROM usuario_cosmeticos WHERE usuario_id = ? AND cosmetico_id = ?',
+    args: [userId, cosmeticoId],
+  });
+
+  // Obtener tipo del cosmético
+  const cosmeticoResult = await db.execute({
+    sql: 'SELECT tipo FROM cosmeticos WHERE id = ?',
+    args: [cosmeticoId],
+  });
+
+  const tipo = cosmeticoResult.rows[0]?.tipo;
+  console.log(`[DB] equiparCosmetico: existing=${existing.rows.length}, tipo=${tipo}`);
+
+  if (!tipo) {
+    console.log(`[DB] equiparCosmetico: Cosmético no encontrado: ${cosmeticoId}`);
+    return { error: 'Cosmético no encontrado' };
+  }
+
+  if (existing.rows.length === 0) {
+    if (autoDesbloquear) {
+      // Desbloquear automáticamente (para usuarios premium)
+      console.log(`[DB] equiparCosmetico: Auto-desbloqueando ${cosmeticoId} para usuario ${userId}`);
+      await db.execute({
+        sql: 'INSERT INTO usuario_cosmeticos (usuario_id, cosmetico_id, equipado) VALUES (?, ?, 0)',
+        args: [userId, cosmeticoId],
+      });
+    } else {
+      console.log(`[DB] equiparCosmetico: Usuario no tiene el cosmético y autoDesbloquear=false`);
+      return { error: 'No tienes este cosmético' };
+    }
+  }
+
+  // Desequipar otros del mismo tipo
+  await db.execute({
+    sql: `UPDATE usuario_cosmeticos SET equipado = 0
+      WHERE usuario_id = ? AND cosmetico_id IN (SELECT id FROM cosmeticos WHERE tipo = ?)`,
+    args: [userId, tipo],
+  });
+
+  // Equipar este
+  await db.execute({
+    sql: 'UPDATE usuario_cosmeticos SET equipado = 1 WHERE usuario_id = ? AND cosmetico_id = ?',
+    args: [userId, cosmeticoId],
+  });
+
+  console.log(`[DB] equiparCosmetico: SUCCESS - ${cosmeticoId} equipado para usuario ${userId}`);
+  return { success: true };
+}
+
+async function obtenerCosmeticosEquipados(userId) {
+  const result = await db.execute({
+    sql: `SELECT c.* FROM cosmeticos c
+      JOIN usuario_cosmeticos uc ON uc.cosmetico_id = c.id
+      WHERE uc.usuario_id = ? AND uc.equipado = 1`,
+    args: [userId],
+  });
+  return result.rows;
+}
+
 // ============ AUDIOS CUSTOM ============
 
 async function guardarAudioCustom(userId, tipoAudio, urlArchivo, fileKey) {
@@ -314,6 +876,10 @@ module.exports = {
   initDB,
   crearUsuario,
   buscarUsuarioPorApodo,
+  buscarUsuarioPorGoogleId,
+  buscarUsuarioPorEmail,
+  crearUsuarioGoogle,
+  vincularGoogle,
   actualizarUltimoLogin,
   setPremium,
   actualizarAvatarUrl,
@@ -332,4 +898,21 @@ module.exports = {
   obtenerAudiosCustom,
   eliminarAudioCustom,
   obtenerAudiosCustomMultiples,
+  // Estadísticas detalladas y niveles
+  obtenerEstadisticasDetalladas,
+  actualizarEstadisticasDetalladas,
+  agregarExperiencia,
+  // Logros
+  inicializarLogros,
+  obtenerTodosLosLogros,
+  obtenerLogrosUsuario,
+  desbloquearLogro,
+  verificarYDesbloquearLogros,
+  // Cosméticos
+  inicializarCosmeticos,
+  obtenerTodosLosCosmeticos,
+  obtenerCosmeticosUsuario,
+  comprarCosmetico,
+  equiparCosmetico,
+  obtenerCosmeticosEquipados,
 };

@@ -116,6 +116,8 @@ interface Mesa {
   modoAlternadoHabilitado?: boolean;
   modoRondaActual?: 'normal' | '1v1';
   modoAyudaHabilitado?: boolean;
+  // Cosméticos de jugadores premium
+  cosmeticosJugadores?: Record<string, Record<string, string>>;
 }
 
 interface FlorDeclaracion {
@@ -131,6 +133,23 @@ const paloAArchivo: Record<string, string> = {
   'copa': 'copas',
   'espada': 'espadas',
   'basto': 'bastos',
+};
+
+// Configuración de temas de mesa para usuarios premium
+// Usar colores CSS directos en lugar de clases Tailwind dinámicas
+const TEMAS_MESA: Record<string, { colors: [string, string, string]; accent: string; name: string }> = {
+  'mesa_clasico': { colors: ['#1a3d1a', '#0d2e0d', '#0a2a0a'], accent: '#10b981', name: 'Clásico' },
+  'mesa_noche': { colors: ['#1a2744', '#0d1a2e', '#0a1525'], accent: '#3b82f6', name: 'Noche' },
+  'mesa_rojo': { colors: ['#4a1a1a', '#2e0d0d', '#250a0a'], accent: '#ef4444', name: 'Casino' },
+  'mesa_dorado': { colors: ['#3d3010', '#2a200a', '#1a1505'], accent: '#f59e0b', name: 'Dorado' },
+};
+
+// Configuración de reversos de cartas para usuarios premium (colores CSS directos)
+const REVERSOS_CARTAS: Record<string, { colors: [string, string]; name: string }> = {
+  'reverso_clasico': { colors: ['#1e3a5f', '#172554'], name: 'Clásico' },
+  'reverso_azul': { colors: ['#1d4ed8', '#1e3a8a'], name: 'Azul Elegante' },
+  'reverso_rojo': { colors: ['#991b1b', '#450a0a'], name: 'Rojo Fuego' },
+  'reverso_dorado': { colors: ['#b45309', '#78350f'], name: 'Dorado Real' },
 };
 
 function getCartaImageUrl(carta: Carta): string {
@@ -705,6 +724,26 @@ function GamePage() {
   // Bots
   const [agregandoBot, setAgregandoBot] = useState(false);
 
+  // Obtener tema de mesa activo (solo del jugador actual - cada premium ve su propio tema)
+  const getTemaActivo = useCallback((): { colors: [string, string, string]; accent: string } | null => {
+    if (!mesa?.cosmeticosJugadores || !socketId) return null;
+    const misCosmetics = mesa.cosmeticosJugadores[socketId];
+    if (misCosmetics?.tema_mesa && TEMAS_MESA[misCosmetics.tema_mesa]) {
+      return TEMAS_MESA[misCosmetics.tema_mesa];
+    }
+    return null;
+  }, [mesa?.cosmeticosJugadores, socketId]);
+
+  // Obtener reverso de cartas activo (solo del jugador actual - cada premium ve su propio reverso)
+  const getReversoActivo = useCallback((): [string, string] | null => {
+    if (!mesa?.cosmeticosJugadores || !socketId) return null;
+    const misCosmetics = mesa.cosmeticosJugadores[socketId];
+    if (misCosmetics?.reverso_cartas && REVERSOS_CARTAS[misCosmetics.reverso_cartas]) {
+      return REVERSOS_CARTAS[misCosmetics.reverso_cartas].colors;
+    }
+    return null;
+  }, [mesa?.cosmeticosJugadores, socketId]);
+
   const mostrarMensaje = useCallback((msg: string, duracion = 3000) => {
     setMensaje(msg);
     setTimeout(() => setMensaje(null), duracion);
@@ -771,7 +810,7 @@ function GamePage() {
 
         socketService.onPartidaIniciada((estado) => {
           if (!mounted) return;
-          console.log('[Game] partida-iniciada received');
+          console.log('[Game] partida-iniciada received, cosmeticosJugadores:', estado.cosmeticosJugadores, 'socketId:', socketService.getSocketId());
           setMesa(estado);
           setEsperandoInicio(false);
           setSocketId(socketService.getSocketId());
@@ -1726,6 +1765,8 @@ function GamePage() {
   };
 
   // Componente de carta
+  const reversoActivo = getReversoActivo();
+
   const CartaImg = ({ carta, size = 'normal', onClick, disabled, showGlow }: {
     carta: Carta;
     size?: 'small' | 'normal' | 'large';
@@ -1742,6 +1783,19 @@ function GamePage() {
     };
 
     if (isOculta) {
+      // Usar reverso personalizado si hay uno activo de un jugador premium
+      if (reversoActivo) {
+        return (
+          <div
+            className={`${sizeClasses[size]} rounded-lg border border-white/20 shadow-lg flex items-center justify-center`}
+            style={{
+              background: `linear-gradient(to bottom right, ${reversoActivo[0]}, ${reversoActivo[1]})`
+            }}
+          >
+            <div className="w-2/3 h-2/3 rounded border border-white/10 bg-white/5" />
+          </div>
+        );
+      }
       return (
         <div className={`${sizeClasses[size]} card-back rounded-lg`} />
       );
@@ -2512,11 +2566,33 @@ function GamePage() {
     );
   };
 
+  // Obtener tema activo para el fondo
+  const temaActivo = getTemaActivo();
+
+  // Debug: mostrar valores
+  console.log('[Game] RENDER - socketId:', socketId, 'cosmeticosJugadores:', mesa?.cosmeticosJugadores, 'temaActivo:', temaActivo);
+
   return (
-    <div className="min-h-screen bg-table-wood p-2 sm:p-4 overflow-hidden">
+    <div
+      className={`min-h-screen p-2 sm:p-4 overflow-hidden ${!temaActivo ? 'bg-table-wood' : ''}`}
+      style={temaActivo ? {
+        background: `linear-gradient(to bottom right, ${temaActivo.colors[0]}, ${temaActivo.colors[1]}, ${temaActivo.colors[2]})`,
+        backgroundImage: 'none'
+      } : undefined}
+    >
+      {/* Textura de fieltro para temas premium */}
+      {temaActivo && (
+        <div className="fixed inset-0 pointer-events-none opacity-20 bg-[url('/Images/felt-texture.png')] bg-repeat" />
+      )}
+
       {/* Iluminación de pulpería */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-radial from-amber-500/10 to-transparent rounded-full blur-3xl" />
+        <div
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full blur-3xl"
+          style={{
+            background: `radial-gradient(circle, ${temaActivo ? temaActivo.accent + '26' : 'rgba(245, 158, 11, 0.1)'} 0%, transparent 70%)`
+          }}
+        />
       </div>
 
       {/* Toast de mensaje */}

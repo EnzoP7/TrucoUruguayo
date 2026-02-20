@@ -44,6 +44,49 @@ interface AudioCustom {
   creado_en: string;
 }
 
+interface Logro {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  icono: string;
+  categoria: string;
+  puntos_exp: number;
+  desbloqueado_en: string | null;
+}
+
+interface EstadisticasDetalladas {
+  envidos_cantados: number;
+  envidos_ganados: number;
+  trucos_cantados: number;
+  trucos_ganados: number;
+  flores_cantadas: number;
+  flores_ganadas: number;
+  partidas_1v1: number;
+  partidas_2v2: number;
+  partidas_3v3: number;
+  victorias_1v1: number;
+  victorias_2v2: number;
+  victorias_3v3: number;
+  matas_jugadas: number;
+  partidas_perfectas: number;
+  idas_al_mazo: number;
+  nivel: number;
+  experiencia: number;
+}
+
+interface Cosmetico {
+  id: string;
+  tipo: string;
+  nombre: string;
+  descripcion: string;
+  imagen_preview: string;
+  precio_monedas: number;
+  nivel_requerido: number;
+  es_premium: number;
+  desbloqueado: number;
+  equipado: number;
+}
+
 const TIPOS_AUDIO = [
   { key: 'truco', label: 'Truco' },
   { key: 'retruco', label: 'Retruco' },
@@ -67,7 +110,7 @@ export default function PerfilPage() {
   const [busqueda, setBusqueda] = useState('');
   const [resultadosBusqueda, setResultadosBusqueda] = useState<{ id: number; apodo: string }[]>([]);
   const [buscando, setBuscando] = useState(false);
-  const [tab, setTab] = useState<'stats' | 'historial' | 'amigos' | 'audios' | 'mesa'>('stats');
+  const [tab, setTab] = useState<'stats' | 'historial' | 'amigos' | 'audios' | 'mesa' | 'logros' | 'tienda'>('stats');
 
   // Premium state
   const [esPremium, setEsPremium] = useState(false);
@@ -86,6 +129,18 @@ export default function PerfilPage() {
   const [temaMesa, setTemaMesa] = useState('clasico');
   const [reversoCartas, setReversoCartas] = useState('clasico');
   const [guardandoPersonalizacion, setGuardandoPersonalizacion] = useState(false);
+
+  // Logros y progresión
+  const [logros, setLogros] = useState<Logro[]>([]);
+  const [nivel, setNivel] = useState(1);
+  const [experiencia, setExperiencia] = useState(0);
+  const [expRequerida, setExpRequerida] = useState(100);
+  const [estadisticasDetalladas, setEstadisticasDetalladas] = useState<EstadisticasDetalladas | null>(null);
+
+  // Cosméticos/Tienda
+  const [cosmeticos, setCosmeticos] = useState<Cosmetico[]>([]);
+  const [comprando, setComprando] = useState<string | null>(null);
+  const [equipando, setEquipando] = useState<string | null>(null);
 
   // Refs for dynamic headers in UploadThing hooks
   const uploadTipoRef = useRef<string>('');
@@ -182,6 +237,27 @@ export default function PerfilPage() {
           setTemaMesa(persResult.tema_mesa || 'clasico');
           setReversoCartas(persResult.reverso_cartas || 'clasico');
         }
+
+        // Cargar logros y nivel
+        const logrosResult = await socketService.obtenerLogros();
+        if (logrosResult.success) {
+          setLogros(logrosResult.logros || []);
+          setNivel(logrosResult.nivel || 1);
+          setExperiencia(logrosResult.experiencia || 0);
+          setExpRequerida(logrosResult.expRequerida || 100);
+        }
+
+        // Cargar estadísticas detalladas
+        const statsDetResult = await socketService.obtenerEstadisticasDetalladas();
+        if (statsDetResult.success) {
+          setEstadisticasDetalladas(statsDetResult.estadisticas);
+        }
+
+        // Cargar cosméticos
+        const cosmeticosResult = await socketService.obtenerCosmeticos();
+        if (cosmeticosResult.success) {
+          setCosmeticos(cosmeticosResult.cosmeticos || []);
+        }
       } catch (err) {
         console.error('Error cargando perfil:', err);
       } finally {
@@ -243,8 +319,10 @@ export default function PerfilPage() {
 
   const handleGuardarPersonalizacion = async () => {
     setGuardandoPersonalizacion(true);
+    console.log('[Perfil] Guardando personalizacion:', { temaMesa, reversoCartas, connected: socketService.connected() });
     try {
       const result = await socketService.actualizarPersonalizacion(temaMesa, reversoCartas);
+      console.log('[Perfil] Resultado actualizar-personalizacion:', result);
       if (result.success) {
         // Guardar en sessionStorage para usarlo en el juego
         const saved = sessionStorage.getItem('truco_usuario');
@@ -254,11 +332,63 @@ export default function PerfilPage() {
           u.reverso_cartas = reversoCartas;
           sessionStorage.setItem('truco_usuario', JSON.stringify(u));
         }
+        alert('Personalización guardada correctamente');
+      } else {
+        console.error('[Perfil] Error:', result.error);
+        alert('Error: ' + (result.error || 'No se pudo guardar'));
       }
     } catch (err) {
       console.error('Error guardando personalizacion:', err);
+      alert('Error al guardar: ' + (err instanceof Error ? err.message : 'Error desconocido'));
     } finally {
       setGuardandoPersonalizacion(false);
+    }
+  };
+
+  const handleComprarCosmetico = async (cosmeticoId: string) => {
+    setComprando(cosmeticoId);
+    try {
+      const result = await socketService.comprarCosmetico(cosmeticoId);
+      if (result.success) {
+        // El backend auto-equipa al comprar, actualizar UI correspondiente
+        const cosmeticoComprado = cosmeticos.find(c => c.id === cosmeticoId);
+        setCosmeticos(prev => prev.map(c => {
+          if (c.id === cosmeticoId) {
+            return { ...c, desbloqueado: 1, equipado: 1 };
+          }
+          // Desequipar otros del mismo tipo
+          if (cosmeticoComprado && c.tipo === cosmeticoComprado.tipo) {
+            return { ...c, equipado: 0 };
+          }
+          return c;
+        }));
+      } else {
+        console.error('Error comprando:', result.error);
+      }
+    } catch (err) {
+      console.error('Error comprando cosmético:', err);
+    } finally {
+      setComprando(null);
+    }
+  };
+
+  const handleEquiparCosmetico = async (cosmeticoId: string, tipo: string) => {
+    setEquipando(cosmeticoId);
+    try {
+      const result = await socketService.equiparCosmetico(cosmeticoId);
+      if (result.success) {
+        // Actualizar lista de cosméticos - desequipar otros del mismo tipo
+        setCosmeticos(prev => prev.map(c => {
+          if (c.tipo === tipo) {
+            return { ...c, equipado: c.id === cosmeticoId ? 1 : 0 };
+          }
+          return c;
+        }));
+      }
+    } catch (err) {
+      console.error('Error equipando cosmético:', err);
+    } finally {
+      setEquipando(null);
     }
   };
 
@@ -495,7 +625,7 @@ export default function PerfilPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-4 flex-wrap">
-          {(['stats', 'historial', 'amigos', ...(esPremium ? ['audios', 'mesa'] as const : [])] as const).map(t => (
+          {(['stats', 'logros', 'tienda', 'historial', 'amigos', ...(esPremium ? ['audios', 'mesa'] as const : [])] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t as typeof tab)}
@@ -505,7 +635,7 @@ export default function PerfilPage() {
                   : 'text-gold-500/50 hover:text-gold-400 hover:bg-white/5'
               }`}
             >
-              {t === 'stats' ? 'Resumen' : t === 'historial' ? 'Historial' : t === 'amigos' ? 'Amigos' : t === 'audios' ? 'Mis Audios' : 'Mi Mesa'}
+              {t === 'stats' ? 'Resumen' : t === 'logros' ? '🏆 Logros' : t === 'tienda' ? '🛒 Tienda' : t === 'historial' ? 'Historial' : t === 'amigos' ? 'Amigos' : t === 'audios' ? 'Mis Audios' : 'Mi Mesa'}
             </button>
           ))}
         </div>
@@ -735,11 +865,287 @@ export default function PerfilPage() {
         {tab === 'stats' && (
           <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20">
             <h3 className="text-gold-300 font-bold mb-4">Resumen</h3>
+
+            {/* Barra de nivel */}
+            <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-purple-900/30 to-indigo-900/30 border border-purple-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">⭐</span>
+                  <span className="text-purple-300 font-bold text-lg">Nivel {nivel}</span>
+                </div>
+                <span className="text-purple-400/60 text-sm">{experiencia} / {expRequerida} XP</span>
+              </div>
+              <div className="w-full bg-purple-900/50 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-purple-500 to-indigo-400 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${(experiencia / expRequerida) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Estadísticas detalladas */}
+            {estadisticasDetalladas && (
+              <div className="mb-6">
+                <h4 className="text-gold-400/80 text-sm font-medium mb-3">Estadísticas Detalladas</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                    <div className="text-xl font-bold text-celeste-400">{estadisticasDetalladas.trucos_cantados}</div>
+                    <div className="text-gold-500/50 text-xs">Trucos cantados</div>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                    <div className="text-xl font-bold text-green-400">{estadisticasDetalladas.trucos_ganados}</div>
+                    <div className="text-gold-500/50 text-xs">Trucos ganados</div>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                    <div className="text-xl font-bold text-yellow-400">{estadisticasDetalladas.envidos_cantados}</div>
+                    <div className="text-gold-500/50 text-xs">Envidos cantados</div>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                    <div className="text-xl font-bold text-green-400">{estadisticasDetalladas.envidos_ganados}</div>
+                    <div className="text-gold-500/50 text-xs">Envidos ganados</div>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                    <div className="text-xl font-bold text-pink-400">{estadisticasDetalladas.flores_cantadas}</div>
+                    <div className="text-gold-500/50 text-xs">Flores cantadas</div>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                    <div className="text-xl font-bold text-amber-400">{estadisticasDetalladas.partidas_perfectas}</div>
+                    <div className="text-gold-500/50 text-xs">Partidas perfectas</div>
+                  </div>
+                </div>
+
+                {/* Stats por modo */}
+                <h4 className="text-gold-400/80 text-sm font-medium mt-4 mb-3">Por Modo de Juego</h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                    <div className="text-lg font-bold text-gold-400">{estadisticasDetalladas.victorias_1v1}/{estadisticasDetalladas.partidas_1v1}</div>
+                    <div className="text-gold-500/50 text-xs">1v1</div>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                    <div className="text-lg font-bold text-gold-400">{estadisticasDetalladas.victorias_2v2}/{estadisticasDetalladas.partidas_2v2}</div>
+                    <div className="text-gold-500/50 text-xs">2v2</div>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                    <div className="text-lg font-bold text-gold-400">{estadisticasDetalladas.victorias_3v3}/{estadisticasDetalladas.partidas_3v3}</div>
+                    <div className="text-gold-500/50 text-xs">3v3</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="text-gold-400/60 text-sm space-y-2">
               <p>Tu ELO sube +25 por victoria y baja -15 por derrota.</p>
               <p>Todos los jugadores comienzan con 1000 ELO.</p>
-              <p>Juga partidas para subir en el ranking.</p>
+              <p>Juga partidas para subir en el ranking y desbloquear logros.</p>
             </div>
+          </div>
+        )}
+
+        {/* Logros (tab logros) */}
+        {tab === 'logros' && (
+          <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-gold-300 font-bold">Mis Logros</h3>
+              <span className="text-gold-400/60 text-sm">
+                {logros.filter(l => l.desbloqueado_en).length} / {logros.length} desbloqueados
+              </span>
+            </div>
+
+            {/* Barra de nivel */}
+            <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-purple-900/30 to-indigo-900/30 border border-purple-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">⭐</span>
+                  <span className="text-purple-300 font-bold text-lg">Nivel {nivel}</span>
+                </div>
+                <span className="text-purple-400/60 text-sm">{experiencia} / {expRequerida} XP</span>
+              </div>
+              <div className="w-full bg-purple-900/50 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-purple-500 to-indigo-400 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${(experiencia / expRequerida) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Categorías de logros */}
+            {['primeros_pasos', 'victorias', 'rachas', 'habilidad', 'modos', 'especiales', 'niveles'].map(categoria => {
+              const logrosCategoria = logros.filter(l => l.categoria === categoria);
+              if (logrosCategoria.length === 0) return null;
+
+              const nombreCategoria = {
+                primeros_pasos: '🎯 Primeros Pasos',
+                victorias: '🏆 Victorias',
+                rachas: '🔥 Rachas',
+                habilidad: '💪 Habilidad',
+                modos: '🎮 Modos de Juego',
+                especiales: '✨ Especiales',
+                niveles: '⭐ Niveles',
+              }[categoria] || categoria;
+
+              return (
+                <div key={categoria} className="mb-6">
+                  <h4 className="text-gold-400/80 text-sm font-medium mb-3">{nombreCategoria}</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {logrosCategoria.map(logro => {
+                      const desbloqueado = !!logro.desbloqueado_en;
+                      return (
+                        <div
+                          key={logro.id}
+                          className={`rounded-xl p-4 border transition-all ${
+                            desbloqueado
+                              ? 'bg-gradient-to-r from-gold-900/30 to-amber-900/30 border-gold-500/30'
+                              : 'bg-white/5 border-gold-700/10 opacity-60'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className={`text-2xl ${desbloqueado ? '' : 'grayscale'}`}>
+                              {logro.icono}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-medium ${desbloqueado ? 'text-gold-300' : 'text-gold-500/50'}`}>
+                                  {logro.nombre}
+                                </span>
+                                {desbloqueado && (
+                                  <span className="text-green-400 text-xs">✓</span>
+                                )}
+                              </div>
+                              <p className="text-gold-500/50 text-xs mt-0.5">{logro.descripcion}</p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-purple-400 text-xs font-medium">+{logro.puntos_exp} XP</span>
+                                {desbloqueado && logro.desbloqueado_en && (
+                                  <span className="text-gold-500/30 text-[10px]">
+                                    {new Date(logro.desbloqueado_en).toLocaleDateString('es-UY')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Tienda (tab tienda) */}
+        {tab === 'tienda' && (
+          <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-gold-300 font-bold">Tienda de Cosméticos</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-purple-400 font-medium">Nivel {nivel}</span>
+              </div>
+            </div>
+
+            <p className="text-gold-500/40 text-xs mb-6">
+              Desbloquea cosméticos subiendo de nivel. Los elementos premium requieren ser usuario premium.
+            </p>
+
+            {/* Tipos de cosméticos */}
+            {['tema_mesa', 'reverso_cartas', 'marco_avatar'].map(tipo => {
+              const cosmeticosTipo = cosmeticos.filter(c => c.tipo === tipo);
+              if (cosmeticosTipo.length === 0) return null;
+
+              const nombreTipo = {
+                tema_mesa: '🎨 Temas de Mesa',
+                reverso_cartas: '🃏 Reversos de Cartas',
+                marco_avatar: '🖼️ Marcos de Avatar',
+              }[tipo] || tipo;
+
+              return (
+                <div key={tipo} className="mb-6">
+                  <h4 className="text-gold-400/80 text-sm font-medium mb-3">{nombreTipo}</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {cosmeticosTipo.map(cosmetico => {
+                      const desbloqueado = cosmetico.desbloqueado === 1;
+                      const equipado = cosmetico.equipado === 1;
+                      const puedeComprar = nivel >= cosmetico.nivel_requerido && (!cosmetico.es_premium || esPremium);
+                      const comprando_ = comprando === cosmetico.id;
+                      const equipando_ = equipando === cosmetico.id;
+
+                      return (
+                        <div
+                          key={cosmetico.id}
+                          className={`rounded-xl overflow-hidden border transition-all ${
+                            equipado
+                              ? 'ring-2 ring-green-500 border-green-500/30'
+                              : desbloqueado
+                                ? 'border-gold-500/30'
+                                : 'border-gold-700/10 opacity-70'
+                          }`}
+                        >
+                          {/* Preview */}
+                          <div className={`h-20 flex items-center justify-center ${
+                            tipo === 'tema_mesa' ? 'bg-gradient-to-br from-emerald-800 to-emerald-900' :
+                            tipo === 'reverso_cartas' ? 'bg-gradient-to-br from-blue-800 to-blue-900' :
+                            'bg-gradient-to-br from-purple-800 to-purple-900'
+                          }`}>
+                            <span className="text-3xl">{
+                              tipo === 'tema_mesa' ? '🎨' :
+                              tipo === 'reverso_cartas' ? '🃏' : '🖼️'
+                            }</span>
+                          </div>
+
+                          {/* Info */}
+                          <div className="p-3 bg-black/30">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-white text-sm font-medium">{cosmetico.nombre}</span>
+                              {cosmetico.es_premium === 1 && (
+                                <span className="px-1.5 py-0.5 text-[10px] bg-yellow-500/20 text-yellow-400 rounded">
+                                  PRO
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gold-500/50 text-xs mb-2">{cosmetico.descripcion}</p>
+
+                            {/* Requisito de nivel */}
+                            {!desbloqueado && (
+                              <div className="text-xs mb-2">
+                                <span className={nivel >= cosmetico.nivel_requerido ? 'text-green-400' : 'text-red-400'}>
+                                  Nivel {cosmetico.nivel_requerido} requerido
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Botón de acción */}
+                            {desbloqueado ? (
+                              <button
+                                onClick={() => handleEquiparCosmetico(cosmetico.id, cosmetico.tipo)}
+                                disabled={equipado || equipando_}
+                                className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                  equipado
+                                    ? 'bg-green-600/30 text-green-300 cursor-default'
+                                    : 'bg-gold-600/30 text-gold-300 hover:bg-gold-600/50'
+                                }`}
+                              >
+                                {equipando_ ? '...' : equipado ? '✓ Equipado' : 'Equipar'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleComprarCosmetico(cosmetico.id)}
+                                disabled={!puedeComprar || comprando_}
+                                className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                  puedeComprar
+                                    ? 'bg-purple-600/30 text-purple-300 hover:bg-purple-600/50'
+                                    : 'bg-gray-600/20 text-gray-500 cursor-not-allowed'
+                                }`}
+                              >
+                                {comprando_ ? '...' : puedeComprar ? 'Desbloquear' : 'Bloqueado'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -882,12 +1288,10 @@ export default function PerfilPage() {
               <h4 className="text-gold-400/80 text-sm font-medium mb-3">Tema de la Mesa</h4>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[
-                  { id: 'clasico', nombre: 'Clásico', color: 'from-emerald-800 to-emerald-900', desc: 'Verde tradicional' },
-                  { id: 'verde', nombre: 'Verde Oscuro', color: 'from-green-900 to-green-950', desc: 'Verde profundo' },
-                  { id: 'azul', nombre: 'Azul Celeste', color: 'from-blue-800 to-blue-900', desc: 'Estilo uruguayo' },
-                  { id: 'rojo', nombre: 'Rojo Burdeos', color: 'from-red-900 to-red-950', desc: 'Elegante' },
-                  { id: 'dorado', nombre: 'Dorado', color: 'from-amber-700 to-amber-900', desc: 'Lujoso' },
-                  { id: 'nocturno', nombre: 'Nocturno', color: 'from-slate-800 to-slate-950', desc: 'Modo oscuro' },
+                  { id: 'clasico', nombre: 'Clásico', color: 'from-[#1a3d1a] via-[#0d2e0d] to-[#0a2a0a]', desc: 'Verde tradicional' },
+                  { id: 'azul', nombre: 'Noche', color: 'from-[#1a2744] via-[#0d1a2e] to-[#0a1525]', desc: 'Azul nocturno' },
+                  { id: 'rojo', nombre: 'Casino', color: 'from-[#4a1a1a] via-[#2e0d0d] to-[#250a0a]', desc: 'Rojo elegante' },
+                  { id: 'dorado', nombre: 'Dorado', color: 'from-[#3d3010] via-[#2a200a] to-[#1a1505]', desc: 'Premium' },
                 ].map(tema => (
                   <button
                     key={tema.id}
@@ -922,11 +1326,10 @@ export default function PerfilPage() {
               <h4 className="text-gold-400/80 text-sm font-medium mb-3">Reverso de Cartas</h4>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
                 {[
-                  { id: 'clasico', nombre: 'Clásico', color: 'bg-blue-900', patron: 'Diseño tradicional' },
-                  { id: 'uruguayo', nombre: 'Uruguayo', color: 'bg-celeste-700', patron: 'Sol de Mayo' },
-                  { id: 'dorado', nombre: 'Dorado', color: 'bg-amber-700', patron: 'Elegante' },
-                  { id: 'minimalista', nombre: 'Minimal', color: 'bg-slate-700', patron: 'Moderno' },
-                  { id: 'retro', nombre: 'Retro', color: 'bg-red-900', patron: 'Vintage' },
+                  { id: 'clasico', nombre: 'Clásico', color: 'bg-blue-950', patron: 'Diseño tradicional' },
+                  { id: 'azul', nombre: 'Azul', color: 'bg-blue-700', patron: 'Azul elegante' },
+                  { id: 'rojo', nombre: 'Rojo', color: 'bg-red-800', patron: 'Rojo intenso' },
+                  { id: 'dorado', nombre: 'Dorado', color: 'bg-amber-700', patron: 'Dorado real' },
                 ].map(reverso => (
                   <button
                     key={reverso.id}

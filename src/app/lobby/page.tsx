@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useSession, signOut } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 import socketService from '@/lib/socket';
 import audioManager from '@/lib/audioManager';
 
@@ -78,7 +80,10 @@ interface MiPartida {
   miEquipo?: number;
 }
 
-export default function LobbyPage() {
+function LobbyPageContent() {
+  const { data: session } = useSession();
+  const searchParams = useSearchParams();
+
   const [nombre, setNombre] = useState('');
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [conectado, setConectado] = useState(false);
@@ -86,6 +91,7 @@ export default function LobbyPage() {
   const [tamañoSala, setTamañoSala] = useState<'1v1' | '2v2' | '3v3'>('2v2');
   const [modoAlternado, setModoAlternado] = useState(true);
   const [partidaGuardada, setPartidaGuardada] = useState<string | null>(null);
+  const [googleAuthPending, setGoogleAuthPending] = useState(false);
 
   // Auth state
   const [usuario, setUsuario] = useState<Usuario | null>(null);
@@ -195,6 +201,53 @@ export default function LobbyPage() {
     }
   }, []);
 
+  // Sincronizar sesión de Google con Socket.IO
+  useEffect(() => {
+    const fromGoogle = searchParams?.get('from') === 'google';
+
+    // Si viene de Google auth y tiene sesión de NextAuth pero no está autenticado en Socket.IO
+    if (fromGoogle && session?.user && !usuario && conectado && !googleAuthPending) {
+      setGoogleAuthPending(true);
+
+      const syncGoogleAuth = async () => {
+        try {
+          const googleId = session.user.googleId;
+          const email = session.user.email;
+          const nombre = session.user.name;
+          const avatarUrl = session.user.image;
+
+          if (googleId && email && nombre) {
+            const result = await socketService.loginConGoogle(googleId, email, nombre, avatarUrl || undefined);
+
+            if (result.success) {
+              setUsuario(result.usuario);
+              setNombre(result.usuario.apodo);
+              sessionStorage.setItem('truco_usuario', JSON.stringify(result.usuario));
+              sessionStorage.setItem('truco_nombre', result.usuario.apodo);
+              // No guardamos password para usuarios de Google
+              sessionStorage.removeItem('truco_auth');
+
+              if (result.partidasActivas) {
+                setMisPartidas(result.partidasActivas);
+              }
+
+              // Limpiar el query param
+              window.history.replaceState({}, '', '/lobby');
+            } else {
+              console.error('[Google Auth] Error:', result.error);
+            }
+          }
+        } catch (error) {
+          console.error('[Google Auth] Error sincronizando:', error);
+        } finally {
+          setGoogleAuthPending(false);
+        }
+      };
+
+      syncGoogleAuth();
+    }
+  }, [session, usuario, conectado, searchParams, googleAuthPending]);
+
   const solicitarPermisosNotificacion = useCallback(async () => {
     if ('Notification' in window && Notification.permission === 'default') {
       const permission = await Notification.requestPermission();
@@ -202,13 +255,18 @@ export default function LobbyPage() {
     }
   }, []);
 
-  const handleCerrarSesion = () => {
+  const handleCerrarSesion = async () => {
     setUsuario(null);
     setNombre('');
     setMisPartidas([]);
     sessionStorage.removeItem('truco_usuario');
     sessionStorage.removeItem('truco_auth');
     sessionStorage.removeItem('truco_nombre');
+
+    // Si tiene sesión de Google, cerrarla también
+    if (session) {
+      await signOut({ redirect: false });
+    }
   };
 
   // Obtener partidas del usuario logueado
@@ -1046,5 +1104,24 @@ export default function LobbyPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// Wrapper con Suspense para useSearchParams
+export default function LobbyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-table-wood flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative w-20 h-20 mx-auto mb-6">
+            <div className="absolute inset-0 rounded-full border-4 border-gold-700/30" />
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-gold-500 animate-spin" />
+          </div>
+          <div className="text-gold-400/80 text-xl font-light">Cargando...</div>
+        </div>
+      </div>
+    }>
+      <LobbyPageContent />
+    </Suspense>
   );
 }

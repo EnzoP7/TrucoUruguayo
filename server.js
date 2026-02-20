@@ -3,8 +3,8 @@ const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
 const { Server: SocketIOServer } = require('socket.io');
-const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples, actualizarPersonalizacion, obtenerPersonalizacion } = require('./db');
-const { registrar, login } = require('./auth');
+const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples, actualizarPersonalizacion, obtenerPersonalizacion, inicializarLogros, inicializarCosmeticos, obtenerEstadisticasDetalladas, actualizarEstadisticasDetalladas, verificarYDesbloquearLogros, obtenerLogrosUsuario, obtenerCosmeticosUsuario, comprarCosmetico, equiparCosmetico, obtenerCosmeticosEquipados } = require('./db');
+const { registrar, login, loginConGoogle, vincularCuentaGoogle, agregarPassword } = require('./auth');
 const TrucoBot = require('./src/truco/bot/TrucoBot');
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -487,6 +487,12 @@ function getEstadoParaJugador(mesa, jugadorId) {
   if (copia.jugadoresConFlor && !copia.florYaCantada) {
     copia.jugadoresConFlor = copia.jugadoresConFlor.filter(id => id === jugadorId);
   }
+
+  // Incluir cosméticos de todos los jugadores premium para que el cliente los aplique
+  if (mesa.cosmeticosJugadores) {
+    copia.cosmeticosJugadores = mesa.cosmeticosJugadores;
+  }
+
   return copia;
 }
 
@@ -2729,18 +2735,20 @@ function resolverEnvidoAutomatico(mesa, puntosAcumulados, diferirPuntos = false)
         // Ahora el equipo mano debe responder
         turnoEquipo = 'mano';
       } else if (jugador.puntos === mejorPuntajeDeclarado) {
-        // Empate: declara puntos pero mano gana el empate
+        // Empate: el equipo contrario (no mano) empata, pero pierde porque mano gana empates
+        // Debe decir "son buenas" porque sabe que pierde el empate
         declaraciones.push({
           jugadorId: jugador.jugadorId,
           jugadorNombre: jugador.jugadorNombre,
           equipo: jugador.equipo,
-          puntos: jugador.puntos,
-          sonBuenas: false,
+          puntos: null,
+          sonBuenas: true,
         });
-        // Empate: mano sigue ganando, ver si el contrario tiene más jugadores
+        // Empate: mano sigue ganando, ver si el contrario tiene más jugadores que puedan superar
         if (idxContrario < equipoContrarioJugadores.length) {
-          // Siguiente del contrario intenta
-          continue;
+          // El siguiente del contrario ya tiene puntos menores o iguales (están ordenados)
+          // Como están ordenados de mayor a menor, si este empató, los siguientes no pueden superar
+          break;
         } else {
           // No quedan más del contrario, mano gana
           break;
@@ -2755,13 +2763,8 @@ function resolverEnvidoAutomatico(mesa, puntosAcumulados, diferirPuntos = false)
           sonBuenas: true,
         });
         // Ver si quedan más del equipo contrario que puedan superar
-        if (idxContrario < equipoContrarioJugadores.length) {
-          // El siguiente del contrario ya tiene puntos menores (están ordenados), no puede
-          // Todos los restantes del contrario dicen son buenas implícitamente
-          break;
-        } else {
-          break;
-        }
+        // Como están ordenados, los siguientes tienen puntos menores o iguales
+        break;
       }
     } else {
       // turnoEquipo === 'mano'
@@ -3178,6 +3181,10 @@ function scheduleNextRound(io, room) {
 app.prepare().then(async () => {
   // Inicializar base de datos Turso
   await initDB();
+  // Inicializar logros y cosméticos predefinidos
+  await inicializarLogros();
+  await inicializarCosmeticos();
+  console.log('[DB] Logros y cosméticos inicializados');
 
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
@@ -3233,6 +3240,74 @@ app.prepare().then(async () => {
           jugadoresConUserId
         );
         console.log(`[DB] Partida guardada: ${room.tamañoSala}, ganador equipo ${mesa.winnerJuego}`);
+
+        // Actualizar estadísticas detalladas y verificar logros
+        const puntajeGanador = mesa.equipos.find(e => e.id === mesa.winnerJuego)?.puntaje || 30;
+        const puntajePerdedor = mesa.equipos.find(e => e.id !== mesa.winnerJuego)?.puntaje || 0;
+        const esPartidaPerfecta = puntajePerdedor === 0;
+
+        for (const j of jugadoresConUserId) {
+          if (!j.userId) continue;
+
+          const gano = j.equipo === mesa.winnerJuego;
+          const statsActualizacion = {};
+
+          // Contadores por modo de juego
+          if (room.tamañoSala === '1v1') {
+            statsActualizacion.partidas_1v1 = 1;
+            if (gano) statsActualizacion.victorias_1v1 = 1;
+          } else if (room.tamañoSala === '2v2') {
+            statsActualizacion.partidas_2v2 = 1;
+            if (gano) statsActualizacion.victorias_2v2 = 1;
+          } else if (room.tamañoSala === '3v3') {
+            statsActualizacion.partidas_3v3 = 1;
+            if (gano) statsActualizacion.victorias_3v3 = 1;
+          }
+
+          // Partida perfecta
+          if (gano && esPartidaPerfecta) {
+            statsActualizacion.partidas_perfectas = 1;
+          }
+
+          // Obtener estadísticas de cantos del jugador (si las hay)
+          const jugadorStats = mesa.statsJugadores?.get(j.userId) || {};
+          if (jugadorStats.trucosCantados) statsActualizacion.trucos_cantados = jugadorStats.trucosCantados;
+          if (jugadorStats.trucosGanados) statsActualizacion.trucos_ganados = jugadorStats.trucosGanados;
+          if (jugadorStats.envidosCantados) statsActualizacion.envidos_cantados = jugadorStats.envidosCantados;
+          if (jugadorStats.envidosGanados) statsActualizacion.envidos_ganados = jugadorStats.envidosGanados;
+          if (jugadorStats.floresCantadas) statsActualizacion.flores_cantadas = jugadorStats.floresCantadas;
+          if (jugadorStats.floresGanadas) statsActualizacion.flores_ganadas = jugadorStats.floresGanadas;
+          if (jugadorStats.idasAlMazo) statsActualizacion.idas_al_mazo = jugadorStats.idasAlMazo;
+
+          try {
+            await actualizarEstadisticasDetalladas(j.userId, statsActualizacion);
+
+            // Verificar y desbloquear logros
+            const estadisticasBasicas = await obtenerEstadisticas(j.userId);
+            const logrosDesbloqueados = await verificarYDesbloquearLogros(j.userId, statsActualizacion, estadisticasBasicas);
+
+            // Notificar logros desbloqueados al jugador
+            if (logrosDesbloqueados.length > 0) {
+              const roomJugador = room.jugadores.find(rj => rj.userId === j.userId);
+              if (roomJugador?.socketId) {
+                io.to(roomJugador.socketId).emit('logros-desbloqueados', {
+                  logros: logrosDesbloqueados.map(l => ({
+                    id: l.logro.id,
+                    nombre: l.logro.nombre,
+                    descripcion: l.logro.descripcion,
+                    icono: l.logro.icono,
+                    experienciaGanada: l.experienciaGanada,
+                    nivel: l.nivel,
+                    subioNivel: l.subioNivel,
+                  })),
+                });
+                console.log(`[Logros] ${roomJugador.nombre} desbloqueó ${logrosDesbloqueados.length} logro(s)`);
+              }
+            }
+          } catch (err) {
+            console.error(`[DB] Error actualizando stats detalladas para ${j.userId}:`, err);
+          }
+        }
       }
     } catch (err) {
       console.error('[DB] Error guardando partida:', err);
@@ -3361,6 +3436,92 @@ app.prepare().then(async () => {
       }
     });
 
+    // === LOGIN CON GOOGLE ===
+    socket.on('login-google', async (data, callback) => {
+      try {
+        const { googleId, email, nombre, avatarUrl } = data;
+        if (!googleId || !email || !nombre) {
+          return callback({ success: false, error: 'Datos de Google incompletos' });
+        }
+
+        const result = await loginConGoogle(googleId, email, nombre, avatarUrl);
+        if (result.success) {
+          socketUsuarios.set(socket.id, result.usuario);
+
+          // Buscar partidas activas del usuario (mismo código que login normal)
+          const partidasActivas = [];
+          for (const [mesaId, room] of lobbyRooms.entries()) {
+            if (room.estado === 'terminado') continue;
+            const jugadorEnRoom = room.jugadores.find(j => j.userId === result.usuario.id);
+            if (!jugadorEnRoom) continue;
+
+            const mesa = engines.get(mesaId);
+            const partidaInfo = {
+              mesaId: room.mesaId,
+              estado: room.estado,
+              tamañoSala: room.tamañoSala,
+              jugadores: room.jugadores.map(j => j.nombre),
+              jugadoresCount: room.jugadores.length,
+              maxJugadores: room.maxJugadores,
+            };
+            if (room.estado === 'jugando' && mesa) {
+              partidaInfo.puntaje = {
+                equipo1: mesa.equipos[0].puntaje,
+                equipo2: mesa.equipos[1].puntaje,
+                limite: mesa.puntosLimite,
+              };
+              const jugadorEnMesa = mesa.jugadores.find(j => j.nombre === jugadorEnRoom.nombre);
+              if (jugadorEnMesa) partidaInfo.miEquipo = jugadorEnMesa.equipo;
+            }
+            partidasActivas.push(partidaInfo);
+          }
+          result.partidasActivas = partidasActivas;
+        }
+        callback(result);
+      } catch (err) {
+        console.error('[Auth] Error login-google:', err);
+        callback({ success: false, error: 'Error interno del servidor' });
+      }
+    });
+
+    // === VINCULAR CUENTA GOOGLE ===
+    socket.on('vincular-google', async (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) {
+          return callback({ success: false, error: 'No autenticado' });
+        }
+
+        const { googleId, email } = data;
+        if (!googleId || !email) {
+          return callback({ success: false, error: 'Datos de Google incompletos' });
+        }
+
+        const result = await vincularCuentaGoogle(usuario.id, googleId, email);
+        callback(result);
+      } catch (err) {
+        console.error('[Auth] Error vincular-google:', err);
+        callback({ success: false, error: 'Error interno del servidor' });
+      }
+    });
+
+    // === AGREGAR PASSWORD A CUENTA GOOGLE ===
+    socket.on('agregar-password', async (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) {
+          return callback({ success: false, error: 'No autenticado' });
+        }
+
+        const { password } = data;
+        const result = await agregarPassword(usuario.id, password);
+        callback(result);
+      } catch (err) {
+        console.error('[Auth] Error agregar-password:', err);
+        callback({ success: false, error: 'Error interno del servidor' });
+      }
+    });
+
     // === OBTENER PERFIL/ESTADÍSTICAS ===
     socket.on('obtener-perfil', async (callback) => {
       try {
@@ -3409,18 +3570,52 @@ app.prepare().then(async () => {
     });
 
     // === PERSONALIZACIÓN DE MESA (Premium) ===
+    // Mapeo directo a IDs de cosméticos
+    const mapeoTemas = {
+      'clasico': 'mesa_clasico',
+      'azul': 'mesa_noche',
+      'rojo': 'mesa_rojo',
+      'dorado': 'mesa_dorado',
+    };
+    const mapeoReversos = {
+      'clasico': 'reverso_clasico',
+      'azul': 'reverso_azul',
+      'rojo': 'reverso_rojo',
+      'dorado': 'reverso_dorado',
+    };
+
     socket.on('actualizar-personalizacion', async (data, callback) => {
+      console.log(`[SERVER] actualizar-personalizacion recibido:`, data, `socketId=${socket.id}`);
       try {
         const usuario = socketUsuarios.get(socket.id);
+        console.log(`[SERVER] Usuario:`, usuario ? { id: usuario.id, apodo: usuario.apodo, es_premium: usuario.es_premium } : 'NO ENCONTRADO');
         if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
         if (!usuario.es_premium) { callback({ success: false, error: 'Función premium' }); return; }
-        const temasValidos = ['clasico', 'verde', 'azul', 'rojo', 'dorado', 'nocturno'];
-        const reversosValidos = ['clasico', 'uruguayo', 'dorado', 'minimalista', 'retro'];
+        const temasValidos = ['clasico', 'azul', 'rojo', 'dorado'];
+        const reversosValidos = ['clasico', 'azul', 'rojo', 'dorado'];
         const temaMesa = temasValidos.includes(data.temaMesa) ? data.temaMesa : 'clasico';
         const reversoCartas = reversosValidos.includes(data.reversoCartas) ? data.reversoCartas : 'clasico';
         await actualizarPersonalizacion(usuario.id, temaMesa, reversoCartas);
         usuario.tema_mesa = temaMesa;
         usuario.reverso_cartas = reversoCartas;
+
+        // También equipar el cosmético correspondiente (auto-desbloquear para premium)
+        const cosmeticoTema = mapeoTemas[temaMesa];
+        const cosmeticoReverso = mapeoReversos[reversoCartas];
+        console.log(`[DB] Equipando cosméticos para userId=${usuario.id}: tema=${cosmeticoTema}, reverso=${cosmeticoReverso}`);
+        if (cosmeticoTema) {
+          try {
+            const r = await equiparCosmetico(usuario.id, cosmeticoTema, true);
+            console.log(`[DB] Resultado equipar tema:`, r);
+          } catch (e) { console.error('[DB] Error equipar tema:', e); }
+        }
+        if (cosmeticoReverso) {
+          try {
+            const r = await equiparCosmetico(usuario.id, cosmeticoReverso, true);
+            console.log(`[DB] Resultado equipar reverso:`, r);
+          } catch (e) { console.error('[DB] Error equipar reverso:', e); }
+        }
+
         callback({ success: true, temaMesa, reversoCartas });
       } catch (err) {
         console.error('[DB] Error actualizar personalizacion:', err);
@@ -3447,6 +3642,100 @@ app.prepare().then(async () => {
         callback({ success: true, ranking });
       } catch (err) {
         console.error('[DB] Error obtener ranking:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    // === LOGROS Y PROGRESIÓN ===
+    socket.on('obtener-logros', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const logros = await obtenerLogrosUsuario(usuario.id);
+        const estadisticasDetalladas = await obtenerEstadisticasDetalladas(usuario.id);
+        callback({
+          success: true,
+          logros,
+          nivel: estadisticasDetalladas?.nivel || 1,
+          experiencia: estadisticasDetalladas?.experiencia || 0,
+          expRequerida: (estadisticasDetalladas?.nivel || 1) * 100,
+        });
+      } catch (err) {
+        console.error('[DB] Error obtener logros:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('obtener-estadisticas-detalladas', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const stats = await obtenerEstadisticasDetalladas(usuario.id);
+        callback({ success: true, estadisticas: stats });
+      } catch (err) {
+        console.error('[DB] Error obtener estadísticas detalladas:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    // === COSMÉTICOS ===
+    socket.on('obtener-cosmeticos', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const cosmeticos = await obtenerCosmeticosUsuario(usuario.id);
+        const estadisticasDetalladas = await obtenerEstadisticasDetalladas(usuario.id);
+        callback({
+          success: true,
+          cosmeticos,
+          nivel: estadisticasDetalladas?.nivel || 1,
+        });
+      } catch (err) {
+        console.error('[DB] Error obtener cosméticos:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('comprar-cosmetico', async (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const resultado = await comprarCosmetico(usuario.id, data.cosmeticoId);
+        if (resultado.error) {
+          callback({ success: false, error: resultado.error });
+        } else {
+          callback({ success: true, cosmetico: resultado.cosmetico });
+        }
+      } catch (err) {
+        console.error('[DB] Error comprar cosmético:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('equipar-cosmetico', async (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const resultado = await equiparCosmetico(usuario.id, data.cosmeticoId);
+        if (resultado.error) {
+          callback({ success: false, error: resultado.error });
+        } else {
+          callback({ success: true });
+        }
+      } catch (err) {
+        console.error('[DB] Error equipar cosmético:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('obtener-cosmeticos-equipados', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
+        const equipados = await obtenerCosmeticosEquipados(usuario.id);
+        callback({ success: true, equipados });
+      } catch (err) {
+        console.error('[DB] Error obtener cosméticos equipados:', err);
         callback({ success: false, error: 'Error interno' });
       }
     });
@@ -3614,7 +3903,7 @@ app.prepare().then(async () => {
         const usuarioCreador = socketUsuarios.get(socket.id);
         const room = {
           mesaId,
-          jugadores: [{ socketId: socket.id, nombre, userId: usuarioCreador?.id || null }],
+          jugadores: [{ socketId: socket.id, nombre, userId: usuarioCreador?.id || null, es_premium: usuarioCreador?.es_premium || false }],
           maxJugadores,
           tamañoSala,
           estado: 'esperando',
@@ -3627,7 +3916,7 @@ app.prepare().then(async () => {
         };
         lobbyRooms.set(mesaId, room);
 
-        const jugador = { id: socket.id, nombre, equipo: 1, cartas: [], modoAyuda: false, userId: usuarioCreador?.id || null, avatarUrl: usuarioCreador?.avatar_url || null };
+        const jugador = { id: socket.id, nombre, equipo: 1, cartas: [], modoAyuda: false, userId: usuarioCreador?.id || null, avatarUrl: usuarioCreador?.avatar_url || null, es_premium: usuarioCreador?.es_premium || false };
         const mesa = crearEstadoMesa(mesaId, [jugador], 30, { modoAlternado, modoAyuda });
         engines.set(mesaId, mesa);
 
@@ -3778,11 +4067,11 @@ app.prepare().then(async () => {
         if (room.jugadores.length >= room.maxJugadores) { callback(false, 'La partida está llena'); return; }
 
         const usuarioAuth = socketUsuarios.get(socket.id);
-        room.jugadores.push({ socketId: socket.id, nombre, userId: usuarioAuth?.id || null });
+        room.jugadores.push({ socketId: socket.id, nombre, userId: usuarioAuth?.id || null, es_premium: usuarioAuth?.es_premium || false });
 
         const halfPoint = Math.ceil(room.maxJugadores / 2);
         const equipo = (room.jugadores.length - 1) < halfPoint ? 1 : 2;
-        const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false, userId: usuarioAuth?.id || null, avatarUrl: usuarioAuth?.avatar_url || null };
+        const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false, userId: usuarioAuth?.id || null, avatarUrl: usuarioAuth?.avatar_url || null, es_premium: usuarioAuth?.es_premium || false };
 
         mesa.jugadores.push(jugador);
         // Re-assign teams
@@ -4129,6 +4418,30 @@ app.prepare().then(async () => {
         } catch (err) {
           console.error('[DB] Error cargando audios custom:', err);
           mesa.audiosCustom = {};
+        }
+
+        // Cache cosméticos equipados de jugadores premium
+        try {
+          mesa.cosmeticosJugadores = {};
+          for (const jugador of room.jugadores) {
+            console.log(`[DB] Checking cosmetics for ${jugador.nombre}: userId=${jugador.userId}, es_premium=${jugador.es_premium}, isBot=${jugador.isBot}`);
+            // Cargar cosméticos para todos los jugadores humanos (premium o no)
+            if (jugador.userId && !jugador.isBot) {
+              const equipados = await obtenerCosmeticosEquipados(jugador.userId);
+              console.log(`[DB] Equipados for ${jugador.nombre} (userId=${jugador.userId}):`, JSON.stringify(equipados));
+              if (equipados.length > 0) {
+                mesa.cosmeticosJugadores[jugador.socketId] = {};
+                for (const c of equipados) {
+                  mesa.cosmeticosJugadores[jugador.socketId][c.tipo] = c.id;
+                  console.log(`[DB] Assigned ${c.tipo}=${c.id} for ${jugador.nombre}`);
+                }
+              }
+            }
+          }
+          console.log('[DB] Cosméticos equipados cargados:', JSON.stringify(mesa.cosmeticosJugadores));
+        } catch (err) {
+          console.error('[DB] Error cargando cosméticos:', err);
+          mesa.cosmeticosJugadores = {};
         }
 
         // Send state to all (shows shuffle animation + cut phase)

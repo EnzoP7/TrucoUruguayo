@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter, Cinzel, Permanent_Marker } from 'next/font/google'
+import { Providers } from './providers'
 import './globals.css'
 
 const inter = Inter({
@@ -42,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${inter.variable} ${cinzel.variable} ${permanentMarker.variable}`}>
       <body className={`${inter.className} bg-table-wood`}>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

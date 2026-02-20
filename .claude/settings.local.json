@@ -24,7 +24,8 @@
       "Read(//c/**)",
       "Bash(node -c:*)",
       "Bash(node -e:*)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(find:*)"
     ]
   }
 }

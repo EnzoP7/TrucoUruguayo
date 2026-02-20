@@ -323,6 +323,27 @@ class SocketService {
     });
   }
 
+  async loginConGoogle(googleId: string, email: string, nombre: string, avatarUrl?: string): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('login-google' as any, { googleId, email, nombre, avatarUrl }, (result: any) => resolve(result));
+    });
+  }
+
+  async vincularGoogle(googleId: string, email: string): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('vincular-google' as any, { googleId, email }, (result: any) => resolve(result));
+    });
+  }
+
+  async agregarPasswordACuenta(password: string): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('agregar-password' as any, { password }, (result: any) => resolve(result));
+    });
+  }
+
   async obtenerPerfil(): Promise<any> {
     if (!this.socket) return { success: false, error: 'Sin conexión' };
     return new Promise((resolve) => {
@@ -393,9 +414,20 @@ class SocketService {
   }
 
   async actualizarPersonalizacion(temaMesa: string, reversoCartas: string): Promise<{ success: boolean; temaMesa?: string; reversoCartas?: string; error?: string }> {
-    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    console.log('[Socket] actualizarPersonalizacion:', { temaMesa, reversoCartas, connected: this.socket?.connected, socketId: this.socket?.id });
+    if (!this.socket) {
+      console.log('[Socket] No hay socket!');
+      return { success: false, error: 'Sin conexión' };
+    }
+    if (!this.socket.connected) {
+      console.log('[Socket] Socket no está conectado!');
+      return { success: false, error: 'Socket desconectado' };
+    }
     return new Promise((resolve) => {
-      this.socket!.emit('actualizar-personalizacion' as any, { temaMesa, reversoCartas }, (result: any) => resolve(result));
+      this.socket!.emit('actualizar-personalizacion' as any, { temaMesa, reversoCartas }, (result: any) => {
+        console.log('[Socket] Respuesta de actualizar-personalizacion:', result);
+        resolve(result);
+      });
     });
   }
 
@@ -404,6 +436,49 @@ class SocketService {
     return new Promise((resolve) => {
       this.socket!.emit('obtener-personalizacion' as any, (result: any) => resolve(result));
     });
+  }
+
+  // === LOGROS Y PROGRESIÓN ===
+
+  async obtenerLogros(): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-logros' as any, (result: any) => resolve(result));
+    });
+  }
+
+  async obtenerEstadisticasDetalladas(): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-estadisticas-detalladas' as any, (result: any) => resolve(result));
+    });
+  }
+
+  // === COSMÉTICOS ===
+
+  async obtenerCosmeticos(): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-cosmeticos' as any, (result: any) => resolve(result));
+    });
+  }
+
+  async comprarCosmetico(cosmeticoId: string): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('comprar-cosmetico' as any, { cosmeticoId }, (result: any) => resolve(result));
+    });
+  }
+
+  async equiparCosmetico(cosmeticoId: string): Promise<any> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('equipar-cosmetico' as any, { cosmeticoId }, (result: any) => resolve(result));
+    });
+  }
+
+  onLogrosDesbloqueados(callback: (data: any) => void): void {
+    this.socket?.on('logros-desbloqueados' as any, callback);
   }
 
   // === BOTS ===
