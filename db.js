@@ -116,6 +116,17 @@ async function initDB() {
         obtenido_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (usuario_id, cosmetico_id)
       );
+
+      CREATE TABLE IF NOT EXISTS sugerencias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        email TEXT,
+        tipo TEXT DEFAULT 'sugerencia',
+        mensaje TEXT NOT NULL,
+        usuario_id INTEGER REFERENCES usuarios(id),
+        estado TEXT DEFAULT 'pendiente',
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // Agregar columnas nuevas a usuarios (ignorar si ya existen)
@@ -871,6 +882,40 @@ async function obtenerAudiosCustomMultiples(userIds) {
   return result.rows;
 }
 
+// ============ SUGERENCIAS ============
+
+async function crearSugerencia(nombre, email, tipo, mensaje, userId = null) {
+  const result = await db.execute({
+    sql: `INSERT INTO sugerencias (nombre, email, tipo, mensaje, usuario_id)
+          VALUES (?, ?, ?, ?, ?)`,
+    args: [nombre, email || null, tipo, mensaje, userId],
+  });
+  return Number(result.lastInsertRowid);
+}
+
+async function obtenerSugerencias(estado = null, limite = 50) {
+  let sql = 'SELECT * FROM sugerencias';
+  const args = [];
+
+  if (estado) {
+    sql += ' WHERE estado = ?';
+    args.push(estado);
+  }
+
+  sql += ' ORDER BY creado_en DESC LIMIT ?';
+  args.push(limite);
+
+  const result = await db.execute({ sql, args });
+  return result.rows;
+}
+
+async function actualizarEstadoSugerencia(id, estado) {
+  await db.execute({
+    sql: 'UPDATE sugerencias SET estado = ? WHERE id = ?',
+    args: [estado, id],
+  });
+}
+
 module.exports = {
   db,
   initDB,
@@ -915,4 +960,8 @@ module.exports = {
   comprarCosmetico,
   equiparCosmetico,
   obtenerCosmeticosEquipados,
+  // Sugerencias
+  crearSugerencia,
+  obtenerSugerencias,
+  actualizarEstadoSugerencia,
 };

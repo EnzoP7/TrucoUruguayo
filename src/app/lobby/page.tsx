@@ -7,6 +7,8 @@ import { useSession, signOut } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import socketService from '@/lib/socket';
 import audioManager from '@/lib/audioManager';
+import { AdBanner } from '@/components/ads';
+import FeedbackModal from '@/components/FeedbackModal';
 
 interface Partida {
   mesaId: string;
@@ -104,6 +106,7 @@ function LobbyPageContent() {
   const [inviteSent, setInviteSent] = useState<Set<number>>(new Set());
   const [invitacion, setInvitacion] = useState<{ de: string; mesaId: string; tamañoSala: string } | null>(null);
   const [notificacionesPermitidas, setNotificacionesPermitidas] = useState<boolean | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   useEffect(() => {
     // Restaurar sesión guardada
@@ -998,23 +1001,68 @@ function LobbyPageContent() {
           )}
         </div>
 
-        {/* Footer */}
+        {/* Banner de publicidad */}
+        <div className="flex justify-center my-6">
+          <AdBanner
+            size="leaderboard"
+            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
+            className="hidden sm:flex"
+          />
+          <AdBanner
+            size="banner"
+            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
+            className="flex sm:hidden"
+          />
+        </div>
+
+        {/* Footer con caracteristicas */}
         <footer className="mt-10 text-center animate-fade-in">
-          <div className="inline-flex items-center gap-6 text-gold-600/30 text-xs tracking-wider">
+          <div className="inline-flex items-center gap-6 text-gold-600/30 text-xs tracking-wider mb-6">
             <span className="flex items-center gap-1.5">
-              <Image src="/Images/Pelota.png" alt="" width={18} height={18} className="w-[18px] h-[18px] opacity-40" /> Tiempo real
+              <Image src="/Images/Pelota.png" alt="Truco en tiempo real" width={18} height={18} className="w-[18px] h-[18px] opacity-40" /> Tiempo real
             </span>
             <span className="w-1 h-1 rounded-full bg-gold-700/30" />
             <span className="flex items-center gap-1.5">
-              <Image src="/Images/MonedaArtigas.png" alt="" width={18} height={18} className="w-[18px] h-[18px] opacity-40" /> Clasico
+              <Image src="/Images/MonedaArtigas.png" alt="Truco clasico uruguayo" width={18} height={18} className="w-[18px] h-[18px] opacity-40" /> Clasico
             </span>
             <span className="w-1 h-1 rounded-full bg-gold-700/30" />
             <span className="flex items-center gap-1.5">
-              <Image src="/Images/MapaUruguayBandera.png" alt="" width={18} height={18} className="w-[18px] h-[18px] opacity-40" /> Uruguayo
+              <Image src="/Images/MapaUruguayBandera.png" alt="Truco Uruguayo" width={18} height={18} className="w-[18px] h-[18px] opacity-40" /> Uruguayo
             </span>
+          </div>
+
+          {/* Creditos del desarrollador */}
+          <div className="border-t border-celeste-600/20 pt-4">
+            <p className="text-gold-400/70 text-sm mb-2">
+              Desarrollado por <span className="font-semibold text-gold-400">Enzo Pontet</span>
+            </p>
+            <p className="text-white/40 text-xs mb-4">
+              Queres colaborar o sugerir mejoras?
+            </p>
+
+            {/* Boton de sugerencias destacado */}
+            <button
+              onClick={() => setFeedbackOpen(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-500 hover:to-green-400 transition-all shadow-lg shadow-green-600/30 hover:scale-105 active:scale-95 mb-3"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              Enviar Sugerencia
+            </button>
+
+            <p className="text-white/30 text-xs">
+              o escribinos a{' '}
+              <a href="mailto:enzopch2022@gmail.com" className="text-celeste-400/70 hover:text-celeste-300 transition-colors">
+                enzopch2022@gmail.com
+              </a>
+            </p>
           </div>
         </footer>
       </div>
+
+      {/* Modal de feedback */}
+      <FeedbackModal isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
 
       {/* Modal invitar amigos */}
       {inviteModalMesaId && (
