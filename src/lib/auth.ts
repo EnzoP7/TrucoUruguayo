@@ -14,6 +14,8 @@ declare module 'next-auth' {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Confiar en el host en producción (necesario para Render, Vercel, etc.)
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,

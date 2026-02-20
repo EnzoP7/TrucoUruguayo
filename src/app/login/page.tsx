@@ -63,10 +63,10 @@ export default function LoginPage() {
       <div className="min-h-screen bg-table-wood flex items-center justify-center">
         <div className="text-center">
           <div className="relative w-20 h-20 mx-auto mb-6">
-            <div className="absolute inset-0 rounded-full border-4 border-gold-700/30" />
-            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-gold-500 animate-spin" />
+            <div className="absolute inset-0 rounded-full border-4 border-celeste-600/30" />
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-celeste-400 animate-spin" />
           </div>
-          <div className="text-gold-400/80 text-xl font-light">Conectando...</div>
+          <div className="text-celeste-300 text-xl font-light">Conectando...</div>
         </div>
       </div>
     );
@@ -75,7 +75,9 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-table-wood flex items-center justify-center p-4">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-radial from-amber-500/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-radial from-celeste-500/15 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-72 h-72 bg-celeste-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-0 w-72 h-72 bg-celeste-600/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative z-10 w-full max-w-md">
@@ -87,24 +89,24 @@ export default function LoginPage() {
             </h1>
           </Link>
           <div className="flex items-center justify-center gap-3">
-            <div className="h-px w-8 bg-gold-700/40" />
-            <p className="text-gold-500/60 text-sm tracking-widest uppercase">
+            <div className="h-px w-8 bg-celeste-600/40" />
+            <p className="text-celeste-400/80 text-sm tracking-widest uppercase">
               {mode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}
             </p>
-            <div className="h-px w-8 bg-gold-700/40" />
+            <div className="h-px w-8 bg-celeste-600/40" />
           </div>
         </div>
 
         {/* Formulario */}
-        <div className="glass rounded-2xl p-6 sm:p-8 border border-gold-800/20 animate-slide-up">
+        <div className="glass rounded-2xl p-6 sm:p-8 border border-celeste-600/30 animate-slide-up">
           {/* Tabs login/registro */}
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => { setMode('login'); setError(''); }}
               className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 mode === 'login'
-                  ? 'bg-gold-600/30 text-gold-300 border border-gold-500/30'
-                  : 'text-gold-500/50 hover:text-gold-400 hover:bg-white/5'
+                  ? 'bg-celeste-600/30 text-celeste-300 border border-celeste-500/30'
+                  : 'text-white/50 hover:text-celeste-300 hover:bg-white/5'
               }`}
             >
               Iniciar Sesión
@@ -113,8 +115,8 @@ export default function LoginPage() {
               onClick={() => { setMode('registro'); setError(''); }}
               className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 mode === 'registro'
-                  ? 'bg-gold-600/30 text-gold-300 border border-gold-500/30'
-                  : 'text-gold-500/50 hover:text-gold-400 hover:bg-white/5'
+                  ? 'bg-celeste-600/30 text-celeste-300 border border-celeste-500/30'
+                  : 'text-white/50 hover:text-celeste-300 hover:bg-white/5'
               }`}
             >
               Crear Cuenta
@@ -123,7 +125,7 @@ export default function LoginPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-gold-400/80 text-sm font-medium mb-2">Apodo</label>
+              <label className="block text-celeste-300 text-sm font-medium mb-2">Apodo</label>
               <input
                 type="text"
                 value={apodo}
@@ -135,7 +137,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-gold-400/80 text-sm font-medium mb-2">Contraseña</label>
+              <label className="block text-celeste-300 text-sm font-medium mb-2">Contraseña</label>
               <input
                 type="password"
                 value={password}
@@ -163,9 +165,9 @@ export default function LoginPage() {
 
           {/* Separador */}
           <div className="flex items-center gap-3 my-6">
-            <div className="h-px flex-1 bg-gold-700/20" />
-            <span className="text-gold-500/40 text-xs uppercase tracking-wider">o</span>
-            <div className="h-px flex-1 bg-gold-700/20" />
+            <div className="h-px flex-1 bg-celeste-600/30" />
+            <span className="text-white/40 text-xs uppercase tracking-wider">o</span>
+            <div className="h-px flex-1 bg-celeste-600/30" />
           </div>
 
           {/* Botón Google */}
@@ -204,19 +206,19 @@ export default function LoginPage() {
 
           {/* Separador pequeño */}
           <div className="flex items-center gap-3 my-4">
-            <div className="h-px flex-1 bg-gold-700/20" />
+            <div className="h-px flex-1 bg-celeste-600/20" />
           </div>
 
           {/* Jugar como invitado */}
           <Link
             href="/lobby"
-            className="block w-full text-center py-3 rounded-xl text-gold-400/60 hover:text-gold-300 hover:bg-white/5 border border-gold-700/20 transition-all text-sm"
+            className="block w-full text-center py-3 rounded-xl text-celeste-400/70 hover:text-celeste-300 hover:bg-celeste-900/20 border border-celeste-600/30 transition-all text-sm"
           >
             Jugar como invitado (sin estadísticas)
           </Link>
         </div>
 
-        <p className="text-gold-500/30 text-xs text-center mt-4">
+        <p className="text-white/40 text-xs text-center mt-4">
           Con una cuenta guardás tus estadísticas, ranking y amigos
         </p>
       </div>

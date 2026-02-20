@@ -523,13 +523,13 @@ function LobbyPageContent() {
 
         {/* Banner de reconexión (solo invitados) */}
         {!usuario && partidaGuardada && nombre.trim() && (
-          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-amber-500/30 bg-amber-900/10">
+          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-gold-500/40 bg-gold-900/20">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <ReconnectIcon className="w-6 h-6 text-amber-400 animate-spin-slow flex-shrink-0" />
+                <ReconnectIcon className="w-6 h-6 text-gold-400 animate-spin-slow flex-shrink-0" />
                 <div>
-                  <p className="text-gold-300 font-medium">Tenés una partida en curso</p>
-                  <p className="text-gold-500/60 text-sm">Podés volver a conectarte a tu partida anterior</p>
+                  <p className="text-white font-medium">Tenés una partida en curso</p>
+                  <p className="text-white/60 text-sm">Podés volver a conectarte a tu partida anterior</p>
                 </div>
               </div>
               <div className="flex gap-2 flex-shrink-0">
@@ -538,14 +538,14 @@ function LobbyPageContent() {
                     sessionStorage.removeItem('truco_mesaId');
                     setPartidaGuardada(null);
                   }}
-                  className="px-3 py-2 rounded-lg text-sm text-gold-500/60 hover:text-gold-400 hover:bg-white/5 transition-all"
+                  className="px-3 py-2 rounded-lg text-sm text-white/60 hover:text-white hover:bg-white/10 transition-all"
                 >
                   Descartar
                 </button>
                 <button
                   onClick={() => handleReconectarPartida(partidaGuardada)}
                   disabled={loading}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-amber-600 to-amber-700 text-white hover:from-amber-500 hover:to-amber-600 transition-all shadow-lg shadow-amber-600/20 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-gold-500 to-gold-600 text-black hover:from-gold-400 hover:to-gold-500 transition-all shadow-lg shadow-gold-500/30 disabled:opacity-50"
                 >
                   {loading ? 'Reconectando...' : 'Volver a la partida'}
                 </button>
@@ -591,20 +591,20 @@ function LobbyPageContent() {
             </div>
           </div>
         ) : (
-          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-gold-800/20">
+          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-white/20 bg-white/5">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-wood-800 flex items-center justify-center text-gold-500/50 text-lg">
+                <div className="w-10 h-10 rounded-full bg-celeste-900/50 border border-celeste-500/30 flex items-center justify-center text-celeste-300/70 text-lg">
                   ?
                 </div>
                 <div>
-                  <div className="text-gold-400/70 font-medium">Modo invitado</div>
-                  <div className="text-gold-500/40 text-xs">Sin estadísticas ni ranking</div>
+                  <div className="text-white/80 font-medium">Modo invitado</div>
+                  <div className="text-white/50 text-xs">Sin estadísticas ni ranking</div>
                 </div>
               </div>
               <Link
                 href="/login"
-                className="px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-gold-600 to-gold-700 text-wood-950 hover:from-gold-500 hover:to-gold-600 transition-all shadow-lg shadow-gold-600/20"
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-celeste-500 to-celeste-600 text-white hover:from-celeste-400 hover:to-celeste-500 transition-all shadow-lg shadow-celeste-600/30"
               >
                 Iniciar sesión / Registrarse
               </Link>
@@ -724,18 +724,18 @@ function LobbyPageContent() {
         )}
 
         {/* Panel de crear partida */}
-        <div className="glass rounded-2xl p-6 sm:p-8 mb-6 animate-slide-up border border-gold-800/20">
+        <div className="glass rounded-2xl p-6 sm:p-8 mb-6 animate-slide-up border border-celeste-500/30 bg-gradient-to-br from-celeste-900/20 to-transparent">
           {/* Input nombre (solo para usuarios no registrados como fallback) */}
           {!usuario && (
             <div className="mb-6">
-              <label className="block text-gold-400/80 text-sm font-medium mb-2 tracking-wide">
+              <label className="block text-white/80 text-sm font-medium mb-2 tracking-wide">
                 O jugá como invitado
               </label>
               <input
                 type="text"
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
-                className="input-glass w-full px-4 py-3.5 rounded-xl text-lg"
+                className="w-full px-4 py-3.5 rounded-xl text-lg bg-white/10 border border-celeste-500/30 text-white placeholder:text-white/40 focus:border-celeste-400 focus:ring-2 focus:ring-celeste-500/30 outline-none transition-all"
                 placeholder="Nombre temporal (sin estadísticas)"
                 maxLength={20}
               />
@@ -744,7 +744,7 @@ function LobbyPageContent() {
 
           {/* Selector de tamaño */}
           <div className="mb-6">
-            <label className="block text-gold-400/80 text-sm font-medium mb-3 tracking-wide">
+            <label className="block text-white/80 text-sm font-medium mb-3 tracking-wide">
               Tamaño de la sala
             </label>
             <div className="grid grid-cols-3 gap-3">
@@ -758,18 +758,18 @@ function LobbyPageContent() {
                     onClick={() => setTamañoSala(tamaño)}
                     className={`relative px-4 py-4 rounded-xl font-bold transition-all duration-300 transform hover:scale-[1.02] ${
                       isSelected
-                        ? 'bg-gradient-to-br from-gold-600 to-gold-700 text-wood-950 shadow-lg shadow-gold-600/20 border-2 border-gold-400/50'
-                        : 'glass text-gold-300/70 hover:text-gold-200 hover:bg-white/5 border border-gold-800/30'
+                        ? 'bg-gradient-to-br from-celeste-500 to-celeste-700 text-white shadow-lg shadow-celeste-600/30 border-2 border-celeste-400/50'
+                        : 'glass text-white/70 hover:text-white hover:bg-white/10 border border-white/20'
                     }`}
                   >
                     <div className="flex flex-col items-center">
                       <span className="text-2xl sm:text-3xl mb-1">{tamaño}</span>
-                      <span className={`text-xs ${isSelected ? 'text-wood-800' : 'opacity-60'}`}>
+                      <span className={`text-xs ${isSelected ? 'text-celeste-100' : 'opacity-60'}`}>
                         {jugadores} jugadores
                       </span>
                     </div>
                     {isSelected && (
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-wood-950" />
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-gold-400 rounded-full border-2 border-celeste-700 shadow-lg shadow-gold-400/50" />
                     )}
                   </button>
                 );
@@ -788,13 +788,13 @@ function LobbyPageContent() {
                     onChange={(e) => setModoAlternado(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-wood-800 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-gold-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold-600"></div>
+                  <div className="w-11 h-6 bg-celeste-900/50 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-celeste-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-celeste-500"></div>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-gold-300 font-medium group-hover:text-gold-200 transition-colors">
+                  <span className="text-white font-medium group-hover:text-celeste-200 transition-colors">
                     🐔 Pico a Pico
                   </span>
-                  <span className="text-gold-400/60 text-xs">
+                  <span className="text-white/60 text-xs">
                     En malas: alterna rondas 3v3 y 1v1 (cada uno contra su rival de enfrente)
                   </span>
                 </div>
@@ -806,7 +806,7 @@ function LobbyPageContent() {
           <button
             onClick={handleCrearPartida}
             disabled={loading || !nombre.trim()}
-            className="btn-primary w-full text-white text-lg py-4 px-6 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full text-white text-lg py-4 px-6 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-celeste-500 to-celeste-600 hover:from-celeste-400 hover:to-celeste-500 transition-all shadow-lg shadow-celeste-600/30 font-bold"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -826,13 +826,13 @@ function LobbyPageContent() {
         </div>
 
         {/* Lista de partidas */}
-        <div className="glass rounded-2xl p-6 sm:p-8 animate-slide-up border border-gold-800/20" style={{ animationDelay: '0.15s' }}>
+        <div className="glass rounded-2xl p-6 sm:p-8 animate-slide-up border border-white/20 bg-gradient-to-br from-white/5 to-transparent" style={{ animationDelay: '0.15s' }}>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="font-[var(--font-cinzel)] text-2xl sm:text-3xl font-bold text-gold-400">
+            <h2 className="font-[var(--font-cinzel)] text-2xl sm:text-3xl font-bold text-white">
               Partidas Disponibles
             </h2>
-            <div className="flex items-center gap-2 text-gold-500/50 text-sm">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <div className="flex items-center gap-2 text-celeste-300/70 text-sm">
+              <div className="w-2 h-2 rounded-full bg-celeste-400 animate-pulse" />
               <span>{partidas.length} activas</span>
             </div>
           </div>
@@ -840,13 +840,13 @@ function LobbyPageContent() {
           {partidas.length === 0 ? (
             <div className="text-center py-16">
               <div className="w-24 h-24 mx-auto mb-6 relative">
-                <div className="absolute inset-0 bg-gold-500/5 rounded-full animate-pulse" />
-                <TableIcon className="w-full h-full text-gold-600/30 relative z-10 p-4" />
+                <div className="absolute inset-0 bg-celeste-500/10 rounded-full animate-pulse" />
+                <TableIcon className="w-full h-full text-celeste-400/40 relative z-10 p-4" />
               </div>
-              <p className="text-gold-300/50 text-lg font-light mb-2">
+              <p className="text-white/60 text-lg font-light mb-2">
                 No hay partidas disponibles
               </p>
-              <p className="text-gold-500/30 text-sm">
+              <p className="text-white/40 text-sm">
                 Crea una nueva partida para empezar a jugar
               </p>
             </div>
@@ -864,19 +864,19 @@ function LobbyPageContent() {
                     key={partida.mesaId}
                     className={`glass rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 border ${
                       soyJugador
-                        ? 'border-celeste-500/50 bg-celeste-900/10'
+                        ? 'border-celeste-400/50 bg-celeste-900/20'
                         : puedeUnirse
-                          ? 'border-green-600/30 hover:border-green-500/50 hover:bg-green-900/10'
-                          : 'border-gold-800/20 opacity-60'
+                          ? 'border-celeste-500/30 hover:border-celeste-400/50 hover:bg-celeste-900/10'
+                          : 'border-white/10 opacity-60'
                     } animate-slide-up`}
                     style={{ animationDelay: `${0.05 * index}s` }}
                   >
                     <div className="flex items-center gap-4">
                       {/* Icono de mesa */}
                       <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
-                        soyJugador ? 'bg-celeste-600/20' : puedeUnirse ? 'bg-green-600/20' : 'bg-gold-600/10'
+                        soyJugador ? 'bg-celeste-500/30' : puedeUnirse ? 'bg-celeste-600/20' : 'bg-white/10'
                       }`}>
-                        <span className="text-2xl font-bold text-gold-400">
+                        <span className="text-2xl font-bold text-white">
                           {partida.mesaId.split('_')[1]?.slice(0, 2) || '#'}
                         </span>
                       </div>
@@ -900,8 +900,8 @@ function LobbyPageContent() {
 
                         {/* Creador */}
                         {partida.creadorNombre && (
-                          <div className="text-gold-500/60 text-xs mb-1.5">
-                            Creada por: <span className="text-gold-400">{partida.creadorNombre}</span>
+                          <div className="text-white/50 text-xs mb-1.5">
+                            Creada por: <span className="text-celeste-300">{partida.creadorNombre}</span>
                           </div>
                         )}
 
@@ -914,19 +914,19 @@ function LobbyPageContent() {
                                   key={i}
                                   className={`w-2.5 h-2.5 rounded-full transition-colors ${
                                     i < partida.jugadores
-                                      ? 'bg-gold-400'
-                                      : 'bg-gold-800/40'
+                                      ? 'bg-celeste-400'
+                                      : 'bg-white/20'
                                   }`}
                                 />
                               ))}
                             </div>
-                            <span className="text-gold-400/60 text-sm">
+                            <span className="text-white/60 text-sm">
                               {partida.jugadores}/{partida.maxJugadores}
                             </span>
                           </div>
 
                           {/* Badge de tamaño */}
-                          <span className="px-2.5 py-0.5 bg-gold-600/20 text-gold-400 rounded-full text-xs font-medium">
+                          <span className="px-2.5 py-0.5 bg-celeste-600/30 text-celeste-300 rounded-full text-xs font-medium">
                             {partida.tamañoSala}
                           </span>
 

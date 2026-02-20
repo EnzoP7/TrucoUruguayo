@@ -6,12 +6,12 @@ import Image from 'next/image';
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-table-wood overflow-hidden relative">
-      {/* Efectos de luz ambiente de pulperia */}
+      {/* Efectos de luz ambiente uruguayos - celeste y dorado */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-radial from-amber-500/10 via-amber-600/5 to-transparent rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-wood-600/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-wood-600/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-felt-800/20 rounded-full blur-3xl" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-radial from-celeste-500/15 via-celeste-600/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-celeste-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-celeste-600/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-celeste-900/20 rounded-full blur-3xl" />
       </div>
 
       {/* Imagenes decorativas flotantes de fondo */}
@@ -103,21 +103,21 @@ export default function HomePage() {
 
         {/* Modos de Juego */}
         <div className="w-full max-w-4xl animate-slide-up" style={{ animationDelay: '0.6s' }}>
-          <h2 className="text-center text-xl md:text-2xl font-[var(--font-cinzel)] text-gold-300/80 mb-8 tracking-widest uppercase">
+          <h2 className="text-center text-xl md:text-2xl font-[var(--font-cinzel)] text-celeste-300 mb-8 tracking-widest uppercase">
             Modos de Juego
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 px-4">
             {/* 1v1 */}
-            <div className="glass relative rounded-xl p-6 md:p-8 hover:bg-white/10 transition-all duration-300 group cursor-pointer border border-gold-700/20 hover:border-gold-600/40">
+            <div className="glass relative rounded-xl p-6 md:p-8 hover:bg-celeste-900/20 transition-all duration-300 group cursor-pointer border border-celeste-600/30 hover:border-celeste-500/50">
               <div className="text-center">
                 <div className="flex justify-center mb-2">
                   <Image src="/Images/Vaca.png" alt="" width={48} height={48} className="w-10 h-10 opacity-50 group-hover:opacity-80 transition-opacity" />
                 </div>
-                <div className="text-4xl md:text-5xl font-[var(--font-cinzel)] font-bold text-gold-400 mb-2 group-hover:scale-110 transition-transform duration-300">
+                <div className="text-4xl md:text-5xl font-[var(--font-cinzel)] font-bold text-celeste-400 mb-2 group-hover:scale-110 transition-transform duration-300">
                   1v1
                 </div>
-                <div className="text-sm text-gold-200/50 tracking-wide">
+                <div className="text-sm text-white/60 tracking-wide">
                   Mano a mano
                 </div>
                 <div className="mt-4 flex justify-center gap-2">
@@ -128,15 +128,15 @@ export default function HomePage() {
             </div>
 
             {/* 2v2 */}
-            <div className="glass relative rounded-xl p-6 md:p-8 hover:bg-white/10 transition-all duration-300 group cursor-pointer border border-gold-700/20 hover:border-gold-600/40">
+            <div className="glass relative rounded-xl p-6 md:p-8 hover:bg-celeste-900/20 transition-all duration-300 group cursor-pointer border border-celeste-600/30 hover:border-celeste-500/50">
               <div className="text-center">
                 <div className="flex justify-center mb-2">
                   <Image src="/Images/TermoYMate.png" alt="" width={48} height={48} className="w-10 h-10 opacity-50 group-hover:opacity-80 transition-opacity" />
                 </div>
-                <div className="text-4xl md:text-5xl font-[var(--font-cinzel)] font-bold text-gold-400 mb-2 group-hover:scale-110 transition-transform duration-300">
+                <div className="text-4xl md:text-5xl font-[var(--font-cinzel)] font-bold text-celeste-400 mb-2 group-hover:scale-110 transition-transform duration-300">
                   2v2
                 </div>
-                <div className="text-sm text-gold-200/50 tracking-wide">
+                <div className="text-sm text-white/60 tracking-wide">
                   Equipos de dos
                 </div>
                 <div className="mt-4 flex justify-center gap-2">
@@ -150,15 +150,15 @@ export default function HomePage() {
             </div>
 
             {/* 3v3 */}
-            <div className="glass relative rounded-xl p-6 md:p-8 hover:bg-white/10 transition-all duration-300 group cursor-pointer border border-gold-700/20 hover:border-gold-600/40">
+            <div className="glass relative rounded-xl p-6 md:p-8 hover:bg-celeste-900/20 transition-all duration-300 group cursor-pointer border border-celeste-600/30 hover:border-celeste-500/50">
               <div className="text-center">
                 <div className="flex justify-center mb-2">
                   <Image src="/Images/Tambor.png" alt="" width={48} height={48} className="w-10 h-10 opacity-50 group-hover:opacity-80 transition-opacity" />
                 </div>
-                <div className="text-4xl md:text-5xl font-[var(--font-cinzel)] font-bold text-gold-400 mb-2 group-hover:scale-110 transition-transform duration-300">
+                <div className="text-4xl md:text-5xl font-[var(--font-cinzel)] font-bold text-celeste-400 mb-2 group-hover:scale-110 transition-transform duration-300">
                   3v3
                 </div>
-                <div className="text-sm text-gold-200/50 tracking-wide">
+                <div className="text-sm text-white/60 tracking-wide">
                   Equipos de tres
                 </div>
                 <div className="mt-4 flex justify-center gap-1">
@@ -181,35 +181,35 @@ export default function HomePage() {
             <div className="flex justify-center mb-1">
               <Image src="/Images/Vaca.png" alt="" width={36} height={36} className="w-9 h-9 opacity-70" />
             </div>
-            <div className="text-2xl mb-1 text-gold-500 font-bold">30</div>
-            <div className="text-xs text-gold-200/40 uppercase tracking-wider">Puntos</div>
+            <div className="text-2xl mb-1 text-celeste-400 font-bold">30</div>
+            <div className="text-xs text-white/50 uppercase tracking-wider">Puntos</div>
           </div>
           <div className="text-center">
             <div className="flex justify-center mb-1">
               <Image src="/Images/MapaUruguayBandera.png" alt="" width={36} height={36} className="w-9 h-9 opacity-70" />
             </div>
-            <div className="text-2xl mb-1 text-gold-500 font-bold">40</div>
-            <div className="text-xs text-gold-200/40 uppercase tracking-wider">Cartas</div>
+            <div className="text-2xl mb-1 text-celeste-400 font-bold">40</div>
+            <div className="text-xs text-white/50 uppercase tracking-wider">Cartas</div>
           </div>
           <div className="text-center">
             <div className="flex justify-center mb-1">
               <Image src="/Images/DulceDeLeche.png" alt="" width={36} height={36} className="w-9 h-9 opacity-70" />
             </div>
-            <div className="text-2xl mb-1 text-gold-500 font-bold">3</div>
-            <div className="text-xs text-gold-200/40 uppercase tracking-wider">Manos</div>
+            <div className="text-2xl mb-1 text-celeste-400 font-bold">3</div>
+            <div className="text-xs text-white/50 uppercase tracking-wider">Manos</div>
           </div>
         </div>
 
         {/* Footer */}
         <footer className="mt-16 text-center animate-fade-in" style={{ animationDelay: '1s' }}>
           <div className="flex items-center justify-center gap-3 mb-3">
-            <div className="h-px w-12 bg-gold-700/30" />
+            <div className="h-px w-12 bg-celeste-600/30" />
             <Image src="/Images/SolDeMayo.png" alt="" width={20} height={20} className="w-5 h-5 opacity-30" />
-            <span className="text-gold-600/40 text-xs">TRUCO URUGUAYO ONLINE</span>
+            <span className="text-celeste-400/60 text-xs">TRUCO URUGUAYO ONLINE</span>
             <Image src="/Images/SolDeMayo.png" alt="" width={20} height={20} className="w-5 h-5 opacity-30" />
-            <div className="h-px w-12 bg-gold-700/30" />
+            <div className="h-px w-12 bg-celeste-600/30" />
           </div>
-          <p className="text-gold-200/20 text-xs tracking-widest">
+          <p className="text-white/30 text-xs tracking-widest">
             La tradicion del campo oriental
           </p>
         </footer>
