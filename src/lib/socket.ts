@@ -128,6 +128,16 @@ class SocketService {
     });
   }
 
+  // Crear partida de práctica 1v1 contra bot (no cuenta estadísticas)
+  async crearPartidaPractica(nombre: string): Promise<string | null> {
+    if (!this.socket) return null;
+    return new Promise((resolve) => {
+      this.socket!.emit('crear-partida', { nombre, tamañoSala: '1v1', esPractica: true }, (success, mesaId) => {
+        resolve(success ? mesaId || null : null);
+      });
+    });
+  }
+
   async unirsePartida(mesaId: string, nombre: string): Promise<boolean> {
     if (!this.socket) return false;
     return new Promise((resolve) => {

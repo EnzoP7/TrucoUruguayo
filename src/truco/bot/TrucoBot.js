@@ -485,7 +485,7 @@ class TrucoBot {
         if (cantar) {
           let tipo = 'truco';
           if (nivelActual === 'truco') tipo = 'retruco';
-          if (nivelActual === 'retruco') tipo = 'vale_cuatro';
+          if (nivelActual === 'retruco' || nivelActual === 'vale4') tipo = 'vale4';
           resolve({ cantar: true, tipo });
         } else {
           resolve({ cantar: false });
@@ -532,7 +532,7 @@ class TrucoBot {
           if (tipoTruco === 'truco' && Math.random() < 0.35) {
             escalar = 'retruco';
           } else if (tipoTruco === 'retruco' && Math.random() < 0.25) {
-            escalar = 'vale_cuatro';
+            escalar = 'vale4';
           }
         }
         // Farol: subir con mano mala para asustar al rival
@@ -540,7 +540,7 @@ class TrucoBot {
           if (tipoTruco === 'truco') {
             escalar = 'retruco';
           } else if (tipoTruco === 'retruco') {
-            escalar = 'vale_cuatro';
+            escalar = 'vale4';
           }
         }
 

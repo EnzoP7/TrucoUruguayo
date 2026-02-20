@@ -352,10 +352,11 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
       <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40">
         <button
           onClick={() => setAbierto(true)}
-          className="glass rounded-xl p-2.5 border border-celeste-500/30 bg-celeste-950/40 shadow-lg hover:bg-celeste-900/50 transition-all"
+          className="glass rounded-xl p-2.5 border border-celeste-500/30 bg-celeste-950/40 shadow-lg hover:bg-celeste-900/50 transition-all flex items-center gap-2"
           title="Abrir ayuda"
         >
           <span className="text-lg">📚</span>
+          <span className="hidden md:inline text-celeste-300 text-sm font-medium">Ayuda</span>
         </button>
       </div>
     );

@@ -130,6 +130,7 @@ function repartir(cartas, numJugadores) {
 const lobbyRooms = new Map(); // mesaId -> LobbyRoom
 const engines = new Map();    // mesaId -> game state object
 const activeBots = new Map(); // mesaId -> TrucoBot[] (bots activos en la partida)
+const botTurnTimeouts = new Map(); // mesaId -> timeoutId (timeout de seguridad para turnos de bot)
 
 function getMaxJugadores(tamaño) {
   switch (tamaño) {
@@ -317,14 +318,14 @@ function iniciarRondaFase1(mesa) {
     mesa.indiceEnfrentamiento1v1 = (idx + 1) % 3;
   }
 
-  // The player to the LEFT of mano cuts (next participating player)
-  let cortaIdx = (mesa.indiceMano + 1) % mesa.jugadores.length;
-  // En pico a pico, saltar a un jugador que participe
+  // El mano es quien corta el mazo (el que reparte es el jugador anterior al mano)
+  let cortaIdx = mesa.indiceMano;
+  // En pico a pico, asegurar que el cortador participe en la ronda
   if (mesa.modoRondaActual === '1v1') {
-    let intentos = 0;
-    while (mesa.jugadores[cortaIdx].participaRonda === false && intentos < mesa.jugadores.length) {
-      cortaIdx = (cortaIdx + 1) % mesa.jugadores.length;
-      intentos++;
+    // Si el mano actual no participa, buscar al jugador que sí participa
+    if (!mesa.jugadores[cortaIdx].participaRonda) {
+      cortaIdx = mesa.jugadores.findIndex(j => j.participaRonda);
+      if (cortaIdx === -1) cortaIdx = mesa.indiceMano; // fallback
     }
   }
   mesa.indiceJugadorCorta = cortaIdx;
@@ -491,10 +492,16 @@ function getEstadoParaJugador(mesa, jugadorId) {
 // BOT LOGIC - Procesar turno del bot
 // ============================================================
 
-async function procesarTurnoBot(mesaId, io) {
+async function procesarTurnoBot(mesaId, io, esReintento = false) {
   const mesa = engines.get(mesaId);
   const room = lobbyRooms.get(mesaId);
   const bots = activeBots.get(mesaId) || [];
+
+  // Limpiar timeout anterior si existe
+  if (botTurnTimeouts.has(mesaId)) {
+    clearTimeout(botTurnTimeouts.get(mesaId));
+    botTurnTimeouts.delete(mesaId);
+  }
 
   if (!mesa || !room || bots.length === 0) return;
   if (mesa.fase !== 'jugando') return;
@@ -506,6 +513,44 @@ async function procesarTurnoBot(mesaId, io) {
 
   const bot = bots.find(b => b.id === jugadorActual.id);
   if (!bot) return;
+
+  // Timeout de seguridad: si el bot no juega en 8 segundos, forzar carta aleatoria
+  const timeoutId = setTimeout(() => {
+    const currentMesa = engines.get(mesaId);
+    const currentRoom = lobbyRooms.get(mesaId);
+    if (!currentMesa || !currentRoom) return;
+
+    // Verificar que sigue siendo turno del bot
+    const jugActual = currentMesa.jugadores[currentMesa.turnoActual];
+    if (!jugActual || !jugActual.isBot || jugActual.id !== bot.id) return;
+    if (currentMesa.fase !== 'jugando') return;
+
+    console.log(`[Bot TIMEOUT] ${bot.nombre} no respondió en 8s, forzando carta aleatoria`);
+
+    // Forzar jugar una carta aleatoria
+    const cartasValidas = jugActual.cartas.filter(c => c.valor !== 0);
+    if (cartasValidas.length > 0) {
+      const cartaRandom = cartasValidas[Math.floor(Math.random() * cartasValidas.length)];
+      const success = jugarCarta(currentMesa, bot.id, cartaRandom);
+
+      if (success) {
+        currentRoom.jugadores.forEach(p => {
+          if (!p.isBot) {
+            io.to(p.socketId).emit('carta-jugada', {
+              jugadorId: bot.id,
+              carta: cartaRandom,
+              estado: getEstadoParaJugador(currentMesa, p.socketId),
+            });
+          }
+        });
+
+        // Continuar el flujo del juego
+        setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+      }
+    }
+  }, 8000);
+
+  botTurnTimeouts.set(mesaId, timeoutId);
 
   // Sincronizar cartas del bot
   bot.setCartas(jugadorActual.cartas.filter(c => c.valor !== 0));
@@ -571,13 +616,29 @@ async function procesarTurnoBot(mesaId, io) {
   }
 
   // === JUGAR CARTA ===
-  const carta = await bot.decidirCarta(mesa.cartasMesa, mesa.manoActual, mesa.manoActual === 1);
+  let carta = await bot.decidirCarta(mesa.cartasMesa, mesa.manoActual, mesa.manoActual === 1);
+
+  // Fallback: si el bot no puede decidir, elegir carta aleatoria de las disponibles
+  if (!carta && jugadorActual.cartas && jugadorActual.cartas.length > 0) {
+    const cartasValidas = jugadorActual.cartas.filter(c => c.valor !== 0);
+    if (cartasValidas.length > 0) {
+      carta = cartasValidas[Math.floor(Math.random() * cartasValidas.length)];
+      console.log(`[Bot] ${bot.nombre} no pudo decidir, tirando carta aleatoria: ${carta.valor} de ${carta.palo}`);
+    }
+  }
+
   if (!carta) {
     console.log(`[Bot] ${bot.nombre} no tiene cartas para jugar`);
     return;
   }
 
   console.log(`[Bot] ${bot.nombre} juega ${carta.valor} de ${carta.palo}`);
+
+  // Limpiar timeout de seguridad ya que el bot va a jugar
+  if (botTurnTimeouts.has(mesaId)) {
+    clearTimeout(botTurnTimeouts.get(mesaId));
+    botTurnTimeouts.delete(mesaId);
+  }
 
   const success = jugarCarta(mesa, bot.id, carta);
   if (!success) {
@@ -2947,6 +3008,21 @@ app.prepare().then(async () => {
   // Helper: guardar partida en BD cuando termina el juego
   async function guardarResultadoPartida(room, mesa) {
     try {
+      // No guardar estadísticas en partidas de práctica (1v1 contra bot)
+      if (room.esPractica) {
+        console.log(`[DB] Partida de práctica - no se guardan estadísticas`);
+        return;
+      }
+
+      // No guardar estadísticas en partidas 1v1 donde hay bots
+      if (room.tamañoSala === '1v1') {
+        const tieneBot = room.jugadores.some(j => j.isBot);
+        if (tieneBot) {
+          console.log(`[DB] Partida 1v1 con bot - no se guardan estadísticas`);
+          return;
+        }
+      }
+
       const duracionSeg = room.inicioPartida ? Math.round((Date.now() - room.inicioPartida) / 1000) : null;
       const jugadoresConUserId = mesa.jugadores.map(j => {
         const roomJugador = room.jugadores.find(rj => rj.socketId === j.id);
@@ -3278,7 +3354,7 @@ app.prepare().then(async () => {
     socket.on('crear-partida', (data, callback) => {
       console.log(`[Socket.IO] ${socket.id} crear-partida:`, data);
       try {
-        const { nombre, tamañoSala = '2v2', modoAlternado = true, modoAyuda = false } = data;
+        const { nombre, tamañoSala = '2v2', modoAlternado = true, modoAyuda = false, esPractica = false } = data;
         const mesaId = `mesa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const maxJugadores = getMaxJugadores(tamañoSala);
 
@@ -3293,6 +3369,7 @@ app.prepare().then(async () => {
           creadorSocketId: socket.id,
           modoAlternado,
           modoAyuda,
+          esPractica, // Flag para partidas de práctica (no guardan estadísticas)
           inicioPartida: null, // timestamp para calcular duración
         };
         lobbyRooms.set(mesaId, room);
@@ -5474,6 +5551,17 @@ app.prepare().then(async () => {
             mesa.equipos.find(e => e.id === jugador.equipo).puntaje += puntosFlor;
             mesa.florYaCantada = true;
             mesa.envidoYaCantado = true;
+
+            // Guardar cartas de flor para revelar al final de la ronda
+            mesa.cartasFlorReveladas = floresRespondedor.map(j => ({
+              jugadorId: j.id,
+              jugadorNombre: j.nombre,
+              equipo: j.equipo,
+              puntos: calcularPuntosFlor(j, mesa.muestra),
+              cartas: (j.cartasOriginales && j.cartasOriginales.length === 3
+                ? j.cartasOriginales
+                : j.cartas).map(c => ({ ...c })),
+            }));
           }
         } else if (!tieneFlor && quiereFaltaEnvido) {
           // Falta Envido accepted - pero primero verificar si el ECHADOR tiene flor
@@ -5599,14 +5687,52 @@ app.prepare().then(async () => {
           mesa.nivelGritoAceptado = 'truco';
           // El equipo que echó los perros es quien "cantó" el truco
           mesa.equipoQueCantoUltimo = mesa.perrosConfig.equipoQueEcha;
+          mesa.perrosActivos = false;
+          mesa.fase = 'jugando'; // Ahora sí se puede jugar
         } else {
-          // Truco rejected - equipo que echó gana 1 punto
+          // Truco rejected - equipo que echó gana 1 punto y la ronda termina
           const equipoEchador = mesa.perrosConfig.equipoQueEcha;
           mesa.equipos.find(e => e.id === equipoEchador).puntaje += 1;
-        }
+          mesa.perrosActivos = false;
+          mesa.fase = 'finalizada';
+          mesa.winnerRonda = equipoEchador;
+          mesa.puntosEnJuego = 1;
 
-        mesa.perrosActivos = false;
-        mesa.fase = 'jugando'; // Ahora sí se puede jugar
+          // Emitir ronda-finalizada y programar siguiente ronda
+          room.jugadores.forEach(p => {
+            io.to(p.socketId).emit('ronda-finalizada', {
+              ganadorEquipo: equipoEchador,
+              puntosGanados: 1,
+              cartasFlorReveladas: mesa.cartasFlorReveladas || [],
+              estado: getEstadoParaJugador(mesa, p.socketId),
+            });
+          });
+
+          // Check game end
+          const eqGanador = mesa.equipos.find(e => e.id === equipoEchador);
+          if (eqGanador && eqGanador.puntaje >= mesa.puntosLimite) {
+            mesa.winnerJuego = equipoEchador;
+            mesa.estado = 'terminado';
+            room.estado = 'terminado';
+            guardarResultadoPartida(room, mesa);
+            setTimeout(() => {
+              room.jugadores.forEach(p => {
+                io.to(p.socketId).emit('juego-finalizado', {
+                  ganadorEquipo: mesa.winnerJuego,
+                  estado: getEstadoParaJugador(mesa, p.socketId),
+                });
+              });
+              broadcastLobby(io);
+            }, 3000);
+          } else {
+            scheduleNextRound(io, room);
+          }
+
+          // Clear perrosConfig before callback
+          mesa.perrosConfig = null;
+          callback(true);
+          return; // Salir aquí porque la ronda ya terminó
+        }
 
         // Build response description
         const partes = [];

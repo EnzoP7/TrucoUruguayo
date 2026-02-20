@@ -6,7 +6,7 @@ export interface ClientToServerEvents {
   'join-lobby': (callback: (success: boolean, message?: string) => void) => void;
 
   // Partidas
-  'crear-partida': (data: { nombre: string; tamañoSala?: '1v1' | '2v2' | '3v3'; modoAlternado?: boolean; modoAyuda?: boolean }, callback: (success: boolean, mesaId?: string) => void) => void;
+  'crear-partida': (data: { nombre: string; tamañoSala?: '1v1' | '2v2' | '3v3'; modoAlternado?: boolean; modoAyuda?: boolean; esPractica?: boolean }, callback: (success: boolean, mesaId?: string) => void) => void;
   'unirse-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
   'iniciar-partida': (callback: (success: boolean, message?: string) => void) => void;
   'reconectar-partida': (data: { mesaId: string; nombre: string; userId?: number }, callback: (success: boolean, message?: string) => void) => void;

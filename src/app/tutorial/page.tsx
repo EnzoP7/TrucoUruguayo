@@ -14,7 +14,7 @@ interface Carta {
 interface CartaIlustrativa {
   valor: number;
   palo: 'espada' | 'basto' | 'oro' | 'copa';
-  etiqueta?: string; // Ej: "1°", "2°", "MATA"
+  etiqueta?: string; // Ej: "1°", "2°", "BRAVO"
 }
 
 interface LeccionPaso {
@@ -50,113 +50,104 @@ const LECCIONES: Leccion[] = [
   {
     id: 'basico',
     titulo: 'Lo Basico',
-    descripcion: 'Aprende como se juega una mano de truco',
+    descripcion: 'Aprende las cartas y su jerarquia',
     icono: '1',
-    cartasJugador: [
-      { valor: 2, palo: 'oro', poder: 20 },    // PIEZA - 2 del palo de muestra (LA MAS FUERTE!)
-      { valor: 5, palo: 'oro', poder: 17 },     // PIEZA - 5 del palo de muestra
-      { valor: 4, palo: 'copa', poder: 0 },     // Carta comun
-    ],
-    cartasRival: [
-      { valor: 3, palo: 'basto', poder: 10 },
-      { valor: 1, palo: 'espada', poder: 14 }, // Mata
-      { valor: 6, palo: 'copa', poder: 0 },
-    ],
-    muestra: { valor: 12, palo: 'oro', poder: 0 },
     pasos: [
       {
         titulo: 'Bienvenido al Truco Uruguayo',
-        descripcion: 'El truco se juega con 40 cartas (mazo espanol sin 8 y 9). Cada jugador recibe 3 cartas y se da vuelta una carta llamada "muestra". El objetivo es ganar 2 de 3 manos para sumar puntos.',
+        descripcion: 'El truco se juega con 40 cartas (mazo espanol sin 8 y 9). Cada jugador recibe 3 cartas y se da vuelta una carta llamada "muestra".\n\nEl objetivo es ganar 2 de 3 manos para sumar puntos. El juego se juega a 30 puntos.',
         accion: 'siguiente',
       },
       {
-        titulo: 'Las PIEZAS - Las Cartas Mas Fuertes!',
-        descripcion: 'En el Truco Uruguayo, las cartas MAS FUERTES son las PIEZAS (cartas del palo de la muestra).\n\nLas PIEZAS le ganan a TODO, incluso a las matas!',
+        titulo: 'La MUESTRA',
+        descripcion: 'Al inicio de cada ronda se da vuelta una carta: la MUESTRA.\n\nEsta carta define el palo de las PIEZAS, que son las cartas MAS FUERTES del juego!',
         accion: 'siguiente',
         cartasIlustrativas: [
-          { valor: 2, palo: 'oro', etiqueta: '1°' },
-          { valor: 4, palo: 'oro', etiqueta: '2°' },
-          { valor: 5, palo: 'oro', etiqueta: '3°' },
-          { valor: 11, palo: 'oro', etiqueta: '4°' },
-          { valor: 10, palo: 'oro', etiqueta: '5°' },
+          { valor: 12, palo: 'oro', etiqueta: 'MUESTRA' },
+        ],
+      },
+      {
+        titulo: 'Las PIEZAS - Las Cartas Mas Fuertes!',
+        descripcion: 'Las PIEZAS son las cartas del palo de la muestra. Son las MAS FUERTES!\n\nOrden de PIEZAS (de mayor a menor):\n2 > 4 > 5 > 11 > 10\n\nLas PIEZAS le ganan a TODO!',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'oro', etiqueta: '1° PIEZA' },
+          { valor: 4, palo: 'oro', etiqueta: '2° PIEZA' },
+          { valor: 5, palo: 'oro', etiqueta: '3° PIEZA' },
+          { valor: 11, palo: 'oro', etiqueta: '4° PIEZA' },
+          { valor: 10, palo: 'oro', etiqueta: '5° PIEZA' },
+        ],
+      },
+      {
+        titulo: 'Ejemplo de PIEZAS',
+        descripcion: 'Si la muestra es ORO, todas las cartas de Oro (2, 4, 5, 11, 10) son PIEZAS.\n\nEl 2 de Oro le gana al 1 de Espada (BRAVO)!\nEl 10 de Oro le gana al 3 de cualquier palo!',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'oro', etiqueta: 'LE GANA' },
+          { valor: 1, palo: 'espada', etiqueta: 'PIERDE' },
         ],
       },
       {
         titulo: 'La Regla del 12 Pieza',
-        descripcion: 'IMPORTANTE: Cuando la muestra es una PIEZA (2, 4, 5, 10 u 11), el 12 del mismo palo toma el valor de esa pieza!\n\nEjemplo: Si la muestra es el 4 de Oro, el 12 de Oro vale como si fuera el 4 de Oro (segunda pieza mas fuerte).',
+        descripcion: 'CASO ESPECIAL: Si la muestra es una PIEZA (2, 4, 5, 10 u 11), el 12 de ese palo toma el valor de esa pieza!\n\nEjemplo: Si la muestra es el 4 de Copa, el 12 de Copa vale como el 4 de Copa.',
         accion: 'siguiente',
         cartasIlustrativas: [
-          { valor: 4, palo: 'oro', etiqueta: 'Muestra' },
-          { valor: 12, palo: 'oro', etiqueta: '= 4 Oro' },
+          { valor: 4, palo: 'copa', etiqueta: 'Muestra' },
+          { valor: 12, palo: 'copa', etiqueta: '= 4 Copa' },
         ],
       },
       {
-        titulo: 'Las MATAS - Despues de las Piezas',
-        descripcion: 'Las MATAS son fuertes pero van DESPUES de las piezas.\n\nSi no hay piezas en juego, las matas son las mas fuertes!',
+        titulo: 'Los BRAVOS - Despues de las Piezas',
+        descripcion: 'Los BRAVOS son 4 cartas fijas que SIEMPRE son fuertes (pero van despues de las piezas):\n\n1. 1 de Espada\n2. 1 de Basto\n3. 7 de Espada\n4. 7 de Oro\n\nSi NO hay piezas en juego, los BRAVOS son las cartas mas fuertes!',
         accion: 'siguiente',
         cartasIlustrativas: [
-          { valor: 1, palo: 'espada', etiqueta: '1°' },
-          { valor: 1, palo: 'basto', etiqueta: '2°' },
-          { valor: 7, palo: 'espada', etiqueta: '3°' },
-          { valor: 7, palo: 'oro', etiqueta: '4°' },
+          { valor: 1, palo: 'espada', etiqueta: '1° BRAVO' },
+          { valor: 1, palo: 'basto', etiqueta: '2° BRAVO' },
+          { valor: 7, palo: 'espada', etiqueta: '3° BRAVO' },
+          { valor: 7, palo: 'oro', etiqueta: '4° BRAVO' },
         ],
       },
       {
-        titulo: 'Tus Cartas',
-        descripcion: 'La muestra es ORO. Tienes el 2 de Oro (PIEZA mas fuerte!) y el 5 de Oro (otra PIEZA). El 4 de Copa es carta comun y debil.',
+        titulo: 'BRAVOS vs PIEZAS',
+        descripcion: 'Recorda: las PIEZAS SIEMPRE le ganan a los BRAVOS.\n\nIncluso un 10 del palo de la muestra (pieza mas debil) le gana al 1 de Espada (bravo mas fuerte)!',
         accion: 'siguiente',
-        cartasResaltadas: [0, 1],
+        cartasIlustrativas: [
+          { valor: 10, palo: 'oro', etiqueta: 'PIEZA' },
+          { valor: 1, palo: 'espada', etiqueta: 'BRAVO' },
+        ],
       },
       {
-        titulo: 'Tu Turno - Jugar Carta',
-        descripcion: 'Es tu turno. Como tienes 2 PIEZAS muy fuertes, guardalas para despues. Tira el 4 de Copa (la mas debil) para ver que tiene el rival.',
-        accion: 'seleccionar-carta',
-        respuestaCorrecta: 2,
-        explicacion: 'Correcto! Siempre es buena estrategia tirar las cartas debiles primero para ver que tiene el rival y guardar las fuertes.',
-      },
-      {
-        titulo: 'El Rival Juega',
-        descripcion: 'El rival tiro el 6 de Copa. Tu 4 pierde esta mano porque el 6 es mayor. Pero no te preocupes, aun tienes 2 PIEZAS!',
+        titulo: 'Cartas COMUNES',
+        descripcion: 'Despues de PIEZAS y BRAVOS, van las cartas comunes.\n\nOrden (de mayor a menor):\n3 > 2 > 1 (falso) > 12 > 11 > 10 > 7 (falso) > 6 > 5 > 4\n\nEl 3 es la carta COMUN mas alta, el 4 es la mas baja.',
         accion: 'siguiente',
-        cartaRivalJuega: 2,
-        mostrarCartasRival: true,
+        cartasIlustrativas: [
+          { valor: 3, palo: 'basto', etiqueta: '1° COMUN' },
+          { valor: 2, palo: 'copa', etiqueta: '2° COMUN' },
+          { valor: 1, palo: 'copa', etiqueta: '3° COMUN' },
+        ],
       },
       {
-        titulo: 'Segunda Mano - Turno del Rival',
-        descripcion: 'Como el rival gano la primera mano, ahora tira el primero. Tiro el 3 de Basto (carta comun alta).',
+        titulo: 'Ejemplo de Mano',
+        descripcion: 'Imagina que la muestra es COPA y tienes estas cartas:\n\n- 2 de Copa = PIEZA (la mas fuerte!)\n- 1 de Espada = BRAVO\n- 3 de Basto = COMUN alta\n\nTienes una mano MUY fuerte!',
         accion: 'siguiente',
-        cartaRivalJuega: 0,
-        mostrarCartasRival: true,
+        cartasIlustrativas: [
+          { valor: 2, palo: 'copa', etiqueta: 'PIEZA' },
+          { valor: 1, palo: 'espada', etiqueta: 'BRAVO' },
+          { valor: 3, palo: 'basto', etiqueta: 'COMUN' },
+        ],
       },
       {
-        titulo: 'Tu Respuesta',
-        descripcion: 'El rival tiro un 3. Tira el 5 de Oro (PIEZA) para ganarle. Las PIEZAS le ganan a todo!',
-        accion: 'seleccionar-carta',
-        respuestaCorrecta: 1,
-        explicacion: 'Excelente! El 5 de Oro es PIEZA y le gana al 3. Ganaste esta mano!',
-      },
-      {
-        titulo: 'Tercera Mano - Turno Tuyo',
-        descripcion: 'Ganaste la segunda mano, asi que arrancas vos. El rival solo tiene el 1 de Espada (MATA). Tira tu 2 de Oro (PIEZA) para ganar!',
-        accion: 'seleccionar-carta',
-        respuestaCorrecta: 0,
-        explicacion: 'Perfecto! El 2 de Oro es la PIEZA mas poderosa. El rival ve que no puede ganar y se va al mazo!',
-      },
-      {
-        titulo: 'Victoria!',
-        descripcion: 'El rival vio tu 2 de Oro (la PIEZA mas fuerte) y se fue al mazo. No tiene sentido seguir jugando cuando no puede ganar.\n\nGanaste la ronda y sumas 1 punto!',
+        titulo: 'Estrategia Basica',
+        descripcion: 'Consejos para empezar:\n\n1. Siempre mira la MUESTRA primero\n2. Guarda las PIEZAS y BRAVOS para despues\n3. Tira cartas debiles primero para "tantear" al rival\n4. Gana 2 de 3 manos para llevarte la ronda!',
         accion: 'siguiente',
-        limpiarMesa: true,
       },
       {
         titulo: 'Leccion Completada',
-        descripcion: 'Aprendiste lo basico del Truco Uruguayo:',
+        descripcion: 'Resumen de jerarquia:\n\n1° PIEZAS: 2 > 4 > 5 > 11 > 10 (del palo de muestra)\n2° BRAVOS: 1 Espada > 1 Basto > 7 Espada > 7 Oro\n3° COMUNES: 3 > 2 > 1 > 12 > 11 > 10 > 7 > 6 > 5 > 4\n\nSiempre mira la muestra primero!',
         accion: 'siguiente',
-        limpiarMesa: true,
         cartasIlustrativas: [
-          { valor: 2, palo: 'oro', etiqueta: 'PIEZA 1°' },
-          { valor: 4, palo: 'oro', etiqueta: 'PIEZA 2°' },
-          { valor: 1, palo: 'espada', etiqueta: 'MATA 1°' },
+          { valor: 2, palo: 'oro', etiqueta: 'PIEZA' },
+          { valor: 1, palo: 'espada', etiqueta: 'BRAVO' },
           { valor: 3, palo: 'basto', etiqueta: 'COMUN' },
         ],
       },
@@ -167,83 +158,79 @@ const LECCIONES: Leccion[] = [
     titulo: 'El Truco',
     descripcion: 'Aprende a gritar truco y subir la apuesta',
     icono: '2',
-    cartasJugador: [
-      { valor: 1, palo: 'basto', poder: 13 },   // Mata
-      { valor: 3, palo: 'espada', poder: 10 },  // 3 comun (carta alta)
-      { valor: 12, palo: 'espada', poder: 0 },
-    ],
-    cartasRival: [
-      { valor: 7, palo: 'espada', poder: 12 }, // Mata
-      { valor: 2, palo: 'copa', poder: 9 },
-      { valor: 6, palo: 'basto', poder: 0 },
-    ],
-    muestra: { valor: 12, palo: 'copa', poder: 0 }, // Copa es muestra, no hay piezas relevantes
     pasos: [
       {
         titulo: 'Que es el Truco?',
-        descripcion: 'El truco es un "grito" o apuesta. Normalmente, ganar una ronda vale 1 punto. Pero si gritas "Truco" y el rival acepta, la ronda vale 2 puntos!',
+        descripcion: 'El truco es un "grito" o apuesta sobre las cartas.\n\nNormalmente, ganar una ronda vale 1 punto. Pero si gritas "Truco" y el rival acepta, la ronda vale 2 puntos!',
         accion: 'siguiente',
       },
       {
-        titulo: 'Escalar la Apuesta',
-        descripcion: 'Si te gritan Truco, podes:\n- Quiero: aceptar (2 puntos en juego)\n- No Quiero: rendirte (rival gana 1 punto)\n- Retruco: subir a 3 puntos\n- Vale Cuatro: subir a 4 puntos\n\nIMPORTANTE: Los gritos se alternan! Si vos gritas Truco, no podes gritar Retruco. Te "guardas la palabra" y el rival es quien puede subir la apuesta.',
+        titulo: 'Cuando Gritar Truco?',
+        descripcion: 'Podes gritar Truco en CUALQUIER momento de la ronda (antes o despues de tirar cartas).\n\nEstrategia: Grita cuando tengas buenas cartas... o cuando quieras farolear!',
         accion: 'siguiente',
-      },
-      {
-        titulo: 'Tienes Buenas Cartas',
-        descripcion: 'La muestra es Copa (no tenes piezas). Pero tenes el 1 de Basto (MATA) y un 3. Tira el 12 primero para tantear al rival.',
-        accion: 'seleccionar-carta',
-        respuestaCorrecta: 2,
-        explicacion: 'Bien! El 12 es carta comun pero te permite ver que juega el rival.',
-      },
-      {
-        titulo: 'El Rival Grita Truco!',
-        descripcion: 'Antes de tirar su carta, el rival grito "Truco"! Tienes el 1 de Basto que es MATA (no hay piezas en juego). Que haces?\n\nPista: Tienes buenas cartas, no te rindas!',
-        accion: 'cantar',
-        opcionesCantar: ['Quiero', 'No Quiero', 'Retruco'],
-        respuestaCorrecta: 'Retruco',
-        respuestasAceptables: ['Quiero'],
-        respuestaIncorrecta: 'Tienes una MATA! No te rindas con cartas tan buenas. Intenta Quiero o Retruco.',
-        explicacion: 'Excelente! Con una MATA como el 1 de Basto (y sin piezas del rival), podes escalar a Retruco (3 puntos).',
-        mostrarCartasRival: true,
-      },
-      {
-        titulo: 'El Rival Acepta y Responde',
-        descripcion: 'El rival acepto el Retruco (ahora vale 3 puntos) y tiro el 6 de Basto. Tu 12 le gana! Ganaste la primera mano.',
-        accion: 'siguiente',
-        cartaRivalJuega: 2,
-        mostrarCartasRival: true,
-      },
-      {
-        titulo: 'Segunda Mano - Tu Turno',
-        descripcion: 'Ganaste la primera mano, asi que arrancas vos. Tira el 3 (carta alta).',
-        accion: 'seleccionar-carta',
-        respuestaCorrecta: 1,
-        explicacion: 'Perfecto! El 3 es la carta COMUN mas alta.',
-        mostrarCartasRival: true,
-      },
-      {
-        titulo: 'El Rival Responde',
-        descripcion: 'El rival tiro el 2 de Copa. Tu 3 le gana! Ganaste la segunda mano y la ronda!',
-        accion: 'siguiente',
-        cartaRivalJuega: 1,
-        mostrarCartasRival: true,
-      },
-      {
-        titulo: 'Victoria con Retruco!',
-        descripcion: 'Ganaste 2 de 3 manos. Con el Retruco aceptado, sumas 3 puntos en vez de 1!\n\nTu MATA (1 de Basto) ni siquiera fue necesaria.',
-        accion: 'siguiente',
-        limpiarMesa: true,
         cartasIlustrativas: [
-          { valor: 3, palo: 'espada', etiqueta: 'Tu 3' },
-          { valor: 2, palo: 'copa', etiqueta: 'Su 2' },
+          { valor: 1, palo: 'espada', etiqueta: 'BRAVO' },
+          { valor: 3, palo: 'basto', etiqueta: 'Alta' },
+        ],
+      },
+      {
+        titulo: 'Respuestas al Truco',
+        descripcion: 'Si te gritan Truco, podes responder:\n\n- "Quiero": Aceptas (2 puntos en juego)\n- "No Quiero": Te rendis (rival gana 1 punto)\n- "Retruco": Subis la apuesta a 3 puntos!',
+        accion: 'siguiente',
+      },
+      {
+        titulo: 'El Retruco',
+        descripcion: 'Si aceptas con "Retruco", la ronda ahora vale 3 puntos.\n\nEl rival puede responder:\n- "Quiero": Acepta los 3 puntos\n- "No Quiero": Te lleva 2 puntos\n- "Vale Cuatro": Sube a 4 puntos!',
+        accion: 'siguiente',
+      },
+      {
+        titulo: 'Vale Cuatro',
+        descripcion: 'El "Vale Cuatro" es el grito maximo: 4 puntos en juego!\n\nEl rival solo puede:\n- "Quiero": Se juegan 4 puntos\n- "No Quiero": Te llevas 3 puntos',
+        accion: 'siguiente',
+      },
+      {
+        titulo: 'Puntos del Truco',
+        descripcion: 'Resumen de puntos:\n\n- Sin truco: 1 punto al ganador\n- Truco: 2 pts (1 si no quieren)\n- Retruco: 3 pts (2 si no quieren)\n- Vale Cuatro: 4 pts (3 si no quieren)',
+        accion: 'siguiente',
+      },
+      {
+        titulo: 'La Regla de la Palabra',
+        descripcion: 'IMPORTANTE: Los gritos se ALTERNAN!\n\nSi VOS gritas Truco, no podes gritar Retruco. Te "guardas la palabra" y es el RIVAL quien puede subir.\n\nEsto permite ir y venir con los gritos.',
+        accion: 'siguiente',
+      },
+      {
+        titulo: 'Ejemplo: Tu Gritas',
+        descripcion: 'Situacion:\n1. VOS gritas "Truco"\n2. Rival dice "Retruco"\n3. VOS podes decir "Vale Cuatro" (recuperaste la palabra)\n4. Rival acepta o no\n\nLos gritos van alternando!',
+        accion: 'siguiente',
+      },
+      {
+        titulo: 'Ejemplo: Te Gritan',
+        descripcion: 'Situacion:\n1. RIVAL grita "Truco"\n2. VOS decis "Retruco"\n3. RIVAL puede decir "Vale Cuatro"\n4. VOS aceptas o no\n\nSiempre alterna quien puede subir!',
+        accion: 'siguiente',
+      },
+      {
+        titulo: 'El Farol (Bluff)',
+        descripcion: 'No necesitas buenas cartas para gritar Truco!\n\nSi el rival tiene miedo y dice "No Quiero", ganas puntos gratis. Esto se llama "farolear".\n\nPero cuidado: si te descubren, perderas mas puntos!',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 4, palo: 'copa', etiqueta: 'Mala' },
+          { valor: 6, palo: 'basto', etiqueta: 'Mala' },
+          { valor: 10, palo: 'espada', etiqueta: 'Mala' },
+        ],
+      },
+      {
+        titulo: 'Cuando Aceptar?',
+        descripcion: 'Guia rapida:\n\n- PIEZA o BRAVO: Siempre acepta!\n- 2 cartas altas (2, 3): Acepta con confianza\n- Cartas medias: Evalua si vale la pena\n- Cartas malas: Mejor "No Quiero"',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'oro', etiqueta: 'Acepta!' },
+          { valor: 1, palo: 'basto', etiqueta: 'Acepta!' },
         ],
       },
       {
         titulo: 'Leccion Completada',
-        descripcion: 'Aprendiste el Truco:\n- Truco = 2 puntos (1 si no quieren)\n- Retruco = 3 puntos (2 si no quieren)\n- Vale 4 = 4 puntos (3 si no quieren)\n\nRecorda: podes farolear aunque no tengas buenas cartas!',
+        descripcion: 'Resumen del Truco:\n\n- Truco = 2 pts (1 si no quieren)\n- Retruco = 3 pts (2 si no quieren)\n- Vale 4 = 4 pts (3 si no quieren)\n- Los gritos ALTERNAN entre jugadores\n- Podes farolear con cartas malas!',
         accion: 'siguiente',
-        limpiarMesa: true,
       },
     ],
   },
@@ -366,12 +353,22 @@ const LECCIONES: Leccion[] = [
       },
       {
         titulo: 'Caso 1: Flor Simple',
-        descripcion: 'Las 3 cartas del mismo palo = FLOR!\n\nEjemplo: 7, 4 y 2 de Espada.\nValor: 7 + 4 + 2 + 20 = 33 puntos de flor.',
+        descripcion: 'Las 3 cartas del mismo palo (sin piezas) = FLOR!\n\nSe calcula igual que el envido: suma de las 2 cartas mas altas + 20.',
         accion: 'siguiente',
         cartasIlustrativas: [
           { valor: 7, palo: 'espada', etiqueta: '7' },
-          { valor: 4, palo: 'espada', etiqueta: '4' },
+          { valor: 6, palo: 'espada', etiqueta: '6' },
           { valor: 2, palo: 'espada', etiqueta: '2' },
+        ],
+      },
+      {
+        titulo: 'Ejemplo: Flor de 33',
+        descripcion: 'Con 7, 6 y 2 de Espada (sin piezas):\n\n7 + 6 + 20 = 33 puntos\n\n(Se toman las 2 cartas mas altas + 20)',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 7, palo: 'espada', etiqueta: '7' },
+          { valor: 6, palo: 'espada', etiqueta: '+ 6' },
+          { valor: 2, palo: 'espada', etiqueta: 'No suma' },
         ],
       },
       {
@@ -379,9 +376,23 @@ const LECCIONES: Leccion[] = [
         descripcion: 'Si tenes 2 o mas PIEZAS (cartas del palo de la muestra) = FLOR!\n\nEjemplo: Si la muestra es Copa, tener 2 y 4 de Copa es FLOR aunque la tercera sea de otro palo.',
         accion: 'siguiente',
         cartasIlustrativas: [
-          { valor: 2, palo: 'copa', etiqueta: 'Pieza' },
-          { valor: 4, palo: 'copa', etiqueta: 'Pieza' },
+          { valor: 2, palo: 'copa', etiqueta: 'Pieza 30' },
+          { valor: 4, palo: 'copa', etiqueta: 'Pieza 29' },
           { valor: 7, palo: 'espada', etiqueta: 'Otro palo' },
+        ],
+      },
+      {
+        titulo: 'Calcular Flor con Piezas',
+        descripcion: 'Con PIEZAS, el calculo cambia:\n\n1. La pieza MAS ALTA vale completa (30, 29, 28 o 27)\n2. Las otras piezas valen su ULTIMO DIGITO:\n   - 29 → 9\n   - 28 → 8\n   - 27 → 7\n\nEl 2 (30) siempre se usa completo!',
+        accion: 'siguiente',
+      },
+      {
+        titulo: 'Ejemplo: 2 Piezas',
+        descripcion: 'Con 2 de Copa (30) y 4 de Copa (29):\n\n- El 2 vale 30 (pieza mas alta, completa)\n- El 4 vale 9 (ultimo digito de 29)\n\nFlor = 30 + 9 = 39 puntos!',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'copa', etiqueta: '30' },
+          { valor: 4, palo: 'copa', etiqueta: '+ 9' },
         ],
       },
       {
@@ -395,8 +406,18 @@ const LECCIONES: Leccion[] = [
         ],
       },
       {
+        titulo: 'Ejemplo: 1 Pieza + 2 Cartas',
+        descripcion: 'Con 2 de Copa (pieza=30) + 7 y 5 de Oro:\n\nFlor = 30 + 7 + 5 = 42 puntos!\n\n(La pieza vale 30, mas las 2 cartas del mismo palo)',
+        accion: 'siguiente',
+        cartasIlustrativas: [
+          { valor: 2, palo: 'copa', etiqueta: '30' },
+          { valor: 7, palo: 'oro', etiqueta: '+ 7' },
+          { valor: 5, palo: 'oro', etiqueta: '+ 5' },
+        ],
+      },
+      {
         titulo: 'NO es Flor',
-        descripcion: 'Cuidado! Esto NO es flor:\n\n- 2 cartas del mismo palo + 1 de otro (sin piezas)\n- 1 pieza + 2 cartas de palos distintos',
+        descripcion: 'Cuidado! Esto NO es flor:\n\n- 2 cartas del mismo palo + 1 de otro (sin piezas)\n- 1 pieza + 2 cartas de palos DISTINTOS',
         accion: 'siguiente',
         cartasIlustrativas: [
           { valor: 7, palo: 'oro', etiqueta: '' },
@@ -405,28 +426,13 @@ const LECCIONES: Leccion[] = [
         ],
       },
       {
-        titulo: 'Calcular Puntos de Flor',
-        descripcion: 'Para calcular el valor de tu flor:\n\n- Suma los valores de las 3 cartas + 20\n- Las "negras" (10, 11, 12) valen 0\n- Las PIEZAS valen su valor especial (30, 29, 28, 27)',
-        accion: 'siguiente',
-      },
-      {
-        titulo: 'Ejemplo: Flor de 33',
-        descripcion: 'Con 7, 4 y 2 de Espada (sin piezas):\n\n7 + 4 + 2 + 20 = 33 puntos\n\nEsta es una flor muy buena!',
-        accion: 'siguiente',
-        cartasIlustrativas: [
-          { valor: 7, palo: 'espada', etiqueta: '7' },
-          { valor: 4, palo: 'espada', etiqueta: '4' },
-          { valor: 2, palo: 'espada', etiqueta: '2' },
-        ],
-      },
-      {
         titulo: 'Flor Maxima: 47 Puntos!',
-        descripcion: 'La FLOR maxima es 47:\n\n2 (pieza=30) + 4 (pieza=9) + 5 (pieza=8) del palo de la muestra.\n\n30 + 9 + 8 = 47 puntos!',
+        descripcion: 'La FLOR maxima es 47:\n\n2 (30) + 4 (9) + 5 (8) del palo de la muestra.\n\n30 + 9 + 8 = 47 puntos!\n\n(Pieza alta completa + ultimos digitos de las otras)',
         accion: 'siguiente',
         cartasIlustrativas: [
           { valor: 2, palo: 'copa', etiqueta: '30' },
-          { valor: 4, palo: 'copa', etiqueta: '9' },
-          { valor: 5, palo: 'copa', etiqueta: '8' },
+          { valor: 4, palo: 'copa', etiqueta: '+ 9' },
+          { valor: 5, palo: 'copa', etiqueta: '+ 8' },
         ],
       },
       {
@@ -436,22 +442,22 @@ const LECCIONES: Leccion[] = [
       },
       {
         titulo: 'Respuestas a la Flor',
-        descripcion: 'Si cantas flor y el rival tambien tiene, puede responder:\n\n- "Con Flor": comparan valores (3 pts al ganador)\n- "Con Flor Quiero": acepta comparar\n- "Contra Flor al Resto": se juega todo lo que falta!',
+        descripcion: 'Si cantas flor y el rival tambien tiene, puede responder:\n\n- "Con Flor Quiero": comparan valores (3 pts al ganador)\n- "Con Flor Me Achico": se rinde (vos ganas 3 pts)\n- "Contra Flor al Resto": se juega todo lo que falta!',
         accion: 'siguiente',
       },
       {
         titulo: 'Puntos de la Flor',
-        descripcion: 'Puntos segun la situacion:\n\n- Flor sin respuesta: 3 pts\n- Con Flor (ambos tienen): 3 pts al ganador\n- Contra Flor: 6 pts\n- Contra Flor al Resto: lo que falta para ganar!',
+        descripcion: 'Puntos segun la situacion:\n\n- Flor sin respuesta: 3 pts\n- Con Flor Quiero: 3 pts al ganador\n- Con Flor Me Achico: 3 pts al que canto\n- Contra Flor al Resto: lo que falta para ganar!',
         accion: 'siguiente',
       },
       {
         titulo: 'Leccion Completada',
-        descripcion: 'Resumen de la Flor:\n\n- 3 cartas mismo palo = FLOR\n- 2+ piezas = FLOR\n- 1 pieza + 2 mismo palo = FLOR\n- Es OBLIGATORIO cantarla\n- Anula el envido\n- Maximo: 47 puntos',
+        descripcion: 'Resumen de la Flor:\n\n- 3 cartas mismo palo = FLOR\n- 2+ piezas = FLOR\n- 1 pieza + 2 mismo palo = FLOR\n- Pieza alta vale completa, otras su ultimo digito\n- Es OBLIGATORIO cantarla\n- Maximo: 47 puntos (30+9+8)',
         accion: 'siguiente',
         cartasIlustrativas: [
-          { valor: 7, palo: 'espada', etiqueta: 'Flor' },
-          { valor: 4, palo: 'espada', etiqueta: 'mismo' },
-          { valor: 2, palo: 'espada', etiqueta: 'palo' },
+          { valor: 2, palo: 'copa', etiqueta: '30' },
+          { valor: 4, palo: 'copa', etiqueta: '+ 9' },
+          { valor: 5, palo: 'copa', etiqueta: '+ 8' },
         ],
       },
     ],
@@ -475,8 +481,8 @@ const LECCIONES: Leccion[] = [
         ],
       },
       {
-        titulo: 'Las MATAS - Despues de las Piezas',
-        descripcion: 'Las MATAS son fijas y van DESPUES de las piezas.\n\nSi no hay piezas en juego, las matas son las mas fuertes!',
+        titulo: 'Los BRAVOS - Despues de las Piezas',
+        descripcion: 'Los BRAVOS son fijos y van DESPUES de las piezas.\n\nSi no hay piezas en juego, los BRAVOS son las cartas mas fuertes!',
         accion: 'siguiente',
         cartasIlustrativas: [
           { valor: 1, palo: 'espada', etiqueta: '6°' },
@@ -487,12 +493,12 @@ const LECCIONES: Leccion[] = [
       },
       {
         titulo: 'Cartas COMUNES',
-        descripcion: 'Despues de PIEZAS y MATAS, van las cartas comunes (de menor a mayor):\n\n4, 5, 6, 7, 10, 11, 12, 1, 2, 3\n\nEs decir, el 3 es la carta COMUN mas alta, y el 4 es la mas baja.',
+        descripcion: 'Despues de PIEZAS y BRAVOS, van las cartas comunes (de menor a mayor):\n\n4, 5, 6, 7, 10, 11, 12, 1, 2, 3\n\nEs decir, el 3 es la carta COMUN mas alta, y el 4 es la mas baja.',
         accion: 'siguiente',
       },
       {
         titulo: 'Ejemplo Practico',
-        descripcion: 'Si la muestra es COPA:\n\nOrden completo:\n1. 2 Copa (PIEZA MAS FUERTE!)\n2. 4 Copa (PIEZA)\n3. 5 Copa (PIEZA)\n4. 11 Copa (PIEZA)\n5. 10 Copa (PIEZA)\n6. 1 Espada (MATA)\n7. 1 Basto (MATA)\n8. 7 Espada (MATA)\n9. 7 Oro (MATA)\n10. 3, 2, 1 falsos, 12, 11...',
+        descripcion: 'Si la muestra es COPA:\n\nOrden completo:\n1. 2 Copa (PIEZA MAS FUERTE!)\n2. 4 Copa (PIEZA)\n3. 5 Copa (PIEZA)\n4. 11 Copa (PIEZA)\n5. 10 Copa (PIEZA)\n6. 1 Espada (BRAVO)\n7. 1 Basto (BRAVO)\n8. 7 Espada (BRAVO)\n9. 7 Oro (BRAVO)\n10. 3, 2, 1 falsos, 12, 11...',
         accion: 'siguiente',
       },
       {
@@ -502,7 +508,7 @@ const LECCIONES: Leccion[] = [
       },
       {
         titulo: 'Leccion Completada',
-        descripcion: 'Resumen de jerarquia:\n\nPIEZAS (las mas fuertes!): 2 > 4 > 5 > 11 > 10 de la muestra\n\nMATAS: 1 Espada > 1 Basto > 7 Espada > 7 Oro\n\nCOMUNES: 3 > 2 > 1 falso > 12 > 11 > 10 > 7 falso > 6 > 5 > 4\n\nSiempre mira la muestra primero!',
+        descripcion: 'Resumen de jerarquia:\n\nPIEZAS (las mas fuertes!): 2 > 4 > 5 > 11 > 10 de la muestra\n\nBRAVOS: 1 Espada > 1 Basto > 7 Espada > 7 Oro\n\nCOMUNES: 3 > 2 > 1 falso > 12 > 11 > 10 > 7 falso > 6 > 5 > 4\n\nSiempre mira la muestra primero!',
         accion: 'siguiente',
       },
     ],
@@ -514,8 +520,8 @@ const LECCIONES: Leccion[] = [
     icono: '6',
     pasos: [
       {
-        titulo: 'Guardar las PIEZAS',
-        descripcion: 'Si tienes una PIEZA, no la tires primero. Las piezas son tus cartas mas valiosas! Empieza con cartas comunes para ver que tiene el rival.',
+        titulo: 'Guardar PIEZAS y BRAVOS',
+        descripcion: 'Si tienes una PIEZA o un BRAVO, no lo tires primero. Son tus cartas mas valiosas! Empieza con cartas comunes para ver que tiene el rival.',
         accion: 'siguiente',
       },
       {
@@ -535,17 +541,17 @@ const LECCIONES: Leccion[] = [
       },
       {
         titulo: 'Conocer las PIEZAS',
-        descripcion: 'Siempre mira la muestra al empezar. Las PIEZAS cambian todo el juego!\n\nEjemplo: Un 10 comun es debil, pero un 10 del palo de la muestra es LA CARTA MAS FUERTE del juego!',
+        descripcion: 'Siempre mira la muestra al empezar. Las PIEZAS cambian todo el juego!\n\nEjemplo: Un 10 comun es debil, pero un 10 del palo de la muestra es una PIEZA que le gana a los BRAVOS!',
         accion: 'siguiente',
       },
       {
         titulo: 'Juego en Equipo',
-        descripcion: 'En 2v2 o 3v3:\n- Si tu companero canta envido, apoyalo\n- La carta mas alta del equipo es la que cuenta\n- Coordinense para no desperdiciar piezas ni matas',
+        descripcion: 'En 2v2 o 3v3:\n- Si tu companero canta envido, apoyalo\n- La carta mas alta del equipo es la que cuenta\n- Coordinense para no desperdiciar piezas ni bravos',
         accion: 'siguiente',
       },
       {
         titulo: 'Tutorial Completado!',
-        descripcion: 'Felicitaciones! Ya conoces las reglas del Truco Uruguayo:\n\n- Las PIEZAS son las cartas mas fuertes\n- Las MATAS van despues de las piezas\n- Envido, Flor y Truco\n- Estrategias basicas\n\nAhora a practicar contra el bot o con amigos!',
+        descripcion: 'Felicitaciones! Ya conoces las reglas del Truco Uruguayo:\n\n- Las PIEZAS son las cartas mas fuertes\n- Los BRAVOS van despues de las piezas\n- Envido, Flor y Truco\n- Estrategias basicas\n\nAhora a practicar contra el bot o con amigos!',
         accion: 'siguiente',
       },
     ],
@@ -888,7 +894,7 @@ export default function TutorialPage() {
           {/* Boton para jugar con bot */}
           <div className="mt-8 text-center">
             <Link
-              href="/lobby"
+              href="/practica"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-celeste-600 to-celeste-500 text-white hover:from-celeste-500 hover:to-celeste-400 transition-all shadow-lg shadow-celeste-600/20"
             >
               Practicar contra Bot
@@ -896,7 +902,7 @@ export default function TutorialPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
             </Link>
-            <p className="text-gold-500/40 text-xs mt-2">Crea una partida y agrega un bot para practicar</p>
+            <p className="text-gold-500/40 text-xs mt-2">Inicia una partida rapida contra un bot (no afecta estadisticas)</p>
           </div>
         </div>
       </div>
