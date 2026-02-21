@@ -55,14 +55,17 @@ export default function HomePage() {
             />
           </div>
 
-          <h1 className="font-[var(--font-cinzel)] text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-gold-400 mb-4 tracking-wider">
+          <h1 className="font-[var(--font-cinzel)] text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-gold-400 mb-4 tracking-wider">
             <span className="drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]">
-              Truco Uruguayo
+              Truco Uruguayo Online
+            </span>
+            <span className="block text-2xl sm:text-3xl md:text-4xl text-celeste-300 mt-2 font-normal">
+              Juga Gratis con Amigos
             </span>
           </h1>
 
           <p className="text-lg md:text-xl text-gold-200/70 font-light tracking-widest uppercase">
-            La tradicion oriental en tiempo real
+            El autentico juego de cartas uruguayo en tiempo real
           </p>
 
           {/* Linea decorativa con mate real */}
@@ -204,6 +207,124 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Seccion SEO - Contenido informativo */}
+        <section className="mt-20 w-full max-w-4xl px-4 animate-fade-in" style={{ animationDelay: '1s' }}>
+          <div className="glass rounded-2xl p-8 border border-celeste-600/20">
+            <h2 className="text-2xl md:text-3xl font-[var(--font-cinzel)] text-gold-400 mb-6 text-center">
+              Que es el Truco Uruguayo y Por Que Jugarlo Online
+            </h2>
+
+            <div className="text-white/80 space-y-4 text-sm md:text-base leading-relaxed">
+              <p>
+                El <strong>Truco Uruguayo</strong> es mucho mas que un simple juego de cartas: es parte fundamental de la
+                identidad cultural de Uruguay. Desde las reuniones familiares en el campo hasta los bares de Montevideo,
+                el truco ha sido durante generaciones el pasatiempo favorito de los orientales. Ahora, con nuestra
+                plataforma de <strong>Truco Uruguayo online gratis</strong>, podes disfrutar de esta tradicion desde
+                cualquier lugar del mundo.
+              </p>
+
+              <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
+                Reglas del Truco Uruguayo: Lo Esencial
+              </h3>
+              <p>
+                El truco se juega con un <strong>mazo espanol de 40 cartas</strong>, sin los ochos ni los nueves.
+                Cada partida es al mejor de tres manos por ronda, y el objetivo es llegar a <strong>30 puntos</strong>.
+                Lo que hace unico al truco uruguayo es el sistema de cantos: el <strong>Envido</strong> (donde se
+                apuestan puntos segun las cartas del mismo palo), el <strong>Truco</strong> (que aumenta el valor de
+                la ronda), y la <strong>Flor</strong> (tres cartas del mismo palo). Cada canto puede ser aceptado,
+                rechazado o subido, creando una dinamica de farol y estrategia que hace al juego tan emocionante.
+              </p>
+
+              <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
+                Modos de Juego Disponibles
+              </h3>
+              <p>
+                En nuestra plataforma podes jugar en tres modalidades: <strong>1v1</strong> (mano a mano, el clasico
+                duelo de ingenio), <strong>2v2</strong> (equipos de dos, donde la comunicacion con tu companero es
+                clave), y <strong>3v3</strong> (equipos de tres, la modalidad mas popular en los torneos). Cada modo
+                tiene su propia estrategia y nivel de complejidad, permitiendote elegir segun tu experiencia o la
+                cantidad de amigos que quieran jugar.
+              </p>
+
+              <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
+                Jerarquia de Cartas en el Truco
+              </h3>
+              <p>
+                Conocer el valor de las cartas es fundamental. Las cartas mas poderosas son: el <strong>Ancho de
+                Espadas</strong> (1 de espada), el <strong>Ancho de Bastos</strong> (1 de basto), el <strong>Siete
+                de Espadas</strong> y el <strong>Siete de Oros</strong>. Luego siguen los treses, los doses, los
+                ases de copa y oro, los reyes, caballos, sotas, y finalmente los sietes de copa y basto, los seis,
+                cincos y cuatros. Dominar esta jerarquia te dara una ventaja importante en cada mano.
+              </p>
+
+              <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
+                Por Que Elegir Nuestra Plataforma
+              </h3>
+              <p>
+                Desarrollamos este <strong>juego de truco online</strong> pensando en los uruguayos que viven en el
+                exterior y extranan las partidas con amigos, pero tambien para quienes quieren aprender o simplemente
+                disfrutar de una buena partida sin salir de casa. Nuestra plataforma es <strong>100% gratis</strong>,
+                no requiere descargas, y funciona en cualquier navegador. Ademas, las partidas son en tiempo real con
+                tecnologia Socket.IO, garantizando una experiencia fluida y sin demoras.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Navegacion interna SEO-friendly */}
+        <nav className="mt-12 w-full max-w-4xl px-4" aria-label="Navegacion principal del sitio">
+          <div className="glass rounded-xl p-6 border border-celeste-600/20">
+            <h2 className="text-lg font-[var(--font-cinzel)] text-gold-400 mb-4 text-center">
+              Explora Truco Uruguayo Online
+            </h2>
+            <ul className="flex flex-wrap justify-center gap-4 text-sm">
+              <li>
+                <Link href="/lobby" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Crear o Unirse a Partida
+                </Link>
+              </li>
+              <li>
+                <Link href="/tutorial" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Tutorial de Truco Uruguayo
+                </Link>
+              </li>
+              <li>
+                <Link href="/practica" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Practicar contra la Computadora
+                </Link>
+              </li>
+              <li>
+                <Link href="/ranking" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Ranking de Jugadores
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </nav>
+
+        {/* Enlaces externos de autoridad */}
+        <aside className="mt-8 w-full max-w-4xl px-4 text-center">
+          <p className="text-white/50 text-xs mb-2">Mas informacion sobre el truco:</p>
+          <div className="flex flex-wrap justify-center gap-4 text-xs">
+            <a
+              href="https://es.wikipedia.org/wiki/Truco_(juego_de_naipes)"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-celeste-400/70 hover:text-celeste-300 transition-colors underline"
+            >
+              Historia del Truco en Wikipedia
+            </a>
+            <a
+              href="https://www.gub.uy/ministerio-turismo/cultura"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-celeste-400/70 hover:text-celeste-300 transition-colors underline"
+            >
+              Cultura Uruguaya - Ministerio de Turismo
+            </a>
+          </div>
+        </aside>
+
         {/* Footer */}
         <footer className="mt-16 text-center animate-fade-in w-full max-w-4xl" style={{ animationDelay: '1s' }}>
           <div className="flex items-center justify-center gap-3 mb-4">
@@ -242,18 +363,6 @@ export default function HomePage() {
               <a href="mailto:enzopch2022@gmail.com" className="text-celeste-400/70 hover:text-celeste-300 transition-colors">
                 enzopch2022@gmail.com
               </a>
-            </p>
-          </div>
-
-          {/* Texto SEO oculto visualmente pero legible por bots */}
-          <div className="sr-only">
-            <h2>Truco Uruguayo Online - El mejor juego de cartas uruguayo</h2>
-            <p>
-              Juga al Truco Uruguayo gratis online con amigos. El autentico juego de cartas tradicional
-              de Uruguay ahora disponible en tu navegador. Modos de juego: 1v1 mano a mano, 2v2 equipos
-              de dos, 3v3 equipos de tres. Incluye todas las reglas del truco uruguayo: Envido, Real Envido,
-              Falta Envido, Truco, Retruco, Vale Cuatro, Flor y Contraflor. Mazo espanol de 40 cartas.
-              Juego a 30 puntos. Multijugador en tiempo real con Socket.IO.
             </p>
           </div>
         </footer>

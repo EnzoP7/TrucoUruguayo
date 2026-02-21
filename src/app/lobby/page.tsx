@@ -486,21 +486,25 @@ function LobbyPageContent() {
       </div>
 
       <div className="relative z-10 max-w-5xl mx-auto">
-        {/* Header */}
+        {/* Header con H1 SEO optimizado */}
         <header className="text-center mb-8 sm:mb-10">
           <Link href="/" className="inline-block group">
             <div className="flex items-center justify-center gap-3 mb-2">
-              <Image src="/Images/SolDeMayo.png" alt="Sol de Mayo" width={40} height={40} className="w-8 h-8 sm:w-10 sm:h-10 sun-glow" />
-              <h1 className="font-[var(--font-cinzel)] text-4xl sm:text-5xl lg:text-6xl font-bold text-gold-400 group-hover:text-gold-300 transition-colors">
+              <Image src="/Images/SolDeMayo.png" alt="Sol de Mayo - Simbolo uruguayo" width={40} height={40} className="w-8 h-8 sm:w-10 sm:h-10 sun-glow" />
+              <div className="font-[var(--font-cinzel)] text-3xl sm:text-4xl lg:text-5xl font-bold text-gold-400 group-hover:text-gold-300 transition-colors">
                 Truco Uruguayo
-              </h1>
+              </div>
               <Image src="/Images/SolDeMayo.png" alt="" width={40} height={40} className="w-8 h-8 sm:w-10 sm:h-10 sun-glow" />
             </div>
           </Link>
+          {/* H1 SEO optimizado - descriptivo y con keywords */}
+          <h1 className="text-xl sm:text-2xl text-celeste-300 font-medium mt-2 mb-3">
+            Jugar Truco Uruguayo Online Gratis con Amigos
+          </h1>
           <div className="flex items-center justify-center gap-3">
             <div className="h-px w-8 bg-celeste-500/40" />
-            <Image src="/Images/TermoYMate.png" alt="" width={20} height={20} className="w-5 h-5 opacity-50" />
-            <p className="text-celeste-400/70 text-sm tracking-widest uppercase">Lobby</p>
+            <Image src="/Images/TermoYMate.png" alt="Mate uruguayo" width={20} height={20} className="w-5 h-5 opacity-50" />
+            <p className="text-celeste-400/70 text-sm tracking-widest uppercase">Lobby de Partidas</p>
             <Image src="/Images/TermoYMate.png" alt="" width={20} height={20} className="w-5 h-5 opacity-50 -scale-x-100" />
             <div className="h-px w-8 bg-celeste-500/40" />
           </div>
@@ -727,7 +731,8 @@ function LobbyPageContent() {
         )}
 
         {/* Panel de crear partida */}
-        <div className="glass rounded-2xl p-6 sm:p-8 mb-6 animate-slide-up border border-celeste-500/30 bg-gradient-to-br from-celeste-900/20 to-transparent">
+        <section className="glass rounded-2xl p-6 sm:p-8 mb-6 animate-slide-up border border-celeste-500/30 bg-gradient-to-br from-celeste-900/20 to-transparent" aria-labelledby="crear-partida-heading">
+          <h2 id="crear-partida-heading" className="sr-only">Crear Nueva Partida de Truco</h2>
           {/* Input nombre (solo para usuarios no registrados como fallback) */}
           {!usuario && (
             <div className="mb-6">
@@ -826,13 +831,13 @@ function LobbyPageContent() {
               </span>
             )}
           </button>
-        </div>
+        </section>
 
         {/* Lista de partidas */}
-        <div className="glass rounded-2xl p-6 sm:p-8 animate-slide-up border border-white/20 bg-gradient-to-br from-white/5 to-transparent" style={{ animationDelay: '0.15s' }}>
+        <section className="glass rounded-2xl p-6 sm:p-8 animate-slide-up border border-white/20 bg-gradient-to-br from-white/5 to-transparent" style={{ animationDelay: '0.15s' }} aria-labelledby="partidas-heading">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="font-[var(--font-cinzel)] text-2xl sm:text-3xl font-bold text-white">
-              Partidas Disponibles
+            <h2 id="partidas-heading" className="font-[var(--font-cinzel)] text-2xl sm:text-3xl font-bold text-white">
+              Partidas Disponibles de Truco Uruguayo
             </h2>
             <div className="flex items-center gap-2 text-celeste-300/70 text-sm">
               <div className="w-2 h-2 rounded-full bg-celeste-400 animate-pulse" />
@@ -999,7 +1004,7 @@ function LobbyPageContent() {
               })}
             </div>
           )}
-        </div>
+        </section>
 
         {/* Banner de publicidad */}
         <div className="flex justify-center my-6">
@@ -1014,6 +1019,125 @@ function LobbyPageContent() {
             className="flex sm:hidden"
           />
         </div>
+
+        {/* Seccion SEO - Contenido informativo sobre el Truco Uruguayo */}
+        <section className="glass rounded-2xl p-6 sm:p-8 mt-8 animate-fade-in border border-celeste-500/20" aria-labelledby="info-truco-heading">
+          <h2 id="info-truco-heading" className="text-xl sm:text-2xl font-[var(--font-cinzel)] text-gold-400 mb-5 text-center">
+            Como Jugar al Truco Uruguayo Online
+          </h2>
+
+          <div className="text-white/75 space-y-4 text-sm leading-relaxed">
+            <p>
+              Bienvenido al <strong>lobby de Truco Uruguayo Online</strong>, el lugar donde podes crear partidas o
+              unirte a mesas existentes para disfrutar del <strong>juego de cartas mas popular de Uruguay</strong>.
+              Nuestra plataforma te permite jugar <strong>truco gratis</strong> con amigos o con otros jugadores
+              de cualquier parte del mundo, todo en tiempo real y sin necesidad de descargar nada.
+            </p>
+
+            <h3 className="text-lg text-celeste-300 font-semibold mt-5 mb-2">
+              Modos de Juego Disponibles
+            </h3>
+            <p>
+              Ofrecemos tres modalidades de juego para adaptarnos a tus preferencias. El modo <strong>1v1</strong>
+              es ideal para duelos mano a mano donde tu estrategia individual es lo que cuenta. El modo
+              <strong> 2v2</strong> te permite jugar en equipos de dos, donde la coordinacion con tu companero
+              es fundamental. Y el modo <strong>3v3</strong> es la experiencia completa del truco uruguayo,
+              con la opcion de activar el modo &quot;Pico a Pico&quot; para alternar entre rondas grupales e individuales
+              cuando estan en malas.
+            </p>
+
+            <h3 className="text-lg text-celeste-300 font-semibold mt-5 mb-2">
+              Crear o Unirse a una Partida
+            </h3>
+            <p>
+              Para empezar a <strong>jugar truco online</strong>, simplemente ingresa tu nombre (o inicia sesion
+              para guardar tus estadisticas), selecciona el tamano de sala que prefieras, y hace clic en
+              &quot;Crear Partida&quot;. Tambien podes unirte a cualquiera de las partidas disponibles en la lista
+              de abajo. Si ya tenes amigos registrados, podes invitarlos directamente a tu mesa con un solo clic.
+            </p>
+
+            <h3 className="text-lg text-celeste-300 font-semibold mt-5 mb-2">
+              Partidas en Tiempo Real
+            </h3>
+            <p>
+              Todas las partidas de <strong>Truco Uruguayo</strong> se juegan en tiempo real gracias a nuestra
+              tecnologia de conexion instantanea. Esto significa que no hay demoras entre jugadas, y la experiencia
+              es tan fluida como si estuvieras sentado en la misma mesa con tus amigos. El sistema detecta
+              automaticamente si te desconectas y te permite volver a la partida sin perder tu lugar.
+            </p>
+
+            <h3 className="text-lg text-celeste-300 font-semibold mt-5 mb-2">
+              Reglas del Truco Uruguayo
+            </h3>
+            <p>
+              El <strong>truco uruguayo</strong> se juega con un mazo espanol de 40 cartas, sin los ochos ni nueves.
+              Cada ronda es al mejor de tres manos, y el juego completo es a 30 puntos. Lo que distingue al truco
+              de otros juegos de cartas son los cantos: el <strong>Envido</strong> para apostar puntos segun tus
+              cartas del mismo palo, el <strong>Truco</strong> para aumentar el valor de la ronda, y la
+              <strong> Flor</strong> cuando tenes tres cartas del mismo palo. Dominar el arte del farol y saber
+              cuando cantar o cuando quedarse callado es lo que separa a los buenos jugadores de los expertos.
+            </p>
+          </div>
+        </section>
+
+        {/* Navegacion interna SEO-friendly */}
+        <nav className="mt-6 w-full" aria-label="Enlaces utiles del sitio">
+          <div className="glass rounded-xl p-5 border border-celeste-500/20">
+            <h2 className="text-base font-[var(--font-cinzel)] text-gold-400 mb-3 text-center">
+              Explora Truco Uruguayo Online
+            </h2>
+            <ul className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
+              <li>
+                <Link href="/" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Pagina Principal
+                </Link>
+              </li>
+              <li>
+                <Link href="/tutorial" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Tutorial: Como Jugar Truco
+                </Link>
+              </li>
+              <li>
+                <Link href="/practica" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Practicar contra la Computadora
+                </Link>
+              </li>
+              <li>
+                <Link href="/ranking" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Ranking de Jugadores
+                </Link>
+              </li>
+              <li>
+                <Link href="/login" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Crear Cuenta Gratis
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </nav>
+
+        {/* Enlaces externos de autoridad */}
+        <aside className="mt-4 text-center">
+          <p className="text-white/40 text-xs mb-2">Mas sobre el truco y la cultura uruguaya:</p>
+          <div className="flex flex-wrap justify-center gap-4 text-xs">
+            <a
+              href="https://es.wikipedia.org/wiki/Truco_(juego_de_naipes)"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-celeste-400/60 hover:text-celeste-300 transition-colors underline"
+            >
+              Historia del Truco en Wikipedia
+            </a>
+            <a
+              href="https://www.gub.uy/ministerio-turismo/cultura"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-celeste-400/60 hover:text-celeste-300 transition-colors underline"
+            >
+              Cultura Uruguaya - Ministerio de Turismo
+            </a>
+          </div>
+        </aside>
 
         {/* Footer con caracteristicas */}
         <footer className="mt-10 text-center animate-fade-in">
