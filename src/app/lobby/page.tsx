@@ -567,7 +567,7 @@ function LobbyPageContent() {
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-3">
                 {usuario.avatar_url ? (
-                  <img src={usuario.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-celeste-500/50 shadow-lg shadow-celeste-500/10" />
+                  <Image src={usuario.avatar_url} alt="" width={40} height={40} className="w-10 h-10 rounded-full object-cover border-2 border-celeste-500/50 shadow-lg shadow-celeste-500/10" unoptimized />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-celeste-500 to-celeste-700 flex items-center justify-center text-white font-bold text-lg">
                     {usuario.apodo[0].toUpperCase()}

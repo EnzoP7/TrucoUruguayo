@@ -401,9 +401,11 @@ function PanelAyuda({ cartas, muestra, envidoYaCantado, florYaCantada }: { carta
           <div className="mb-3">
             <div className="text-celeste-400/70 text-xs font-medium mb-1">Tu carta mas fuerte:</div>
             <div className="flex items-center gap-2 bg-celeste-900/30 rounded-lg p-2">
-              <img
+              <Image
                 src={getCartaImageUrl(cartaMasAlta)}
                 alt={`${cartaMasAlta.valor} de ${cartaMasAlta.palo}`}
+                width={32}
+                height={48}
                 className="w-8 h-12 rounded shadow"
               />
               <div className="text-xs">
@@ -513,9 +515,11 @@ function PerrosResponseModal({ tengoFlor, loading, onResponder, misCartas, muest
             <div className="flex items-center justify-center gap-2 mb-3">
               <span className="text-gold-400/70 text-xs font-medium">Muestra:</span>
               <div className="relative">
-                <img
+                <Image
                   src={`/Cartasimg/${muestra.valor.toString().padStart(2, '0')}-${muestra.palo === 'oro' ? 'oros' : muestra.palo === 'copa' ? 'copas' : muestra.palo === 'espada' ? 'espadas' : muestra.palo === 'basto' ? 'bastos' : muestra.palo}.png`}
                   alt={`${muestra.valor} de ${muestra.palo}`}
+                  width={56}
+                  height={84}
                   className="w-10 h-[3.75rem] sm:w-14 sm:h-[5.25rem] rounded shadow-lg ring-2 ring-yellow-500/60"
                 />
               </div>
@@ -532,9 +536,11 @@ function PerrosResponseModal({ tengoFlor, loading, onResponder, misCartas, muest
                   const valorStr = carta.valor.toString().padStart(2, '0');
                   return (
                     <div key={idx} className="relative">
-                      <img
+                      <Image
                         src={`/Cartasimg/${valorStr}-${paloStr}.png`}
                         alt={`${carta.valor} de ${carta.palo}`}
+                        width={64}
+                        height={96}
                         className={`w-12 h-[4.5rem] sm:w-16 sm:h-24 rounded shadow-lg transition-all ${
                           muestra && carta.palo === muestra.palo
                             ? 'ring-2 ring-yellow-400/70'
@@ -1245,7 +1251,7 @@ function GamePage() {
       socketService.clearAutoReconnect();
       socketService.removeAllListeners();
     };
-  }, [mesaId]);
+  }, [mesaId, mostrarMensaje]);
 
   // Poll for state while in waiting room to catch missed events
   useEffect(() => {
@@ -1811,10 +1817,12 @@ function GamePage() {
           ${showGlow ? 'ring-2 ring-gold-400 shadow-gold-glow' : 'shadow-card'}
         `}
       >
-        <img
+        <Image
           src={getCartaImageUrl(carta)}
           alt={`${carta.valor} de ${carta.palo}`}
-          className="w-full h-full object-cover"
+          fill
+          sizes="(max-width: 640px) 64px, 96px"
+          className="object-cover"
           draggable={false}
         />
       </button>
@@ -1922,10 +1930,12 @@ function GamePage() {
                             backfaceVisibility: 'hidden',
                             transform: 'rotateY(180deg)',
                           }}>
-                            <img
+                            <Image
                               src={`/Cartasimg/${item.carta.valor.toString().padStart(2, '0')}-${paloArchivo[item.carta.palo] || item.carta.palo}.png`}
                               alt={`${item.carta.valor} de ${item.carta.palo}`}
-                              className="w-full h-full object-cover"
+                              fill
+                              sizes="64px"
+                              className="object-cover"
                             />
                           </div>
                         </div>
@@ -2536,7 +2546,7 @@ function GamePage() {
           j.equipo === 1 ? 'equipo-1-light text-celeste-300' : 'equipo-2-light text-red-300'
         } ${esSuTurno ? 'turn-glow' : ''}`}>
           {j.avatarUrl ? (
-            <img src={j.avatarUrl} alt="" className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full object-cover border border-gold-600/50`} />
+            <Image src={j.avatarUrl} alt="" width={24} height={24} className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full object-cover border border-gold-600/50`} unoptimized />
           ) : (
             <span className={`${compact ? 'w-5 h-5 text-[9px]' : 'w-6 h-6 text-[10px]'} rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold`}>
               {j.nombre[0]?.toUpperCase()}
@@ -2842,8 +2852,8 @@ function GamePage() {
             {rondaBanner.muestra && ((rondaBanner.cartasFlor?.length ?? 0) > 0 || (rondaBanner.cartasEnvido?.length ?? 0) > 0) && (
               <div className="mt-3 flex items-center justify-center gap-2">
                 <span className="text-yellow-400/70 text-xs font-medium">Muestra:</span>
-                <div className="w-10 h-[3.75rem] rounded-lg overflow-hidden shadow-lg border border-yellow-500/50">
-                  <img src={getCartaImageUrl(rondaBanner.muestra)} alt="Muestra" className="w-full h-full object-cover" />
+                <div className="w-10 h-[3.75rem] rounded-lg overflow-hidden shadow-lg border border-yellow-500/50 relative">
+                  <Image src={getCartaImageUrl(rondaBanner.muestra)} alt="Muestra" fill sizes="40px" className="object-cover" />
                 </div>
               </div>
             )}
@@ -2858,8 +2868,8 @@ function GamePage() {
                       <span className="text-gold-300 text-xs font-semibold">{florInfo.jugadorNombre}</span>
                       <div className="flex gap-1.5 justify-center">
                         {florInfo.cartas.map((carta, cIdx) => (
-                          <div key={cIdx} className="w-12 h-[4.5rem] rounded-lg overflow-hidden shadow-lg border border-gold-600/30">
-                            <img src={getCartaImageUrl(carta)} alt={`${carta.valor} de ${carta.palo}`} className="w-full h-full object-cover" />
+                          <div key={cIdx} className="w-12 h-[4.5rem] rounded-lg overflow-hidden shadow-lg border border-gold-600/30 relative">
+                            <Image src={getCartaImageUrl(carta)} alt={`${carta.valor} de ${carta.palo}`} fill sizes="48px" className="object-cover" />
                           </div>
                         ))}
                       </div>
@@ -2879,8 +2889,8 @@ function GamePage() {
                       <span className="text-gold-300 text-xs font-semibold">{envidoInfo.jugadorNombre} ({envidoInfo.puntos} pts)</span>
                       <div className="flex gap-1.5 justify-center">
                         {envidoInfo.cartas.map((carta, cIdx) => (
-                          <div key={cIdx} className="w-12 h-[4.5rem] rounded-lg overflow-hidden shadow-lg border border-gold-600/30">
-                            <img src={getCartaImageUrl(carta)} alt={`${carta.valor} de ${carta.palo}`} className="w-full h-full object-cover" />
+                          <div key={cIdx} className="w-12 h-[4.5rem] rounded-lg overflow-hidden shadow-lg border border-gold-600/30 relative">
+                            <Image src={getCartaImageUrl(carta)} alt={`${carta.valor} de ${carta.palo}`} fill sizes="48px" className="object-cover" />
                           </div>
                         ))}
                       </div>
@@ -3607,7 +3617,7 @@ function GamePage() {
               miEquipo === 1 ? 'equipo-1 text-white' : 'equipo-2 text-white'
             }`}>
               {miJugador?.avatarUrl ? (
-                <img src={miJugador.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover border border-gold-600/50" />
+                <Image src={miJugador.avatarUrl} alt="" width={24} height={24} className="w-6 h-6 rounded-full object-cover border border-gold-600/50" unoptimized />
               ) : (
                 <span className="w-6 h-6 rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold text-[10px]">
                   {miJugador?.nombre[0]?.toUpperCase()}

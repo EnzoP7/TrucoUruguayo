@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import socketService from '@/lib/socket';
 import { useUploadThing } from '@/lib/uploadthing';
 
@@ -538,10 +539,13 @@ export default function PerfilPage() {
             {/* Avatar */}
             <div className="relative group">
               {avatarUrl ? (
-                <img
+                <Image
                   src={avatarUrl}
                   alt="Avatar"
+                  width={64}
+                  height={64}
                   className="w-16 h-16 rounded-full object-cover border-2 border-gold-600/50"
+                  unoptimized
                 />
               ) : (
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold text-2xl">

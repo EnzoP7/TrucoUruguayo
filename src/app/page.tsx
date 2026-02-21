@@ -65,7 +65,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg md:text-xl text-gold-200/70 font-light tracking-widest uppercase">
-            El autentico juego de cartas uruguayo en tiempo real
+            El auténtico juego de cartas uruguayo en tiempo real
           </p>
 
           {/* Linea decorativa con mate real */}
@@ -207,75 +207,158 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Seccion SEO - Contenido informativo */}
+        {/* Sección SEO - Contenido informativo expandido */}
         <section className="mt-20 w-full max-w-4xl px-4 animate-fade-in" style={{ animationDelay: '1s' }}>
           <div className="glass rounded-2xl p-8 border border-celeste-600/20">
             <h2 className="text-2xl md:text-3xl font-[var(--font-cinzel)] text-gold-400 mb-6 text-center">
-              Que es el Truco Uruguayo y Por Que Jugarlo Online
+              Qué es el Truco Uruguayo y Por Qué Jugarlo Online
             </h2>
 
             <div className="text-white/80 space-y-4 text-sm md:text-base leading-relaxed">
               <p>
-                El <strong>Truco Uruguayo</strong> es mucho mas que un simple juego de cartas: es parte fundamental de la
+                El <strong>Truco Uruguayo</strong> es mucho más que un simple juego de cartas: es parte fundamental de la
                 identidad cultural de Uruguay. Desde las reuniones familiares en el campo hasta los bares de Montevideo,
                 el truco ha sido durante generaciones el pasatiempo favorito de los orientales. Ahora, con nuestra
-                plataforma de <strong>Truco Uruguayo online gratis</strong>, podes disfrutar de esta tradicion desde
+                plataforma de truco uruguayo online gratis, podés disfrutar de esta tradición desde
                 cualquier lugar del mundo.
+              </p>
+
+              <p>
+                El truco llegó a Uruguay durante la época colonial, probablemente traído por inmigrantes españoles e italianos.
+                Con el tiempo, el juego fue adaptándose a las costumbres locales, desarrollando reglas y expresiones propias
+                que lo diferencian del truco argentino o español. El truco uruguayo se caracteriza por su sistema de cantos
+                único y por la importancia del farol y la picardía criolla en cada jugada.
               </p>
 
               <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
                 Reglas del Truco Uruguayo: Lo Esencial
               </h3>
               <p>
-                El truco se juega con un <strong>mazo espanol de 40 cartas</strong>, sin los ochos ni los nueves.
-                Cada partida es al mejor de tres manos por ronda, y el objetivo es llegar a <strong>30 puntos</strong>.
-                Lo que hace unico al truco uruguayo es el sistema de cantos: el <strong>Envido</strong> (donde se
-                apuestan puntos segun las cartas del mismo palo), el <strong>Truco</strong> (que aumenta el valor de
-                la ronda), y la <strong>Flor</strong> (tres cartas del mismo palo). Cada canto puede ser aceptado,
-                rechazado o subido, creando una dinamica de farol y estrategia que hace al juego tan emocionante.
+                El truco se juega con un <strong>mazo español de 40 cartas</strong>, sin los ochos ni los nueves.
+                Cada partida es al mejor de tres manos por ronda, y el objetivo es llegar a 30 puntos.
+                Lo que hace único al truco uruguayo es el sistema de cantos: el Envido (donde se
+                apuestan puntos según las cartas del mismo palo), el Truco (que aumenta el valor de
+                la ronda), y la Flor (tres cartas del mismo palo). Cada canto puede ser aceptado,
+                rechazado o subido, creando una dinámica de farol y estrategia que hace al juego tan emocionante.
+              </p>
+
+              <p>
+                Las rondas se disputan al mejor de tres manos. En cada mano, los jugadores tiran una carta por turno
+                y gana quien tenga la carta de mayor valor según la jerarquía del truco. Si hay empate (parda), la
+                ventaja pasa al jugador que es mano en esa ronda. Dominar estos conceptos básicos es el primer paso
+                para convertirse en un buen jugador de truco uruguayo online.
+              </p>
+
+              <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
+                El Sistema de Cantos: Envido, Truco y Flor
+              </h3>
+              <p>
+                El <strong>Envido</strong> se canta antes de jugar la primera carta y se basa en sumar los puntos de
+                las dos cartas más altas del mismo palo. Las figuras (10, 11, 12) valen cero, y el resto vale su número.
+                Si tenés tres cartas del mismo palo, podés cantar Flor, que vale más puntos. El envido básico vale 2 puntos,
+                pero puede subirse a Real Envido (3 puntos) o Falta Envido (los puntos que faltan para ganar).
+              </p>
+
+              <p>
+                El canto de Truco aumenta el valor de la ronda de 1 a 2 puntos. El rival puede aceptar (quiero),
+                rechazar (no quiero, perdiendo 1 punto), o subir la apuesta cantando Retruco (3 puntos) o Vale Cuatro
+                (4 puntos). Esta escalada de apuestas es donde el truco uruguayo muestra toda su intensidad psicológica.
               </p>
 
               <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
                 Modos de Juego Disponibles
               </h3>
               <p>
-                En nuestra plataforma podes jugar en tres modalidades: <strong>1v1</strong> (mano a mano, el clasico
-                duelo de ingenio), <strong>2v2</strong> (equipos de dos, donde la comunicacion con tu companero es
-                clave), y <strong>3v3</strong> (equipos de tres, la modalidad mas popular en los torneos). Cada modo
-                tiene su propia estrategia y nivel de complejidad, permitiendote elegir segun tu experiencia o la
+                En nuestra plataforma podés jugar en tres modalidades: 1v1 (mano a mano, el clásico
+                duelo de ingenio), 2v2 (equipos de dos, donde la comunicación con tu compañero es
+                clave), y 3v3 (equipos de tres, la modalidad más popular en los torneos). Cada modo
+                tiene su propia estrategia y nivel de complejidad, permitiéndote elegir según tu experiencia o la
                 cantidad de amigos que quieran jugar.
               </p>
 
-              <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
-                Jerarquia de Cartas en el Truco
-              </h3>
               <p>
-                Conocer el valor de las cartas es fundamental. Las cartas mas poderosas son: el <strong>Ancho de
-                Espadas</strong> (1 de espada), el <strong>Ancho de Bastos</strong> (1 de basto), el <strong>Siete
-                de Espadas</strong> y el <strong>Siete de Oros</strong>. Luego siguen los treses, los doses, los
-                ases de copa y oro, los reyes, caballos, sotas, y finalmente los sietes de copa y basto, los seis,
-                cincos y cuatros. Dominar esta jerarquia te dara una ventaja importante en cada mano.
+                El modo 2v2 es especialmente interesante porque introduce las señas: gestos sutiles que los compañeros
+                usan para comunicarse sin que los rivales se den cuenta. Levantar las cejas, fruncir los labios o mover
+                los ojos de cierta manera puede indicar qué cartas tenés. Aprender y reconocer estas señas es parte
+                fundamental del truco uruguayo en equipo.
               </p>
 
               <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
-                Por Que Elegir Nuestra Plataforma
+                Jerarquía de Cartas en el Truco Uruguayo
+              </h3>
+              <p>
+                Conocer el valor de las cartas es fundamental para ganar. Las cartas más poderosas son: el <strong>Ancho de
+                Espadas</strong> (1 de espada), el Ancho de Bastos (1 de basto), el Siete
+                de Espadas y el Siete de Oros. Luego siguen los treses, los doses, los
+                ases de copa y oro, los reyes, caballos, sotas, y finalmente los sietes de copa y basto, los seis,
+                cincos y cuatros. Dominar esta jerarquía te dará una ventaja importante en cada mano.
+              </p>
+
+              <p>
+                Una estrategia común es guardar las cartas fuertes para las manos decisivas. Si ganaste la primera mano
+                con una carta media, podés arriesgar más en la segunda sabiendo que tenés respaldo. Por el contrario,
+                si perdiste la primera, necesitás ganar las dos siguientes, lo que cambia completamente tu enfoque táctico.
+              </p>
+
+              <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
+                Expresiones y Cultura del Truco
+              </h3>
+              <p>
+                El truco uruguayo tiene su propio vocabulario: se dice quiero para aceptar, no quiero para rechazar,
+                me voy al mazo cuando te retirás de la ronda, y son buenas cuando reconocés que el rival tiene mejor
+                envido. Estas expresiones son parte del encanto del juego y las vas a escuchar (y usar) constantemente
+                mientras jugás truco uruguayo online con amigos.
+              </p>
+
+              <p>
+                Además, el truco está lleno de dichos y refranes populares: a la primera de bastos, el que canta último
+                canta mejor, y muchos más que reflejan la sabiduría popular uruguaya aplicada al juego. Estas frases
+                no solo son divertidas sino que a menudo encierran consejos estratégicos valiosos.
+              </p>
+
+              <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
+                Por Qué Elegir Nuestra Plataforma de Truco Online
               </h3>
               <p>
                 Desarrollamos este <strong>juego de truco online</strong> pensando en los uruguayos que viven en el
-                exterior y extranan las partidas con amigos, pero tambien para quienes quieren aprender o simplemente
-                disfrutar de una buena partida sin salir de casa. Nuestra plataforma es <strong>100% gratis</strong>,
-                no requiere descargas, y funciona en cualquier navegador. Ademas, las partidas son en tiempo real con
-                tecnologia Socket.IO, garantizando una experiencia fluida y sin demoras.
+                exterior y extrañan las partidas con amigos, pero también para quienes quieren aprender o simplemente
+                disfrutar de una buena partida sin salir de casa. Nuestra plataforma es 100% gratis,
+                no requiere descargas, y funciona en cualquier navegador. Además, las partidas son en tiempo real con
+                tecnología moderna, garantizando una experiencia fluida y sin demoras.
+              </p>
+
+              <p>
+                Podés crear una partida privada y compartir el código con tus amigos, o unirte a partidas públicas
+                para conocer nuevos jugadores. El sistema de equipos automático balancea los partidos, y podés
+                chatear con otros jugadores durante la partida para recrear esa experiencia social que hace al
+                truco tan especial.
+              </p>
+
+              <h3 className="text-xl font-[var(--font-cinzel)] text-celeste-300 mt-6 mb-3">
+                Consejos para Principiantes
+              </h3>
+              <p>
+                Si recién empezás a jugar truco uruguayo online, te recomendamos comenzar con partidas 1v1 para
+                aprender la mecánica básica sin la presión del equipo. Prestá atención a qué cartas ya se jugaron
+                para calcular las probabilidades, y no tengas miedo de farolear: el engaño es parte legítima del juego.
+                Con práctica, vas a desarrollar tu propio estilo y estrategia.
+              </p>
+
+              <p>
+                Recordá que en el truco uruguayo la suerte importa, pero la habilidad y la lectura del rival son
+                fundamentales. Observá los patrones de juego de tus oponentes, aprendé a reconocer cuándo están
+                faroleando, y sobre todo: disfrutá del juego. El truco es una tradición uruguaya que se disfruta
+                mejor con buena onda y respeto entre los jugadores.
               </p>
             </div>
           </div>
         </section>
 
-        {/* Navegacion interna SEO-friendly */}
-        <nav className="mt-12 w-full max-w-4xl px-4" aria-label="Navegacion principal del sitio">
+        {/* Navegación interna SEO-friendly */}
+        <nav className="mt-12 w-full max-w-4xl px-4" aria-label="Navegación principal del sitio">
           <div className="glass rounded-xl p-6 border border-celeste-600/20">
             <h2 className="text-lg font-[var(--font-cinzel)] text-gold-400 mb-4 text-center">
-              Explora Truco Uruguayo Online
+              Explorá Truco Uruguayo Online
             </h2>
             <ul className="flex flex-wrap justify-center gap-4 text-sm">
               <li>
@@ -298,13 +381,33 @@ export default function HomePage() {
                   Ranking de Jugadores
                 </Link>
               </li>
+              <li>
+                <Link href="/reglas" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Reglas Oficiales del Truco
+                </Link>
+              </li>
+              <li>
+                <Link href="/perfil" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Mi Perfil de Jugador
+                </Link>
+              </li>
+              <li>
+                <Link href="/estadisticas" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Estadísticas de Partidas
+                </Link>
+              </li>
+              <li>
+                <Link href="/torneos" className="text-celeste-300 hover:text-celeste-100 transition-colors underline underline-offset-4">
+                  Torneos de Truco
+                </Link>
+              </li>
             </ul>
           </div>
         </nav>
 
         {/* Enlaces externos de autoridad */}
         <aside className="mt-8 w-full max-w-4xl px-4 text-center">
-          <p className="text-white/50 text-xs mb-2">Mas informacion sobre el truco:</p>
+          <p className="text-white/50 text-xs mb-2">Más información sobre el truco y Uruguay:</p>
           <div className="flex flex-wrap justify-center gap-4 text-xs">
             <a
               href="https://es.wikipedia.org/wiki/Truco_(juego_de_naipes)"
@@ -321,6 +424,22 @@ export default function HomePage() {
               className="text-celeste-400/70 hover:text-celeste-300 transition-colors underline"
             >
               Cultura Uruguaya - Ministerio de Turismo
+            </a>
+            <a
+              href="https://es.wikipedia.org/wiki/Baraja_espa%C3%B1ola"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-celeste-400/70 hover:text-celeste-300 transition-colors underline"
+            >
+              Baraja Española - Wikipedia
+            </a>
+            <a
+              href="https://www.uruguaynatural.com/es/que-hacer/cultura"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-celeste-400/70 hover:text-celeste-300 transition-colors underline"
+            >
+              Uruguay Natural - Cultura
             </a>
           </div>
         </aside>

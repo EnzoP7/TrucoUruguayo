@@ -48,13 +48,13 @@ export const metadata: Metadata = {
     "truco uruguay",
     "cartas uruguayas",
     "juego de cartas uruguayo",
-    "truco en linea",
+    "truco en línea",
     "truco gratis",
     "envido",
     "flor truco",
     "truco retruco vale cuatro",
     "juegos uruguayos",
-    "cartas espanolas",
+    "cartas españolas",
     "truco argentino uruguayo",
     "mejor juego de truco",
     "truco tiempo real",
@@ -80,7 +80,7 @@ export const metadata: Metadata = {
     siteName: "Truco Uruguayo Online",
     title: "Truco Uruguayo Online Gratis - Juga con Amigos",
     description:
-      "El autentico Truco Uruguayo online. Juga gratis con amigos en tiempo real. Modos 1v1, 2v2 y 3v3.",
+      "El auténtico Truco Uruguayo online. Jugá gratis con amigos en tiempo real. Modos 1v1, 2v2 y 3v3.",
     images: [
       {
         url: "/og-image.png",
@@ -126,7 +126,7 @@ const jsonLd = {
       "@id": `${SITE_URL}/#webapp`,
       name: "Truco Uruguayo Online",
       description:
-        "El autentico Truco Uruguayo online. Juga gratis con amigos en tiempo real. Modos 1v1, 2v2 y 3v3.",
+        "El auténtico Truco Uruguayo online. Jugá gratis con amigos en tiempo real. Modos 1v1, 2v2 y 3v3.",
       url: SITE_URL,
       applicationCategory: "GameApplication",
       operatingSystem: "Web Browser",
@@ -158,7 +158,7 @@ const jsonLd = {
       name: "Truco Uruguayo",
       alternateName: ["Truco", "Truco Online", "Truco Uruguay", "Truco Cartas"],
       description:
-        "Juego de cartas tradicional uruguayo. Juga al Truco con tus amigos online en tiempo real. Incluye Envido, Truco, Retruco, Vale Cuatro, Flor y todas las reglas del truco uruguayo autentico.",
+        "Juego de cartas tradicional uruguayo. Jugá al Truco con tus amigos online en tiempo real. Incluye Envido, Truco, Retruco, Vale Cuatro, Flor y todas las reglas del truco uruguayo auténtico.",
       url: SITE_URL,
       genre: ["Card Game", "Multiplayer", "Traditional Game"],
       numberOfPlayers: {
@@ -224,34 +224,34 @@ const jsonLd = {
       mainEntity: [
         {
           "@type": "Question",
-          name: "Como jugar al Truco Uruguayo online?",
+          name: "¿Cómo jugar al Truco Uruguayo online?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Es muy facil! Solo ingresa a trucouruguayo.onrender.com, crea una partida o unite a una existente, e invita a tus amigos. Podes jugar 1v1, 2v2 o 3v3 completamente gratis.",
+            text: "¡Es muy fácil! Solo ingresá a trucouruguayo.onrender.com, creá una partida o unite a una existente, e invitá a tus amigos. Podés jugar 1v1, 2v2 o 3v3 completamente gratis.",
           },
         },
         {
           "@type": "Question",
-          name: "El Truco Uruguayo es gratis?",
+          name: "¿El Truco Uruguayo es gratis?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Si, Truco Uruguayo Online es 100% gratis. Podes jugar todas las partidas que quieras sin ningun costo.",
+            text: "Sí, Truco Uruguayo Online es 100% gratis. Podés jugar todas las partidas que quieras sin ningún costo.",
           },
         },
         {
           "@type": "Question",
-          name: "Cuantos jugadores pueden jugar al Truco?",
+          name: "¿Cuántos jugadores pueden jugar al Truco?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "El Truco Uruguayo se juega de 2 a 6 jugadores. Podes jugar 1v1 (mano a mano), 2v2 (equipos de dos) o 3v3 (equipos de tres).",
+            text: "El Truco Uruguayo se juega de 2 a 6 jugadores. Podés jugar 1v1 (mano a mano), 2v2 (equipos de dos) o 3v3 (equipos de tres).",
           },
         },
         {
           "@type": "Question",
-          name: "Cuales son las reglas del Truco Uruguayo?",
+          name: "¿Cuáles son las reglas del Truco Uruguayo?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "El Truco Uruguayo usa un mazo espanol de 40 cartas. Se juega al mejor de 3 manos por ronda, y el juego es a 30 puntos. Incluye cantos como Envido, Truco, Retruco, Vale Cuatro y Flor.",
+            text: "El Truco Uruguayo usa un mazo español de 40 cartas. Se juega al mejor de 3 manos por ronda, y el juego es a 30 puntos. Incluye cantos como Envido, Truco, Retruco, Vale Cuatro y Flor.",
           },
         },
       ],

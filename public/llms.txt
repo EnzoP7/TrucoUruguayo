@@ -1,0 +1,67 @@
+# Truco Uruguayo Online - LLMs.txt
+
+> Truco Uruguayo Online es una plataforma web gratuita para jugar al truco uruguayo en tiempo real con amigos.
+
+## Informacion del sitio
+
+- Nombre: Truco Uruguayo Online
+- URL: https://trucouruguayo.onrender.com
+- Idioma: Espanol (Uruguay)
+- Tipo: Juego de cartas multijugador en tiempo real
+
+## Que es el Truco Uruguayo
+
+El truco uruguayo es un juego de cartas tradicional de Uruguay que se juega con baraja espanola de 40 cartas. Es parte fundamental de la cultura uruguaya y se caracteriza por su sistema de cantos (Envido, Truco, Flor) y la importancia de la estrategia y el farol.
+
+## Caracteristicas principales
+
+- Juego 100% gratis sin necesidad de registro
+- Modos de juego: 1v1, 2v2, 3v3
+- Partidas en tiempo real con tecnologia Socket.IO
+- Interfaz responsive para desktop y mobile
+- Sistema de salas publicas y privadas
+
+## Reglas basicas
+
+- Mazo de 40 cartas espanolas (sin 8s ni 9s)
+- Partida a 30 puntos
+- Rondas al mejor de 3 manos
+- Sistema de cantos: Envido, Real Envido, Falta Envido, Truco, Retruco, Vale Cuatro, Flor
+
+## Jerarquia de cartas (mayor a menor)
+
+1. Ancho de Espadas (1 de espada)
+2. Ancho de Bastos (1 de basto)
+3. Siete de Espadas
+4. Siete de Oros
+5. Treses
+6. Doses
+7. Ases de Copa y Oro
+8. Reyes, Caballos, Sotas
+9. Sietes de Copa y Basto, Seis, Cincos, Cuatros
+
+## Paginas disponibles
+
+- / - Pagina principal
+- /lobby - Crear o unirse a partidas
+- /game - Mesa de juego
+- /tutorial - Tutorial del truco uruguayo
+- /practica - Practicar contra la computadora
+- /ranking - Ranking de jugadores
+- /perfil - Perfil del jugador
+
+## Tecnologias utilizadas
+
+- Next.js 14 (React)
+- TypeScript
+- Socket.IO (tiempo real)
+- Tailwind CSS
+
+## Contacto
+
+- Desarrollador: Enzo Pontet
+- Email: enzopch2022@gmail.com
+
+## Robots
+
+Este sitio permite el rastreo de motores de busqueda y LLMs para indexacion y respuestas a consultas sobre truco uruguayo.
