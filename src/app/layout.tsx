@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Cinzel, Permanent_Marker } from "next/font/google";
 import { Providers } from "./providers";
 import { AdSenseScript } from "@/components/ads";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 import "./globals.css";
 
 const inter = Inter({
@@ -281,6 +282,7 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body className={`${inter.className} bg-table-wood`}>
+        <GoogleAnalytics />
         <Providers>{children}</Providers>
       </body>
     </html>
