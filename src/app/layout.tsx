@@ -116,6 +116,7 @@ export const metadata: Metadata = {
     "application-name": "Truco Uruguayo Online",
     "msapplication-TileColor": "#1a5276",
     "theme-color": "#1a5276",
+    "google-adsense-account": "ca-pub-6217274251244633",
   },
 };
 
