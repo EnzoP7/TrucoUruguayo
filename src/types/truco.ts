@@ -13,6 +13,8 @@ export interface Jugador {
   cartas: Carta[];
   esMano?: boolean;
   avatarUrl?: string | null;
+  participaRonda?: boolean; // false si el jugador no participa en esta ronda (ej: pico a pico 3v3)
+  seVaAlMazo?: boolean; // true si el jugador se fue al mazo
 }
 
 // Modelo de equipo
@@ -95,4 +97,8 @@ export interface Mesa {
   // Sistema de perros
   perrosActivos?: boolean; // Si está activo el modo "echar los perros"
   perrosConfig?: { contraFlor: boolean; faltaEnvido: boolean; truco: boolean } | null;
+  // Sistema pico a pico (3v3 en malas)
+  modoPicoAPico: boolean; // true = pico a pico, false = en conjunto
+  rondaNumero: number; // número de ronda actual (para alternar modos)
+  turnosPicoAPico?: { jugadorActual: number; oponenteEnfrente: number } | null; // para controlar turnos en pico a pico
 }

@@ -207,7 +207,7 @@ class TrucoBot {
     }
 
     // === CASO 2: DEBO RESPONDER A UNA CARTA ===
-    return this._elegirCartaComoRespuesta(ordenadas, cartaOponenteActual);
+    return this._elegirCartaComoRespuesta(ordenadas, cartaOponenteActual, manoActual);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -261,7 +261,7 @@ class TrucoBot {
     }
   }
 
-  _elegirCartaComoRespuesta(ordenadas, cartaOponente) {
+  _elegirCartaComoRespuesta(ordenadas, cartaOponente, manoActual) {
     const poderOponente = this.getPoderCarta(cartaOponente);
 
     // Buscar cartas que le ganen
@@ -630,6 +630,112 @@ class TrucoBot {
               escalar = 'retruco';
             } else if (tipoTruco === 'retruco') {
               escalar = 'vale4';
+            }
+          }
+        }
+
+        resolve({ acepta, escalar });
+      }, tiempo);
+    });
+  }
+
+  // ============================================
+  // FLOR - Decisiones de canto y respuesta
+  // ============================================
+
+  /**
+   * Verifica si el bot tiene flor (3 cartas del mismo palo)
+   * Nota: Las reglas de piezas se manejan en el servidor
+   */
+  tieneFlor() {
+    if (this.cartas.length !== 3) return false;
+    const primerPalo = this.cartas[0].palo;
+    return this.cartas.every(c => c.palo === primerPalo);
+  }
+
+  /**
+   * Calcula los puntos de flor del bot
+   * Para flor por palo: suma de valores + 20
+   */
+  calcularPuntosFlor() {
+    if (!this.tieneFlor()) return 0;
+    let suma = 0;
+    this.cartas.forEach(c => {
+      suma += (c.valor >= 10 ? 0 : c.valor);
+    });
+    return suma + 20;
+  }
+
+  /**
+   * Decide si responder a una flor cantada por el oponente
+   * @param {string} tipoFlor - 'flor', 'contra_flor', 'con_flor_envido', 'contra_flor_al_resto'
+   * @param {number} misPuntosFlor - Puntos de flor del bot (si tiene)
+   * @returns {Promise<{acepta: boolean, escalar: string|null}>}
+   */
+  decidirResponderFlor(tipoFlor, misPuntosFlor = null) {
+    return new Promise((resolve) => {
+      const tiempo = this.config.tiempoCantoMin +
+        Math.random() * (this.config.tiempoCantoMax - this.config.tiempoCantoMin);
+
+      setTimeout(() => {
+        // Si no tengo flor, no puedo responder (el servidor maneja esto)
+        const tengoFlor = this.tieneFlor();
+        const puntosFlor = misPuntosFlor || this.calcularPuntosFlor();
+        const mentiroso = this.personalidad.mentiroso;
+        const agresividad = this.personalidad.agresividad;
+
+        let probabilidad = 0;
+
+        // === LÓGICA DE ACEPTACIÓN SEGÚN PUNTOS DE FLOR ===
+        // Flor máxima posible: 38 (7+7+4 del mismo palo + 20)
+        // Flor promedio buena: 30-34
+        // Flor promedio normal: 25-29
+
+        if (puntosFlor >= 36) probabilidad = 0.98;
+        else if (puntosFlor >= 33) probabilidad = 0.90;
+        else if (puntosFlor >= 30) probabilidad = 0.75;
+        else if (puntosFlor >= 27) probabilidad = 0.55;
+        else if (puntosFlor >= 24) probabilidad = 0.35;
+        else if (puntosFlor >= 21) probabilidad = 0.20;
+        else probabilidad = 0.05 + mentiroso * 0.15; // Farol
+
+        // Ajustar por tipo de flor (más puntos en juego = más conservador)
+        if (tipoFlor === 'contra_flor') {
+          probabilidad *= 0.80;
+        } else if (tipoFlor === 'con_flor_envido') {
+          probabilidad *= 0.75;
+        } else if (tipoFlor === 'contra_flor_al_resto') {
+          probabilidad *= 0.50; // Muy arriesgado
+          if (puntosFlor < 30) probabilidad *= 0.5;
+        }
+
+        const acepta = Math.random() < probabilidad;
+
+        // === DECISIÓN DE ESCALAR ===
+        let escalar = null;
+
+        if (acepta && tengoFlor) {
+          // Con flor excelente (35+): escalar agresivamente
+          if (puntosFlor >= 35) {
+            if (tipoFlor === 'flor' && Math.random() < 0.70) escalar = 'contra_flor';
+            if (tipoFlor === 'contra_flor' && Math.random() < 0.60) escalar = 'contra_flor_al_resto';
+          }
+          // Con flor muy buena (32-34): considerar escalar
+          else if (puntosFlor >= 32) {
+            if (tipoFlor === 'flor' && Math.random() < 0.50) escalar = 'contra_flor';
+            if (tipoFlor === 'contra_flor' && Math.random() < 0.35) escalar = 'contra_flor_al_resto';
+          }
+          // Con flor buena (29-31): a veces escalar
+          else if (puntosFlor >= 29) {
+            if (tipoFlor === 'flor' && Math.random() < 0.30 * agresividad) escalar = 'contra_flor';
+          }
+
+          // === FAROLEO ===
+          if (puntosFlor < 27 && mentiroso > 0.2) {
+            const chanceFarol = mentiroso * 0.5;
+            if (Math.random() < chanceFarol) {
+              if (tipoFlor === 'flor') escalar = 'contra_flor';
+              else if (tipoFlor === 'contra_flor') escalar = 'contra_flor_al_resto';
             }
           }
         }

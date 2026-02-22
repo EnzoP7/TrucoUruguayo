@@ -495,6 +495,13 @@ class SocketService {
       this.socket!.emit('quitar-bot' as any, { botId }, (result: any) => resolve(result));
     });
   }
+
+  async llenarConBots(dificultad: 'facil' | 'medio' | 'dificil' = 'medio'): Promise<{ success: boolean; botsAgregados?: { nombre: string; equipo: number }[]; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('llenar-con-bots' as any, { dificultad }, (result: any) => resolve(result));
+    });
+  }
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   // === SOLICITAR ESTADO ===

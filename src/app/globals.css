@@ -1283,3 +1283,46 @@
     opacity: 1;
   }
 }
+
+/* === LOADER DE TRUCO URUGUAYO === */
+
+.animate-card-left {
+  animation: cardLeft 1.5s ease-in-out infinite;
+}
+
+.animate-card-right {
+  animation: cardRight 1.5s ease-in-out infinite;
+}
+
+.animate-sun-pulse {
+  animation: sunPulse 2s ease-in-out infinite;
+}
+
+@keyframes cardLeft {
+  0%, 100% {
+    transform: translateX(-60px) rotate(-15deg);
+  }
+  50% {
+    transform: translateX(-70px) rotate(-25deg) translateY(-5px);
+  }
+}
+
+@keyframes cardRight {
+  0%, 100% {
+    transform: translateX(60px) rotate(15deg);
+  }
+  50% {
+    transform: translateX(70px) rotate(25deg) translateY(-5px);
+  }
+}
+
+@keyframes sunPulse {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    filter: drop-shadow(0 0 20px rgba(252, 209, 22, 0.5));
+  }
+  50% {
+    transform: scale(1.15) rotate(15deg);
+    filter: drop-shadow(0 0 40px rgba(252, 209, 22, 0.9));
+  }
+}

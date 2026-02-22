@@ -9,6 +9,7 @@ import socketService from '@/lib/socket';
 import audioManager from '@/lib/audioManager';
 import { AdBanner } from '@/components/ads';
 import FeedbackModal from '@/components/FeedbackModal';
+import TrucoLoader from '@/components/TrucoLoader';
 
 interface Partida {
   mesaId: string;
@@ -452,18 +453,7 @@ function LobbyPageContent() {
 
   // Pantalla de carga
   if (!conectado) {
-    return (
-      <div className="min-h-screen bg-table-wood flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative w-20 h-20 mx-auto mb-6">
-            <div className="absolute inset-0 rounded-full border-4 border-gold-700/30" />
-            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-gold-500 animate-spin" />
-          </div>
-          <div className="text-gold-400/80 text-xl font-light tracking-wide">Conectando al servidor...</div>
-          <div className="text-gold-600/40 text-sm mt-2">Preparando la pulpería</div>
-        </div>
-      </div>
-    );
+    return <TrucoLoader text="Conectando al servidor..." />;
   }
 
   return (
@@ -1201,8 +1191,21 @@ function LobbyPageContent() {
               <div className="text-center py-8 text-gold-400/60">Cargando amigos...</div>
             ) : amigosOnline.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gold-400/60 mb-1">No hay amigos online</p>
-                <p className="text-gold-500/40 text-sm">Agrega amigos desde tu perfil</p>
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gold-600/10 flex items-center justify-center">
+                  <UsersIcon className="w-8 h-8 text-gold-500/40" />
+                </div>
+                <p className="text-gold-300 font-medium mb-1">No hay amigos conectados</p>
+                <p className="text-gold-500/50 text-sm mb-4">Tus amigos no están online en este momento</p>
+                <Link
+                  href="/ranking"
+                  onClick={() => setInviteModalMesaId(null)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-celeste-600/20 text-celeste-300 hover:bg-celeste-600/30 transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                  Buscar amigos en el ranking
+                </Link>
               </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">

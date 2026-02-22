@@ -153,10 +153,12 @@ function crearEstadoMesa(mesaId, jugadores, puntosLimite = 30, opciones = {}) {
   // Opciones de juego con valores por defecto
   const modoAlternadoHabilitado = opciones.modoAlternado !== false; // true por defecto (Pico a Pico)
   const modoAyudaHabilitado = opciones.modoAyuda === true; // false por defecto
+  const tamañoSala = opciones.tamañoSala || '2v2'; // Tamaño de sala por defecto
 
   return {
     id: mesaId,
     jugadores,
+    tamañoSala, // Incluir tamaño de sala en el estado
     equipos: [
       { id: 1, jugadores: eq1, puntaje: 0 },
       { id: 2, jugadores: eq2, puntaje: 0 },
@@ -213,7 +215,10 @@ function crearEstadoMesa(mesaId, jugadores, puntosLimite = 30, opciones = {}) {
     modoAlternadoHabilitado, // Si está habilitado el Pico a Pico para 6 jugadores
     modoRondaActual: 'normal', // 'normal' (todos juegan) o '1v1' (solo 2 jugadores)
     indiceEnfrentamiento1v1: 0, // Qué par de jugadores se enfrentan en Pico a Pico (0, 1, 2)
-    rondaAlternada: 0, // Contador de rondas para alternar (par=3v3, impar=1v1)
+    manosPicoAPico: 0, // Contador de manos jugadas en el pico a pico actual (0-2, se resetea cada 3)
+    duellosPicoAPicoJugados: 0, // Cantidad de duelos completos jugados (0-2, cuando llega a 3 se pasa a conjunto)
+    cicloRondas: 0, // Contador de ciclos: 0 = conjunto inicial, impar = pico a pico, par = conjunto
+    ganadoresCrucesPicoAPico: [], // Array con el equipo ganador de cada cruce: [equipo1, equipo2, equipo1] etc.
     // === MODO AYUDA (para principiantes) ===
     modoAyudaHabilitado, // Si está habilitado el modo ayuda para aprender
     // === RESPUESTAS GRUPALES (para equipos 2v2, 3v3) ===
@@ -231,6 +236,8 @@ function iniciarRondaFase1(mesa) {
   mesa.ganadoresManos = [];
   mesa.manoGanadorJugadorId = null;
   mesa.manoActual = 1;
+  mesa.inicioManoActual = 0; // Índice donde empieza la mano actual en cartasMesa
+  mesa.scheduleNextRoundPending = false; // Resetear bandera de transición
   mesa.winnerRonda = null;
   mesa.mensajeRonda = null;
   mesa.gritoActivo = null;
@@ -253,25 +260,61 @@ function iniciarRondaFase1(mesa) {
   mesa.esperandoRespuestasGrupales = false;
   mesa.tipoRespuestaGrupal = null;
 
-  // === MODO ALTERNADO 6 JUGADORES ===
-  // Determinar si esta ronda es 3v3 o 1v1
+  // === MODO ALTERNADO 6 JUGADORES (Pico a Pico en Truco Uruguayo) ===
+  // Secuencia correcta:
+  // 1. Primera ronda: En conjunto (3v3)
+  // 2. Pico a pico: 3 duelos de 3 manos c/u (9 rondas totales)
+  //    - Duelo 1: Par 0 juega 3 manos
+  //    - Duelo 2: Par 1 juega 3 manos
+  //    - Duelo 3: Par 2 juega 3 manos
+  // 3. Volver a conjunto (3v3)
+  // 4. Repetir desde paso 2 hasta que alguien entre en "buenas" (15+ pts)
+  // 5. Si alguien está en buenas: solo conjunto
+
   if (mesa.jugadores.length === 6 && mesa.modoAlternadoHabilitado) {
-    const mitadPuntos = mesa.puntosLimite / 2;
+    const mitadPuntos = mesa.puntosLimite / 2; // 15 puntos
     const ambosEnMalas = mesa.equipos[0].puntaje < mitadPuntos && mesa.equipos[1].puntaje < mitadPuntos;
 
-    if (ambosEnMalas) {
-      // Alternar entre 3v3 (par) y 1v1 (impar)
-      mesa.rondaAlternada = (mesa.rondaAlternada || 0) + 1;
-      if (mesa.rondaAlternada % 2 === 0) {
-        mesa.modoRondaActual = 'normal'; // 3v3
-      } else {
-        mesa.modoRondaActual = '1v1';
-        // Rotar qué par de jugadores se enfrenta (0, 1, 2)
-        mesa.indiceEnfrentamiento1v1 = (mesa.indiceEnfrentamiento1v1 || 0) % 3;
-      }
-    } else {
-      // Al menos un equipo en buenas - jugar normal 3v3
+    if (!ambosEnMalas) {
+      // Al menos un equipo en buenas (15+ puntos) - siempre jugar en conjunto
       mesa.modoRondaActual = 'normal';
+      mesa.manosPicoAPico = 0;
+      mesa.duellosPicoAPicoJugados = 0;
+    } else {
+      // Ambos en malas - aplicar sistema pico a pico
+
+      // Inicializar cicloRondas si no existe
+      if (mesa.cicloRondas === undefined) mesa.cicloRondas = 0;
+
+      // cicloRondas = 0: primer conjunto (antes del primer pico a pico)
+      // cicloRondas impar: estamos en fase pico a pico
+      // cicloRondas par (>0): estamos en fase conjunto post pico a pico
+
+      if (mesa.cicloRondas === 0) {
+        // Primera ronda del partido: en conjunto
+        mesa.modoRondaActual = 'normal';
+        mesa.cicloRondas = 1; // Próxima será pico a pico
+        mesa.manosPicoAPico = 0;
+        mesa.duellosPicoAPicoJugados = 0;
+        mesa.indiceEnfrentamiento1v1 = 0;
+        mesa.ultimoCruceIniciado = null;
+      } else if (mesa.cicloRondas % 2 === 1) {
+        // Ciclo impar: estamos en fase pico a pico
+        // NOTA: Esta lógica SOLO aplica para el PRIMER cruce de la fase pico a pico
+        // Los cruces 2 y 3 se manejan en iniciarSiguienteCrucePicoAPico
+        mesa.modoRondaActual = '1v1';
+        mesa.ultimoCruceIniciado = null; // Resetear para nueva fase pico a pico
+        mesa.ganadoresCrucesPicoAPico = []; // Resetear marcador de cruces
+        // El índice de enfrentamiento ya está en 0 (primer cruce) o fue seteado por iniciarSiguienteCrucePicoAPico
+      } else {
+        // Ciclo par (>0): ronda en conjunto post pico a pico
+        mesa.modoRondaActual = 'normal';
+        mesa.cicloRondas++; // Próxima será pico a pico
+        mesa.manosPicoAPico = 0;
+        mesa.duellosPicoAPicoJugados = 0;
+        mesa.indiceEnfrentamiento1v1 = 0;
+        mesa.ultimoCruceIniciado = null;
+      }
     }
   } else {
     mesa.modoRondaActual = 'normal';
@@ -316,8 +359,12 @@ function iniciarRondaFase1(mesa) {
     if (jugadoresEq1[idxEq1]) jugadoresEq1[idxEq1].participaRonda = true;
     if (jugadoresEq2[idxEq2]) jugadoresEq2[idxEq2].participaRonda = true;
 
-    // Incrementar para la próxima ronda Pico a Pico
-    mesa.indiceEnfrentamiento1v1 = (idx + 1) % 3;
+    // Log para debug del pico a pico
+    console.log(`[Pico a Pico] Enfrentamiento ${idx}: ${jugadoresEq1[idxEq1]?.nombre} (E1) vs ${jugadoresEq2[idxEq2]?.nombre} (E2)`);
+    console.log(`[Pico a Pico] Jugadores participan:`, mesa.jugadores.filter(j => j.participaRonda).map(j => j.nombre));
+
+    // NO incrementar aquí - el incremento se hace en finalizarRonda cuando el cruce termina
+    // mesa.indiceEnfrentamiento1v1 se actualiza en iniciarSiguienteCrucePicoAPico
   }
 
   // El mano es quien corta el mazo (el que reparte es el jugador anterior al mano)
@@ -358,22 +405,43 @@ function iniciarRondaFase2(mesa, posicionCorte) {
   mesa.fase = 'repartiendo'; // New phase for dealing animation
   mesa.repartiendoCartas = true;
 
-  // En modo 1v1, solo repartir a los jugadores que participan
-  const jugadoresQueParticipan = mesa.jugadores.filter(j => j.participaRonda !== false);
-  const numJugadoresParticipan = jugadoresQueParticipan.length;
+  // En modo pico a pico, repartir a TODOS los jugadores (usarán las mismas cartas en los 3 cruces)
+  // En modo normal, repartir solo a los que participan
+  const esPrimerCrucePicoAPico = mesa.modoRondaActual === '1v1' && (mesa.duellosPicoAPicoJugados || 0) === 0;
+  const repartirATodos = esPrimerCrucePicoAPico || mesa.modoRondaActual !== '1v1';
+
+  let jugadoresParaRepartir;
+  if (repartirATodos) {
+    jugadoresParaRepartir = mesa.jugadores;
+  } else {
+    jugadoresParaRepartir = mesa.jugadores.filter(j => j.participaRonda !== false);
+  }
+  const numJugadoresParticipan = jugadoresParaRepartir.length;
 
   const manos = repartir(mazo, numJugadoresParticipan);
   let manoIndex = 0;
-  mesa.jugadores.forEach((j) => {
-    if (j.participaRonda !== false) {
+
+  if (repartirATodos) {
+    // Repartir a todos los jugadores
+    mesa.jugadores.forEach((j) => {
       j.cartas = manos[manoIndex];
-      j.cartasOriginales = [...manos[manoIndex]]; // Guardar copia de las 3 cartas originales para envido/flor
+      j.cartasOriginales = [...manos[manoIndex]]; // Guardar copia de las 3 cartas originales
       manoIndex++;
-    } else {
-      j.cartas = []; // Jugadores que no participan no tienen cartas
-      j.cartasOriginales = [];
-    }
-  });
+    });
+    console.log(`[Pico a Pico] Repartidas cartas a TODOS los ${numJugadoresParticipan} jugadores para los 3 cruces`);
+  } else {
+    // Solo repartir a los que participan (no debería ocurrir en pico a pico)
+    mesa.jugadores.forEach((j) => {
+      if (j.participaRonda !== false) {
+        j.cartas = manos[manoIndex];
+        j.cartasOriginales = [...manos[manoIndex]];
+        manoIndex++;
+      } else {
+        j.cartas = [];
+        j.cartasOriginales = [];
+      }
+    });
+  }
 
   // La muestra: la carta siguiente después de repartir (queda boca arriba)
   const cartasRepartidas = numJugadoresParticipan * 3;
@@ -387,7 +455,8 @@ function iniciarRondaFase2(mesa, posicionCorte) {
   // Las piezas (2,4,5,10,11 del palo de la muestra) son más fuertes que las matas
   if (mesa.muestra) {
     mesa.jugadores.forEach(j => {
-      if (j.participaRonda !== false) {
+      // En pico a pico, actualizar poder de TODOS (tienen cartas aunque no participen en este cruce)
+      if (j.cartas && j.cartas.length > 0) {
         actualizarPoderConMuestra(j.cartas, mesa.muestra);
         actualizarPoderConMuestra(j.cartasOriginales, mesa.muestra);
       }
@@ -396,7 +465,8 @@ function iniciarRondaFase2(mesa, posicionCorte) {
 
   // En modo 1v1, el mano es el primer jugador que participa del equipo que le toca
   if (mesa.modoRondaActual === '1v1') {
-    const primerParticipante = jugadoresQueParticipan.find(j => j.equipo === 1) || jugadoresQueParticipan[0];
+    const jugadoresActivos = mesa.jugadores.filter(j => j.participaRonda !== false);
+    const primerParticipante = jugadoresActivos.find(j => j.equipo === 1) || jugadoresActivos[0];
     mesa.turnoActual = mesa.jugadores.findIndex(j => j.id === primerParticipante.id);
     mesa.indiceMano = mesa.turnoActual;
   } else {
@@ -463,6 +533,9 @@ function getEstadoParaJugador(mesa, jugadorId) {
   const equipoQueEchoPerros = mesa.perrosConfig?.equipoQueEcha;
   const miEquipoEchoPerros = perrosEsperandoRespuesta && miEquipo === equipoQueEchoPerros;
 
+  // En modo pico a pico, ocultar cartas de TODOS (incluso compañeros) para evitar deducir cartas del rival
+  const esPicoAPico = mesa.modoRondaActual === '1v1' && mesa.jugadores.length === 6;
+
   copia.jugadores = copia.jugadores.map(j => {
     // Nunca enviar cartasOriginales al cliente (solo se usa server-side para envido/flor)
     delete j.cartasOriginales;
@@ -471,6 +544,10 @@ function getEstadoParaJugador(mesa, jugadorId) {
       return { ...j, cartas: j.cartas.map(() => ({ palo: 'basto', valor: 0, poder: 0 })) };
     }
     if (j.id === jugadorId) return j;
+    // En pico a pico, ocultar cartas de compañeros también (para no deducir las del rival)
+    if (esPicoAPico) {
+      return { ...j, cartas: j.cartas.map(() => ({ palo: 'basto', valor: 0, poder: 0 })) };
+    }
     // Show teammate cards (same team), hide opponent cards
     if (j.equipo === miEquipo) return j;
     return { ...j, cartas: j.cartas.map(() => ({ palo: 'basto', valor: 0, poder: 0 })) };
@@ -514,7 +591,16 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
   if (!mesa || !room || bots.length === 0) return;
   if (mesa.fase !== 'jugando') return;
   if (mesa.gritoActivo || mesa.envidoActivo) return;
-  if (mesa.esperandoRespuestaFlor) return;
+
+  // Si hay flor pendiente de respuesta, hacer que el bot responda
+  if (mesa.esperandoRespuestaFlor && mesa.florPendiente) {
+    const equipoResponde = mesa.florPendiente.equipoQueResponde;
+    const hayBotQueDebeResponder = bots.some(b => b.equipo === equipoResponde);
+    if (hayBotQueDebeResponder) {
+      botResponderFlor(mesaId, io);
+    }
+    return;
+  }
 
   const jugadorActual = mesa.jugadores[mesa.turnoActual];
   if (!jugadorActual || !jugadorActual.isBot) return;
@@ -522,7 +608,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
   const bot = bots.find(b => b.id === jugadorActual.id);
   if (!bot) return;
 
-  // Timeout de seguridad: si el bot no juega en 8 segundos, forzar carta aleatoria
+  // Timeout de seguridad: si el bot no juega en 4 segundos, forzar carta aleatoria
   const timeoutId = setTimeout(() => {
     const currentMesa = engines.get(mesaId);
     const currentRoom = lobbyRooms.get(mesaId);
@@ -533,7 +619,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
     if (!jugActual || !jugActual.isBot || jugActual.id !== bot.id) return;
     if (currentMesa.fase !== 'jugando') return;
 
-    console.log(`[Bot TIMEOUT] ${bot.nombre} no respondió en 8s, forzando carta aleatoria`);
+    console.log(`[Bot TIMEOUT] ${bot.nombre} no respondió en 4s, forzando carta aleatoria`);
 
     // Forzar jugar una carta aleatoria
     const cartasValidas = jugActual.cartas.filter(c => c.valor !== 0);
@@ -556,7 +642,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
         setTimeout(() => procesarTurnoBot(mesaId, io), 500);
       }
     }
-  }, 8000);
+  }, 4000);
 
   botTurnTimeouts.set(mesaId, timeoutId);
 
@@ -581,11 +667,17 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
         const success = cantarEnvido(mesa, bot.id, decisionEnvido.tipo);
         if (success) {
           // Notificar a todos
+          const equipoQueResponde = mesa.envidoActivo.equipoQueCanta === 1 ? 2 : 1;
           room.jugadores.forEach(p => {
             if (!p.isBot) {
+              const pJugador = mesa.jugadores.find(j => j.id === p.socketId);
+              const debeResponder = pJugador &&
+                pJugador.equipo === equipoQueResponde &&
+                pJugador.participaRonda !== false;
               io.to(p.socketId).emit('envido-cantado', {
                 jugadorId: bot.id,
                 tipo: decisionEnvido.tipo,
+                debeResponder,
                 estado: getEstadoParaJugador(mesa, p.socketId),
               });
             }
@@ -615,11 +707,17 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
         const success = cantarTruco(mesa, bot.id, decisionTruco.tipo);
         if (success) {
           // Notificar a todos
+          const equipoQueResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
           room.jugadores.forEach(p => {
             if (!p.isBot) {
+              const pJugador = mesa.jugadores.find(j => j.id === p.socketId);
+              const debeResponder = pJugador &&
+                pJugador.equipo === equipoQueResponde &&
+                pJugador.participaRonda !== false;
               io.to(p.socketId).emit('truco-cantado', {
                 jugadorId: bot.id,
                 tipo: decisionTruco.tipo,
+                debeResponder,
                 estado: getEstadoParaJugador(mesa, p.socketId),
               });
             }
@@ -738,6 +836,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
         }
       } else if (resultado.tipo === 'mano') {
         // Siguiente mano
+        console.log(`[Siguiente Mano] turnoActual=${currentMesa.turnoActual}, jugador=${currentMesa.jugadores[currentMesa.turnoActual]?.nombre}`);
         currentRoom.jugadores.forEach(p => {
           if (!p.isBot) {
             io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(currentMesa, p.socketId));
@@ -773,9 +872,12 @@ async function botResponderTruco(mesaId, io) {
 
   if (!mesa || !room || bots.length === 0 || !mesa.gritoActivo) return;
 
-  // Encontrar bots del equipo que debe responder
+  // Encontrar bots del equipo que debe responder (solo los que participan en la ronda)
   const equipoResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
-  const botsQueResponden = bots.filter(b => b.equipo === equipoResponde);
+  const botsQueResponden = bots.filter(b => {
+    const jugador = mesa.jugadores.find(j => j.id === b.id);
+    return b.equipo === equipoResponde && jugador?.participaRonda !== false;
+  });
 
   // Verificar que el bot no haya respondido ya
   const botsQueFaltanResponder = botsQueResponden.filter(b =>
@@ -903,11 +1005,17 @@ async function botResponderTruco(mesaId, io) {
 
     // Si escaló, emitir el nuevo grito
     if (result.escalar && currentMesa.gritoActivo) {
+      const equipoQueResponde = currentMesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
       room.jugadores.forEach(p => {
         if (!p.isBot) {
+          const pJugador = currentMesa.jugadores.find(j => j.id === p.socketId);
+          const debeResponder = pJugador &&
+            pJugador.equipo === equipoQueResponde &&
+            pJugador.participaRonda !== false;
           io.to(p.socketId).emit('truco-cantado', {
             jugadorId: bot.id,
             tipo: result.escalar,
+            debeResponder,
             estado: getEstadoParaJugador(currentMesa, p.socketId),
           });
         }
@@ -974,9 +1082,12 @@ async function botResponderEnvido(mesaId, io) {
 
   if (!mesa || !room || bots.length === 0 || !mesa.envidoActivo) return;
 
-  // Encontrar bots del equipo que debe responder
+  // Encontrar bots del equipo que debe responder (solo los que participan en la ronda)
   const equipoResponde = mesa.envidoActivo.equipoQueCanta === 1 ? 2 : 1;
-  const botsQueResponden = bots.filter(b => b.equipo === equipoResponde);
+  const botsQueResponden = bots.filter(b => {
+    const jugador = mesa.jugadores.find(j => j.id === b.id);
+    return b.equipo === equipoResponde && jugador?.participaRonda !== false;
+  });
 
   // Verificar que el bot no haya respondido ya
   const botsQueFaltanResponder = botsQueResponden.filter(b =>
@@ -1158,6 +1269,161 @@ async function botResponderEnvido(mesaId, io) {
   }
 }
 
+// Función para hacer que el bot responda a flor con timeout de seguridad
+async function botResponderFlor(mesaId, io) {
+  const mesa = engines.get(mesaId);
+  const room = lobbyRooms.get(mesaId);
+  const bots = activeBots.get(mesaId) || [];
+
+  // Limpiar timeout anterior (usar key específica para flor)
+  const florTimeoutKey = `${mesaId}-flor`;
+  if (botResponseTimeouts.has(florTimeoutKey)) {
+    clearTimeout(botResponseTimeouts.get(florTimeoutKey));
+    botResponseTimeouts.delete(florTimeoutKey);
+  }
+
+  if (!mesa || !room || bots.length === 0 || !mesa.esperandoRespuestaFlor || !mesa.florPendiente) return;
+
+  // Encontrar bots del equipo que debe responder
+  const equipoResponde = mesa.florPendiente.equipoQueResponde;
+  const botsQueResponden = bots.filter(b => b.equipo === equipoResponde);
+
+  if (botsQueResponden.length === 0) return; // Solo humanos deben responder
+
+  const bot = botsQueResponden[0];
+
+  // Timeout de seguridad: si el bot no responde en 6 segundos, forzar respuesta
+  const timeoutId = setTimeout(() => {
+    const currentMesa = engines.get(mesaId);
+    const currentRoom = lobbyRooms.get(mesaId);
+    if (!currentMesa || !currentRoom || !currentMesa.esperandoRespuestaFlor) return;
+
+    console.log(`[Bot TIMEOUT] ${bot.nombre} no respondió a la flor en 6s, forzando QUIERO`);
+
+    // Forzar respuesta "quiero" (más seguro que no_quiero para flor)
+    const result = responderFlor(currentMesa, bot.id, 'quiero');
+    if (result.success && !result.pendiente) {
+      // Notificar resolución de flor
+      emitirResultadoFlor(currentRoom, currentMesa, result, io);
+      // Continuar el juego
+      setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+    }
+  }, 6000);
+
+  botResponseTimeouts.set(florTimeoutKey, timeoutId);
+
+  // Marcar última acción del bot
+  lastBotAction.set(mesaId, Date.now());
+
+  try {
+    // Sincronizar cartas del bot
+    const jugadorBot = mesa.jugadores.find(j => j.id === bot.id);
+    if (jugadorBot) {
+      bot.setCartas(jugadorBot.cartas.filter(c => c.valor !== 0));
+    }
+
+    // Calcular puntos de flor del bot
+    const puntosFlor = calcularPuntosFlor(jugadorBot, mesa.muestra);
+    const tipoFlor = mesa.florPendiente.ultimoTipo || 'flor';
+
+    const decision = await bot.decidirResponderFlor(tipoFlor, puntosFlor);
+
+    // Limpiar timeout ya que el bot respondió
+    if (botResponseTimeouts.has(florTimeoutKey)) {
+      clearTimeout(botResponseTimeouts.get(florTimeoutKey));
+      botResponseTimeouts.delete(florTimeoutKey);
+    }
+
+    // Re-verificar que la flor sigue pendiente
+    const currentMesa = engines.get(mesaId);
+    if (!currentMesa || !currentMesa.esperandoRespuestaFlor) return;
+
+    // Determinar respuesta
+    let tipoRespuesta = decision.acepta ? 'quiero' : 'no_quiero';
+    if (decision.acepta && decision.escalar) {
+      tipoRespuesta = decision.escalar;
+    }
+
+    console.log(`[Bot] ${bot.nombre} responde a la flor: ${tipoRespuesta}`);
+
+    // Usar la función responderFlor del servidor
+    const result = responderFlor(currentMesa, bot.id, tipoRespuesta);
+
+    if (!result.success) {
+      console.log(`[Bot] Error respondiendo flor: ${result.error}`);
+      setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+      return;
+    }
+
+    // Si escaló (contra_flor, etc.), notificar y esperar respuesta del otro equipo
+    if (result.pendiente) {
+      room.jugadores.forEach(p => {
+        if (!p.isBot) {
+          io.to(p.socketId).emit('flor-pendiente', {
+            equipoQueCanta: currentMesa.florPendiente.equipoQueCanta,
+            equipoQueResponde: currentMesa.florPendiente.equipoQueResponde,
+            ultimoTipo: tipoRespuesta,
+            estado: getEstadoParaJugador(currentMesa, p.socketId),
+          });
+        }
+      });
+      // Si el otro equipo tiene bots, hacer que respondan
+      setTimeout(() => botResponderFlor(mesaId, io), 800);
+      return;
+    }
+
+    // Notificar resultado de flor
+    emitirResultadoFlor(room, currentMesa, result, io);
+
+    // Verificar si el juego terminó
+    if (currentMesa.winnerJuego !== null) {
+      room.estado = 'terminado';
+      guardarResultadoPartida(room, currentMesa);
+      room.jugadores.forEach(p => {
+        if (!p.isBot) {
+          io.to(p.socketId).emit('juego-finalizado', {
+            ganadorEquipo: currentMesa.winnerJuego,
+            estado: getEstadoParaJugador(currentMesa, p.socketId),
+          });
+        }
+      });
+      broadcastLobby(io);
+    } else {
+      // Continuar el juego
+      setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+    }
+  } catch (err) {
+    console.error(`[Bot] Error en botResponderFlor: ${err}`);
+    if (botResponseTimeouts.has(florTimeoutKey)) {
+      clearTimeout(botResponseTimeouts.get(florTimeoutKey));
+      botResponseTimeouts.delete(florTimeoutKey);
+    }
+    setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+  }
+}
+
+// Helper para emitir resultado de flor
+function emitirResultadoFlor(room, mesa, result, io) {
+  if (!result || !result.success) return;
+
+  // Obtener las flores cantadas para mostrar
+  const floresCantadas = mesa.floresCantadas || [];
+
+  room.jugadores.forEach(p => {
+    if (!p.isBot) {
+      io.to(p.socketId).emit('flor-resuelta', {
+        resultado: {
+          ganador: result.resultado?.ganador || null,
+          puntosGanados: result.resultado?.puntosGanados || 0,
+          floresCantadas: floresCantadas,
+          mejorFlor: result.resultado?.mejorFlor || null,
+        },
+        estado: getEstadoParaJugador(mesa, p.socketId),
+      });
+    }
+  });
+}
+
 // Función para que el bot corte el mazo automáticamente
 function procesarCorteBot(mesaId, io) {
   const mesa = engines.get(mesaId);
@@ -1320,7 +1586,8 @@ function jugarCarta(mesa, jugadorId, carta) {
   if (jugadorIndex !== mesa.turnoActual) return false;
 
   // Validar que el jugador no haya tirado ya en esta mano
-  const inicio = (mesa.manoActual - 1) * mesa.jugadores.length;
+  // Usar el inicio guardado de la mano actual
+  const inicio = mesa.inicioManoActual || 0;
   const cartasEnEstaMano = mesa.cartasMesa.slice(inicio);
   const yaJugoEnEstaMano = cartasEnEstaMano.some(c => c.jugadorId === jugadorId);
   if (yaJugoEnEstaMano) {
@@ -1343,11 +1610,12 @@ function jugarCarta(mesa, jugadorId, carta) {
 }
 
 function siguienteTurno(mesa) {
-  const numParticipan = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo).length;
-  const inicio = (mesa.manoActual - 1) * numParticipan;
+  const numParticipanActuales = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo).length;
+  // Usar el inicio guardado para la mano actual (considera cambios por irse al mazo)
+  const inicio = mesa.inicioManoActual || 0;
   const cartasEnEstaMano = mesa.cartasMesa.length - inicio;
 
-  if (cartasEnEstaMano >= numParticipan) {
+  if (cartasEnEstaMano >= numParticipanActuales) {
     determinarGanadorMano(mesa);
   } else {
     // Avanzar al siguiente jugador que participa y no se fue al mazo
@@ -1362,8 +1630,8 @@ function siguienteTurno(mesa) {
 }
 
 function determinarGanadorMano(mesa) {
-  const numParticipan = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo).length;
-  const inicio = (mesa.manoActual - 1) * numParticipan;
+  // Usar el inicio guardado para la mano actual
+  const inicio = mesa.inicioManoActual || 0;
   const cartasDeLaMano = mesa.cartasMesa.slice(inicio);
   if (cartasDeLaMano.length === 0) return;
 
@@ -1392,6 +1660,7 @@ function determinarGanadorMano(mesa) {
     mesa.ganadoresManos.push(null);
     mesa.cartaGanadoraMano = null; // No winner - empate
     mesa.manoGanadorJugadorId = null;
+    console.log(`[determinarGanadorMano] EMPATE - manoGanadorJugadorId = null`);
   } else {
     const jugadorGanador = mesa.jugadores.find(j => j.id === cartaGanadora.jugadorId);
     mesa.ganadoresManos.push(jugadorGanador?.equipo || null);
@@ -1404,6 +1673,7 @@ function determinarGanadorMano(mesa) {
     };
     // Store the specific winning player for next hand turn assignment
     mesa.manoGanadorJugadorId = cartaGanadora.jugadorId;
+    console.log(`[determinarGanadorMano] Ganador: ${jugadorGanador?.nombre} (id=${cartaGanadora.jugadorId}), manoGanadorJugadorId = ${mesa.manoGanadorJugadorId}`);
   }
 
   evaluarEstadoRonda(mesa);
@@ -1471,6 +1741,27 @@ function finalizarRonda(mesa, equipoGanador) {
   const equipo = mesa.equipos.find(e => e.id === equipoGanador);
   if (equipo) equipo.puntaje += mesa.puntosEnJuego;
   mesa.mensajeRonda = `Equipo ${equipoGanador} ganó la ronda (+${mesa.puntosEnJuego} pts)`;
+
+  // === MODO PICO A PICO: Incrementar contador de cruces jugados ===
+  if (mesa.jugadores.length === 6 && mesa.modoAlternadoHabilitado && mesa.modoRondaActual === '1v1') {
+    // Guardar el ganador de este cruce para el sub-marcador
+    if (!mesa.ganadoresCrucesPicoAPico) mesa.ganadoresCrucesPicoAPico = [];
+    mesa.ganadoresCrucesPicoAPico.push(equipoGanador);
+
+    mesa.duellosPicoAPicoJugados = (mesa.duellosPicoAPicoJugados || 0) + 1;
+    console.log(`[Pico a Pico] Cruce ${mesa.duellosPicoAPicoJugados}/3 terminado. Ganador: Equipo ${equipoGanador}. Marcador cruces: ${JSON.stringify(mesa.ganadoresCrucesPicoAPico)}`);
+
+    // Si terminaron los 3 cruces, pasar a modo conjunto
+    if (mesa.duellosPicoAPicoJugados >= 3) {
+      mesa.cicloRondas = (mesa.cicloRondas || 1) + 1; // Pasar a ciclo par (conjunto)
+      mesa.modoRondaActual = 'normal';
+      mesa.duellosPicoAPicoJugados = 0;
+      mesa.indiceEnfrentamiento1v1 = 0;
+      mesa.ganadoresCrucesPicoAPico = []; // Resetear para el próximo pico a pico
+      console.log(`[Pico a Pico] Terminaron los 3 cruces. Próxima ronda será EN CONJUNTO.`);
+    }
+  }
+
   if (equipo && equipo.puntaje >= mesa.puntosLimite) {
     mesa.winnerJuego = equipoGanador;
     mesa.estado = 'terminado';
@@ -1479,36 +1770,151 @@ function finalizarRonda(mesa, equipoGanador) {
 }
 
 function prepararSiguienteMano(mesa) {
+  // Actualizar el inicio de la siguiente mano (donde terminó la anterior)
+  mesa.inicioManoActual = mesa.cartasMesa.length;
   mesa.manoActual++;
   const ganadorAnterior = mesa.ganadoresManos[mesa.ganadoresManos.length - 1];
-  if (ganadorAnterior !== null && mesa.manoGanadorJugadorId) {
+  const ganadorJugadorId = mesa.manoGanadorJugadorId;
+
+  console.log(`[prepararSiguienteMano] Mano ${mesa.manoActual} - ganadorAnterior: ${ganadorAnterior}, manoGanadorJugadorId: ${ganadorJugadorId}`);
+
+  if (ganadorAnterior !== null && ganadorJugadorId) {
     // The specific player who won the hand starts next
-    const jugadorIndex = mesa.jugadores.findIndex(j => j.id === mesa.manoGanadorJugadorId);
+    const jugadorIndex = mesa.jugadores.findIndex(j => j.id === ganadorJugadorId);
     let turno = jugadorIndex >= 0 ? jugadorIndex : mesa.indiceMano;
-    // Si ese jugador se fue al mazo, buscar el siguiente activo
+    const jugadorGanador = mesa.jugadores[jugadorIndex];
+    console.log(`[prepararSiguienteMano] Jugador ganador: ${jugadorGanador?.nombre} (idx=${jugadorIndex}), participaRonda: ${jugadorGanador?.participaRonda}, seVaAlMazo: ${jugadorGanador?.seVaAlMazo}`);
+
+    // Si ese jugador se fue al mazo o no participa en la ronda, buscar el siguiente activo
     let intentos = 0;
-    while (mesa.jugadores[turno].seVaAlMazo && intentos < mesa.jugadores.length) {
+    while ((mesa.jugadores[turno].seVaAlMazo || mesa.jugadores[turno].participaRonda === false) && intentos < mesa.jugadores.length) {
       turno = (turno + 1) % mesa.jugadores.length;
       intentos++;
     }
     mesa.turnoActual = turno;
+    console.log(`[prepararSiguienteMano] Turno asignado a: ${mesa.jugadores[turno]?.nombre} (idx=${turno})`);
   } else {
-    // Tie or no winner: mano player starts
+    // Tie or no winner: mano player starts (or first participant in pico a pico)
     let turno = mesa.indiceMano;
     let intentos = 0;
-    while (mesa.jugadores[turno].seVaAlMazo && intentos < mesa.jugadores.length) {
+    while ((mesa.jugadores[turno].seVaAlMazo || mesa.jugadores[turno].participaRonda === false) && intentos < mesa.jugadores.length) {
       turno = (turno + 1) % mesa.jugadores.length;
       intentos++;
     }
     mesa.turnoActual = turno;
+    console.log(`[prepararSiguienteMano] Empate/No ganador - Turno asignado a mano: ${mesa.jugadores[turno]?.nombre} (idx=${turno})`);
   }
 }
 
 function iniciarSiguienteRonda(mesa) {
   if (mesa.estado === 'terminado') return;
+
+  // === MODO PICO A PICO: Verificar si hay que iniciar el siguiente cruce ===
+  if (mesa.jugadores.length === 6 && mesa.modoAlternadoHabilitado && mesa.modoRondaActual === '1v1') {
+    const duelloActual = mesa.duellosPicoAPicoJugados || 0;
+
+    // Si aún no terminaron los 3 cruces, iniciar el siguiente cruce SIN barajar
+    if (duelloActual < 3) {
+      console.log(`[Pico a Pico] Iniciando cruce ${duelloActual + 1}/3`);
+      iniciarSiguienteCrucePicoAPico(mesa);
+      return;
+    }
+    // Si terminaron los 3 cruces, pasar a conjunto (se baraja normalmente)
+    console.log(`[Pico a Pico] Terminaron los 3 cruces, pasando a conjunto`);
+  }
+
   // Avanzar indiceMano al siguiente jugador (la fase1 determinará quién participa en pico a pico)
   mesa.indiceMano = (mesa.indiceMano + 1) % mesa.jugadores.length;
   iniciarRondaFase1(mesa); // Phase 1 only - wait for cut
+}
+
+// Iniciar el siguiente cruce del pico a pico SIN barajar (usa las mismas cartas)
+function iniciarSiguienteCrucePicoAPico(mesa) {
+  const cruceActual = mesa.duellosPicoAPicoJugados || 0;
+
+  // Protección contra llamadas duplicadas usando clave única de cruce+ciclo
+  const ultimoCruceKey = `cruce_${cruceActual}_ciclo_${mesa.cicloRondas}`;
+  if (mesa.ultimoCruceIniciado === ultimoCruceKey && mesa.fase === 'jugando') {
+    console.log(`[Pico a Pico] Cruce ${cruceActual + 1} ya está en curso, ignorando llamada duplicada`);
+    return;
+  }
+  mesa.ultimoCruceIniciado = ultimoCruceKey;
+
+  mesa.indiceEnfrentamiento1v1 = cruceActual;
+
+  const jugadoresEq1 = mesa.jugadores.filter(j => j.equipo === 1);
+  const jugadoresEq2 = mesa.jugadores.filter(j => j.equipo === 2);
+
+  const enfrentamientos = [
+    [0, 1], // Eq1[0] vs Eq2[1]
+    [1, 2], // Eq1[1] vs Eq2[2]
+    [2, 0], // Eq1[2] vs Eq2[0]
+  ];
+
+  const [idxEq1, idxEq2] = enfrentamientos[cruceActual];
+
+  // Marcar quién participa en este cruce
+  mesa.jugadores.forEach(j => {
+    j.participaRonda = false;
+  });
+  if (jugadoresEq1[idxEq1]) jugadoresEq1[idxEq1].participaRonda = true;
+  if (jugadoresEq2[idxEq2]) jugadoresEq2[idxEq2].participaRonda = true;
+
+  console.log(`[Pico a Pico Cruce ${cruceActual + 1}] ${jugadoresEq1[idxEq1]?.nombre} (E1) vs ${jugadoresEq2[idxEq2]?.nombre} (E2)`);
+
+  // Resetear estado de la ronda pero NO las cartas
+  mesa.cartasMesa = [];
+  mesa.ganadoresManos = [];
+  mesa.manoGanadorJugadorId = null;
+  mesa.manoActual = 1;
+  mesa.inicioManoActual = 0; // Índice donde empieza la mano actual en cartasMesa
+  mesa.winnerRonda = null;
+  mesa.mensajeRonda = null;
+  mesa.gritoActivo = null;
+  mesa.nivelGritoAceptado = null;
+  mesa.equipoQueCantoUltimo = null;
+  mesa.puntosEnJuego = 1;
+  mesa.envidoActivo = null;
+  mesa.envidoYaCantado = false;
+  mesa.primeraCartaJugada = false;
+  mesa.fase = 'jugando';
+  mesa.manoTerminada = false;
+  mesa.pendienteSiguienteMano = false;
+  mesa.pendienteFinalizarRonda = null;
+
+  // Restaurar cartas originales para los jugadores del cruce
+  mesa.jugadores.forEach(j => {
+    if (j.participaRonda) {
+      // Restaurar las 3 cartas originales
+      j.cartas = j.cartasOriginales ? [...j.cartasOriginales] : [];
+      // Re-actualizar poder con muestra
+      if (mesa.muestra) {
+        actualizarPoderConMuestra(j.cartas, mesa.muestra);
+      }
+    }
+    j.seVaAlMazo = false;
+  });
+
+  // Determinar quién es mano en este cruce (el jugador de E1 que participa)
+  const jugadorMano = mesa.jugadores.find(j => j.participaRonda && j.equipo === 1);
+  const indiceMano = mesa.jugadores.findIndex(j => j.id === jugadorMano?.id);
+  mesa.indiceMano = indiceMano >= 0 ? indiceMano : 0;
+  mesa.turnoActual = mesa.indiceMano;
+
+  // Marcar quién es mano
+  mesa.jugadores.forEach((j, i) => {
+    j.esMano = i === mesa.indiceMano;
+  });
+
+  // Detectar flores para este cruce
+  mesa.jugadoresConFlor = [];
+  mesa.florYaCantada = false;
+  mesa.floresCantadas = [];
+  mesa.jugadores.forEach(j => {
+    if (j.participaRonda && tieneFlor(j, mesa.muestra)) {
+      mesa.jugadoresConFlor.push(j.id);
+    }
+  });
 }
 
 // Truco system
@@ -1583,6 +1989,10 @@ function responderTruco(mesa, jugadorId, acepta, escalar = null) {
   const jugador = mesa.jugadores.find(j => j.id === jugadorId);
   if (!jugador || jugador.equipo === mesa.gritoActivo.equipoQueGrita) {
     return { success: false, error: 'No puedes responder a tu propio grito' };
+  }
+  // En modo pico a pico, solo los jugadores que participan pueden responder
+  if (jugador.participaRonda === false) {
+    return { success: false, error: 'No participas en esta ronda' };
   }
 
   // Si escala (quiero retruco / quiero vale4), es decisión inmediata del jugador
@@ -1919,23 +2329,17 @@ function emitirFlorDeJugador(io, room, mesa, florResult) {
   });
 
   // Si NO todos declararon, verificar si hay otros jugadores con flor sin declarar
-  // Si un oponente tiene flor, debe declarar inmediatamente (no esperar su turno)
-  // Los compañeros también declaran inmediatamente para no revelar información
+  // Cuando ALGUIEN canta flor, TODOS los que tienen flor deben declararla inmediatamente
+  // (tanto compañeros como oponentes - es obligatorio en el truco uruguayo)
   if (!florResult.todosDeclararon && mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0) {
     const sinDeclarar = mesa.jugadoresConFlor.filter(id => {
       return id !== florResult.declaracion.jugadorId && !mesa.floresCantadas.some(f => f.jugadorId === id);
     });
-    // Solo forzar declaración inmediata si hay al menos un oponente con flor
-    const equipoDeclarante = florResult.declaracion.equipo;
-    const hayOponenteConFlor = sinDeclarar.some(id => {
-      const j = mesa.jugadores.find(jj => jj.id === id);
-      return j && j.equipo !== equipoDeclarante;
-    });
-    const oponentesSinDeclarar = hayOponenteConFlor ? sinDeclarar : [];
 
-    if (oponentesSinDeclarar.length > 0) {
-      // Declarar flor de cada oponente con un pequeño delay entre cada uno
-      oponentesSinDeclarar.forEach((opId, idx) => {
+    // TODOS los que tienen flor deben declararla (compañeros y oponentes)
+    if (sinDeclarar.length > 0) {
+      // Declarar flor de cada jugador con un pequeño delay entre cada uno
+      sinDeclarar.forEach((opId, idx) => {
         setTimeout(() => {
           const currentMesa = engines.get(room.mesaId);
           const currentRoom = lobbyRooms.get(room.mesaId);
@@ -1972,6 +2376,12 @@ function emitirFlorDeJugador(io, room, mesa, florResult) {
                       estado: getEstadoParaJugador(currentMesa, p.socketId),
                     });
                   });
+                  // Si hay bots que deben responder, hacer que respondan
+                  const botsActivos = activeBots.get(room.mesaId) || [];
+                  const hayBotQueResponde = botsActivos.some(b => b.equipo === currentMesa.florPendiente.equipoQueResponde);
+                  if (hayBotQueResponde) {
+                    setTimeout(() => botResponderFlor(room.mesaId, io), 800);
+                  }
                 }, delay);
               } else if (opFlorResult.resultado) {
                 setTimeout(() => {
@@ -2025,6 +2435,12 @@ function emitirFlorDeJugador(io, room, mesa, florResult) {
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });
+        // Si hay bots que deben responder, hacer que respondan
+        const botsActivos = activeBots.get(room.mesaId) || [];
+        const hayBotQueResponde = botsActivos.some(b => b.equipo === mesa.florPendiente.equipoQueResponde);
+        if (hayBotQueResponde) {
+          setTimeout(() => botResponderFlor(room.mesaId, io), 800);
+        }
       }, delay);
     } else if (florResult.resultado) {
       setTimeout(() => {
@@ -2620,6 +3036,10 @@ function responderEnvido(mesa, jugadorId, acepta) {
   if (!jugador || jugador.equipo === mesa.envidoActivo.equipoQueCanta) {
     return { success: false, error: 'No puedes responder a tu propio envido' };
   }
+  // En modo pico a pico, solo los jugadores que participan pueden responder
+  if (jugador.participaRonda === false) {
+    return { success: false, error: 'No participas en esta ronda' };
+  }
 
   const equipoQueResponde = jugador.equipo;
   const esGrupal = necesitaRespuestaGrupal(mesa, equipoQueResponde);
@@ -3171,15 +3591,41 @@ function broadcastToRoom(io, room, event, dataFn) {
 // Helper: start next round with cut phase
 function scheduleNextRound(io, room) {
   const mesaId = room.mesaId;
+  const mesa = engines.get(mesaId);
+
+  // Protección contra llamadas duplicadas
+  if (mesa && mesa.scheduleNextRoundPending) {
+    console.log(`[scheduleNextRound] Ya hay una transición pendiente para mesa ${mesaId}, ignorando`);
+    return;
+  }
+  if (mesa) {
+    mesa.scheduleNextRoundPending = true;
+  }
+
   setTimeout(() => {
     const currentMesa = engines.get(mesaId);
     const currentRoom = lobbyRooms.get(mesaId);
     if (currentMesa && currentRoom) {
+      currentMesa.scheduleNextRoundPending = false; // Resetear bandera
       iniciarSiguienteRonda(currentMesa);
       // Send state update (shows shuffle animation)
       currentRoom.jugadores.forEach(p => {
         io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(currentMesa, p.socketId));
       });
+
+      // Si estamos en pico a pico cruce 2 o 3 (fase ya es 'jugando'), no hay corte
+      // Las cartas ya fueron repartidas y se restauraron en iniciarSiguienteCrucePicoAPico
+      if (currentMesa.fase === 'jugando') {
+        // Ya listo para jugar, procesar turno del bot si corresponde
+        setTimeout(() => {
+          const botMesa = engines.get(mesaId);
+          if (botMesa && botMesa.fase === 'jugando' && !botMesa.gritoActivo && !botMesa.envidoActivo) {
+            procesarTurnoBot(mesaId, io);
+          }
+        }, 500);
+        return;
+      }
+
       // Notify who should cut
       const cortador = currentMesa.jugadores[currentMesa.indiceJugadorCorta];
       if (cortador) {
@@ -3352,7 +3798,11 @@ app.prepare().then(async () => {
       // Verificar si hay grito de truco esperando respuesta de bot
       if (mesa.gritoActivo && mesa.fase === 'jugando') {
         const equipoResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
-        const botsDelEquipo = bots.filter(b => b.equipo === equipoResponde);
+        // Solo bots que participan en la ronda pueden responder
+        const botsDelEquipo = bots.filter(b => {
+          const jugador = mesa.jugadores.find(j => j.id === b.id);
+          return b.equipo === equipoResponde && jugador?.participaRonda !== false;
+        });
 
         if (botsDelEquipo.length > 0) {
           const lastAction = lastBotAction.get(mesaId) || 0;
@@ -3370,7 +3820,11 @@ app.prepare().then(async () => {
       // Verificar si hay envido esperando respuesta de bot
       if (mesa.envidoActivo && mesa.fase === 'jugando') {
         const equipoResponde = mesa.envidoActivo.equipoQueCanta === 1 ? 2 : 1;
-        const botsDelEquipo = bots.filter(b => b.equipo === equipoResponde);
+        // Solo bots que participan en la ronda pueden responder
+        const botsDelEquipo = bots.filter(b => {
+          const jugador = mesa.jugadores.find(j => j.id === b.id);
+          return b.equipo === equipoResponde && jugador?.participaRonda !== false;
+        });
 
         if (botsDelEquipo.length > 0) {
           const lastAction = lastBotAction.get(mesaId) || 0;
@@ -3944,7 +4398,7 @@ app.prepare().then(async () => {
         lobbyRooms.set(mesaId, room);
 
         const jugador = { id: socket.id, nombre, equipo: 1, cartas: [], modoAyuda: false, userId: usuarioCreador?.id || null, avatarUrl: usuarioCreador?.avatar_url || null, es_premium: usuarioCreador?.es_premium || false };
-        const mesa = crearEstadoMesa(mesaId, [jugador], 30, { modoAlternado, modoAyuda });
+        const mesa = crearEstadoMesa(mesaId, [jugador], 30, { modoAlternado, modoAyuda, tamañoSala });
         engines.set(mesaId, mesa);
 
         socket.leave('lobby');
@@ -4097,14 +4551,26 @@ app.prepare().then(async () => {
         room.jugadores.push({ socketId: socket.id, nombre, userId: usuarioAuth?.id || null, es_premium: usuarioAuth?.es_premium || false });
 
         const halfPoint = Math.ceil(room.maxJugadores / 2);
-        const equipo = (room.jugadores.length - 1) < halfPoint ? 1 : 2;
+
+        // Contar jugadores por equipo (respetando los ya asignados como bots)
+        const jugadoresEq1 = mesa.jugadores.filter(j => j.equipo === 1).length;
+        const jugadoresEq2 = mesa.jugadores.filter(j => j.equipo === 2).length;
+
+        // Asignar al equipo con menos jugadores, respetando el límite
+        let equipo;
+        if (jugadoresEq1 < halfPoint && jugadoresEq1 <= jugadoresEq2) {
+          equipo = 1;
+        } else if (jugadoresEq2 < halfPoint) {
+          equipo = 2;
+        } else {
+          equipo = 1; // Fallback
+        }
+
         const jugador = { id: socket.id, nombre, equipo, cartas: [], modoAyuda: false, userId: usuarioAuth?.id || null, avatarUrl: usuarioAuth?.avatar_url || null, es_premium: usuarioAuth?.es_premium || false };
 
         mesa.jugadores.push(jugador);
-        // Re-assign teams
-        mesa.jugadores.forEach((j, idx) => {
-          j.equipo = idx < halfPoint ? 1 : 2;
-        });
+
+        // Actualizar equipos sin reasignar los ya existentes
         mesa.equipos[0].jugadores = mesa.jugadores.filter(j => j.equipo === 1);
         mesa.equipos[1].jugadores = mesa.jugadores.filter(j => j.equipo === 2);
 
@@ -4335,6 +4801,69 @@ app.prepare().then(async () => {
         callback({ success: true, botNombre: bot.nombre, dificultad: dificultadFinal, equipo: equipoFinal });
       } catch (err) {
         console.error('Error agregar-bot:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    // === LLENAR CON BOTS (agregar todos los bots necesarios de una vez) ===
+    socket.on('llenar-con-bots', (data, callback) => {
+      try {
+        const { dificultad = 'medio' } = data || {};
+        const room = findRoomBySocket(socket.id);
+        if (!room) { callback({ success: false, error: 'No estás en ninguna partida' }); return; }
+        if (room.jugadores[0].socketId !== socket.id) { callback({ success: false, error: 'Solo el anfitrión puede agregar bots' }); return; }
+        if (room.estado !== 'esperando') { callback({ success: false, error: 'La partida ya comenzó' }); return; }
+
+        const mesa = engines.get(room.mesaId);
+        if (!mesa) { callback({ success: false, error: 'Motor no encontrado' }); return; }
+
+        const espaciosDisponibles = room.maxJugadores - room.jugadores.length;
+        if (espaciosDisponibles <= 0) { callback({ success: false, error: 'La partida ya está llena' }); return; }
+
+        const halfPoint = Math.ceil(room.maxJugadores / 2);
+        const nombresBot = ['BotRico', 'BotGaucho', 'BotTero', 'BotMate', 'BotPeludo', 'BotCriollo'];
+        const botsActuales = activeBots.get(room.mesaId) || [];
+        const botsAgregados = [];
+
+        // Agregar bots hasta llenar la partida
+        for (let i = 0; i < espaciosDisponibles; i++) {
+          const jugadoresEq1 = mesa.jugadores.filter(j => j.equipo === 1).length;
+          const jugadoresEq2 = mesa.jugadores.filter(j => j.equipo === 2).length;
+
+          // Asignar al equipo con menos jugadores
+          const equipoBot = jugadoresEq1 < halfPoint && jugadoresEq1 <= jugadoresEq2 ? 1 : 2;
+
+          const nombreBot = nombresBot[(botsActuales.length + i) % nombresBot.length] + (botsActuales.length + i > 0 ? (botsActuales.length + i + 1) : '');
+          const dificultadFinal = room.maxJugadores > 2 ? 'dificil' : dificultad;
+
+          const bot = new TrucoBot(nombreBot, dificultadFinal);
+          bot.equipo = equipoBot;
+
+          room.jugadores.push({ socketId: bot.id, nombre: bot.nombre, userId: null, isBot: true });
+          const jugadorBot = { id: bot.id, nombre: bot.nombre, equipo: equipoBot, cartas: [], modoAyuda: false, userId: null, avatarUrl: null, isBot: true };
+          mesa.jugadores.push(jugadorBot);
+
+          botsActuales.push(bot);
+          botsAgregados.push({ nombre: bot.nombre, equipo: equipoBot });
+        }
+
+        // Actualizar equipos
+        mesa.equipos[0].jugadores = mesa.jugadores.filter(j => j.equipo === 1);
+        mesa.equipos[1].jugadores = mesa.jugadores.filter(j => j.equipo === 2);
+
+        activeBots.set(room.mesaId, botsActuales);
+
+        // Notificar a todos los jugadores humanos
+        room.jugadores.forEach(p => {
+          if (!p.isBot) {
+            io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(mesa, p.socketId));
+          }
+        });
+
+        console.log(`[Bot] Llenado con ${botsAgregados.length} bots en partida ${room.mesaId}`);
+        callback({ success: true, botsAgregados });
+      } catch (err) {
+        console.error('Error llenar-con-bots:', err);
         callback({ success: false, error: 'Error interno' });
       }
     });
@@ -4664,12 +5193,19 @@ app.prepare().then(async () => {
         if (!success) { callback(false, 'No se puede cantar'); return; }
 
         const audioTipo = tipo === 'vale_cuatro' ? 'vale4' : tipo;
+        const equipoQueResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
         room.jugadores.forEach(p => {
           if (!p.isBot) {
+            const pJugador = mesa.jugadores.find(j => j.id === p.socketId);
+            // En pico a pico, solo los que participan pueden responder
+            const debeResponder = pJugador &&
+              pJugador.equipo === equipoQueResponde &&
+              pJugador.participaRonda !== false;
             io.to(p.socketId).emit('truco-cantado', {
               jugadorId: socket.id,
               tipo,
               audioCustomUrl: mesa.audiosCustom?.[socket.id]?.[audioTipo] || null,
+              debeResponder,
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           }
@@ -4735,11 +5271,17 @@ app.prepare().then(async () => {
         // Si escaló (quiero retruco / quiero vale4), emitir también el nuevo grito
         if (result.escalar && mesa.gritoActivo) {
           const audioEscalar = result.escalar === 'vale4' ? 'vale4' : result.escalar;
+          const equipoQueResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
           room.jugadores.forEach(p => {
+            const pJugador = mesa.jugadores.find(j => j.id === p.socketId);
+            const debeResponder = pJugador &&
+              pJugador.equipo === equipoQueResponde &&
+              pJugador.participaRonda !== false;
             io.to(p.socketId).emit('truco-cantado', {
               jugadorId: socket.id,
               tipo: result.escalar,
               audioCustomUrl: mesa.audiosCustom?.[socket.id]?.[audioEscalar] || null,
+              debeResponder,
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           });
@@ -4830,6 +5372,12 @@ app.prepare().then(async () => {
                   estado: getEstadoParaJugador(mesa, p.socketId),
                 });
               });
+              // Si hay bots que deben responder, hacer que respondan
+              const botsActivos = activeBots.get(room.mesaId) || [];
+              const hayBotQueResponde = botsActivos.some(b => b.equipo === mesa.florPendiente.equipoQueResponde);
+              if (hayBotQueResponde) {
+                setTimeout(() => botResponderFlor(room.mesaId, io), 800);
+              }
             } else if (florResult.resultado) {
               room.jugadores.forEach(p => {
                 io.to(p.socketId).emit('flor-resuelta', {
@@ -4875,13 +5423,19 @@ app.prepare().then(async () => {
         }
 
         const envidoAudioTipo = tipo.replace('_', '-');
+        const equipoQueResponde = mesa.envidoActivo.equipoQueCanta === 1 ? 2 : 1;
         room.jugadores.forEach(p => {
           if (!p.isBot) {
+            const pJugador = mesa.jugadores.find(j => j.id === p.socketId);
+            const debeResponder = pJugador &&
+              pJugador.equipo === equipoQueResponde &&
+              pJugador.participaRonda !== false;
             io.to(p.socketId).emit('envido-cantado', {
               jugadorId: socket.id,
               tipo: nombreEnvido,
               puntosCustom,
               audioCustomUrl: mesa.audiosCustom?.[socket.id]?.[envidoAudioTipo] || mesa.audiosCustom?.[socket.id]?.['envido'] || null,
+              debeResponder,
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           }
@@ -4940,6 +5494,12 @@ app.prepare().then(async () => {
                   estado: getEstadoParaJugador(mesa, p.socketId),
                 });
               });
+              // Si hay bots que deben responder, hacer que respondan
+              const botsActivos = activeBots.get(room.mesaId) || [];
+              const hayBotQueResponde = botsActivos.some(b => b.equipo === mesa.florPendiente.equipoQueResponde);
+              if (hayBotQueResponde) {
+                setTimeout(() => botResponderFlor(room.mesaId, io), 800);
+              }
             } else if (florResult.resultado) {
               room.jugadores.forEach(p => {
                 io.to(p.socketId).emit('flor-resuelta', {
@@ -5241,6 +5801,12 @@ app.prepare().then(async () => {
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           });
+          // Si hay bots que deben responder, hacer que respondan
+          const botsActivos = activeBots.get(room.mesaId) || [];
+          const hayBotQueResponde = botsActivos.some(b => b.equipo === mesa.florPendiente.equipoQueResponde);
+          if (hayBotQueResponde) {
+            setTimeout(() => botResponderFlor(room.mesaId, io), 800);
+          }
           callback(true);
           return;
         }
@@ -6434,6 +7000,12 @@ app.prepare().then(async () => {
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           });
+          // Si hay bots que deben responder, hacer que respondan
+          const botsActivos = activeBots.get(room.mesaId) || [];
+          const hayBotQueResponde = botsActivos.some(b => b.equipo === mesa.florPendiente.equipoQueResponde);
+          if (hayBotQueResponde) {
+            setTimeout(() => botResponderFlor(room.mesaId, io), 800);
+          }
         }
 
         // Check game end after point assignments - delay to let players see the perros result

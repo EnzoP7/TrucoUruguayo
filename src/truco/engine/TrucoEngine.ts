@@ -23,9 +23,22 @@ export class TrucoEngine {
     equipo1Jugadores.forEach(j => j.equipo = 1);
     equipo2Jugadores.forEach(j => j.equipo = 2);
 
+    // Para 3v3: reordenar jugadores alternando equipos para que queden enfrentados visualmente
+    // Orden original: [E1-0, E1-1, E1-2, E2-0, E2-1, E2-2]
+    // Orden alternado: [E1-0, E2-0, E1-1, E2-1, E1-2, E2-2]
+    // Así el jugador en posición i tiene a su oponente en posición i+1 (o i-1 si es impar)
+    let jugadoresOrdenados = jugadores;
+    if (jugadores.length === 6) {
+      jugadoresOrdenados = [];
+      for (let i = 0; i < mitad; i++) {
+        jugadoresOrdenados.push(equipo1Jugadores[i]);
+        jugadoresOrdenados.push(equipo2Jugadores[i]);
+      }
+    }
+
     return {
       id: mesaId,
-      jugadores,
+      jugadores: jugadoresOrdenados,
       equipos: [equipo1, equipo2],
       estado: 'esperando',
       fase: 'esperando_cantos',
@@ -50,7 +63,46 @@ export class TrucoEngine {
       winnerRonda: null,
       winnerJuego: null,
       mensajeRonda: null,
+      modoPicoAPico: false, // Primera ronda siempre en conjunto
+      rondaNumero: 1,
+      turnosPicoAPico: null,
     };
+  }
+
+  // === SISTEMA PICO A PICO (3v3 en malas) ===
+
+  // Verificar si es partida 3v3
+  private es3v3(): boolean {
+    return this.mesa.jugadores.length === 6;
+  }
+
+  // Verificar si ambos equipos están en "malas" (0-14 puntos)
+  private estanEnMalas(): boolean {
+    return this.mesa.equipos[0].puntaje < 15 && this.mesa.equipos[1].puntaje < 15;
+  }
+
+  // Obtener el índice del oponente de enfrente para un jugador dado
+  // En 3v3 con orden alternado: [E1-0, E2-0, E1-1, E2-1, E1-2, E2-2]
+  // Índices: 0=E1, 1=E2, 2=E1, 3=E2, 4=E1, 5=E2
+  // Enfrentados: 0↔1, 2↔3, 4↔5 (índices pares con impares consecutivos)
+  private obtenerOponenteEnfrente(jugadorIndex: number): number {
+    // Con el orden alternado, el oponente de enfrente es el índice adyacente
+    // Índice par → oponente es índice+1
+    // Índice impar → oponente es índice-1
+    if (jugadorIndex % 2 === 0) {
+      return jugadorIndex + 1;
+    } else {
+      return jugadorIndex - 1;
+    }
+  }
+
+  // Determinar si debe jugarse pico a pico en esta ronda
+  private debeSePicoAPico(): boolean {
+    if (!this.es3v3()) return false;
+    if (!this.estanEnMalas()) return false;
+    // En malas: rondas pares son pico a pico (2, 4, 6...)
+    // Primera ronda (1) es en conjunto, segunda (2) pico a pico, etc.
+    return this.mesa.rondaNumero % 2 === 0;
   }
 
   // Iniciar nueva ronda con sistema de corte
@@ -74,6 +126,10 @@ export class TrucoEngine {
     this.mesa.primeraCartaJugada = false;
     this.mesa.fase = 'jugando';
 
+    // Determinar modo de juego para 3v3
+    this.mesa.modoPicoAPico = this.debeSePicoAPico();
+    this.mesa.turnosPicoAPico = null;
+
     // Determinar quién corta (siguiente a la izquierda del mano)
     this.mesa.indiceJugadorCorta = (this.mesa.indiceMano + 1) % this.mesa.jugadores.length;
     this.mesa.esperandoCorte = true;
@@ -87,6 +143,14 @@ export class TrucoEngine {
 
     // El mano comienza después del corte
     this.mesa.turnoActual = this.mesa.indiceMano;
+
+    // En modo pico a pico, configurar el enfrentamiento inicial
+    if (this.mesa.modoPicoAPico) {
+      this.mesa.turnosPicoAPico = {
+        jugadorActual: this.mesa.indiceMano,
+        oponenteEnfrente: this.obtenerOponenteEnfrente(this.mesa.indiceMano)
+      };
+    }
   }
 
   // Realizar corte del mazo
@@ -165,18 +229,70 @@ export class TrucoEngine {
     // Contar cuántas cartas se jugaron en esta mano
     const cartasEnEstaMano = this.cartasEnManoActual();
 
-    if (cartasEnEstaMano >= this.mesa.jugadores.length) {
-      // Todos jugaron en esta mano, determinar ganador
-      this.determinarGanadorMano();
+    if (this.mesa.modoPicoAPico) {
+      // Modo pico a pico: 2 cartas por enfrentamiento (1 de cada equipo)
+      // En cada "mano" solo juegan 2 jugadores (el que inicia y su oponente de enfrente)
+      if (cartasEnEstaMano >= 2) {
+        // El enfrentamiento terminó, determinar ganador de esta "mano"
+        this.determinarGanadorManoPicoAPico();
+      } else {
+        // Turno del oponente de enfrente
+        if (this.mesa.turnosPicoAPico) {
+          this.mesa.turnoActual = this.mesa.turnosPicoAPico.oponenteEnfrente;
+        }
+      }
     } else {
-      this.mesa.turnoActual = (this.mesa.turnoActual + 1) % this.mesa.jugadores.length;
+      // Modo conjunto: todos los jugadores participan
+      if (cartasEnEstaMano >= this.mesa.jugadores.length) {
+        // Todos jugaron en esta mano, determinar ganador
+        this.determinarGanadorMano();
+      } else {
+        this.mesa.turnoActual = (this.mesa.turnoActual + 1) % this.mesa.jugadores.length;
+      }
     }
+  }
+
+  // Determinar ganador de mano en modo pico a pico
+  private determinarGanadorManoPicoAPico(): void {
+    const inicio = (this.mesa.manoActual - 1) * 2; // En pico a pico, 2 cartas por mano
+    const cartasDeLaMano = this.mesa.cartasMesa.slice(inicio);
+
+    if (cartasDeLaMano.length < 2) return;
+
+    const carta1 = cartasDeLaMano[0];
+    const carta2 = cartasDeLaMano[1];
+
+    const jug1 = this.mesa.jugadores.find(j => j.id === carta1.jugadorId);
+    const jug2 = this.mesa.jugadores.find(j => j.id === carta2.jugadorId);
+
+    if (!jug1 || !jug2) return;
+
+    let ganadorEquipo: number | null;
+    if (carta1.carta.poder > carta2.carta.poder) {
+      ganadorEquipo = jug1.equipo;
+    } else if (carta2.carta.poder > carta1.carta.poder) {
+      ganadorEquipo = jug2.equipo;
+    } else {
+      ganadorEquipo = null; // Empate
+    }
+
+    this.mesa.ganadoresManos.push(ganadorEquipo);
+
+    // Evaluar si la ronda terminó
+    this.evaluarEstadoRonda();
   }
 
   // Cartas jugadas en la mano actual
   private cartasEnManoActual(): number {
-    const inicio = (this.mesa.manoActual - 1) * this.mesa.jugadores.length;
-    return this.mesa.cartasMesa.length - inicio;
+    if (this.mesa.modoPicoAPico) {
+      // En pico a pico, cada mano tiene 2 cartas (1 vs 1)
+      const inicio = (this.mesa.manoActual - 1) * 2;
+      return this.mesa.cartasMesa.length - inicio;
+    } else {
+      // En conjunto, cada mano tiene N cartas (todos los jugadores)
+      const inicio = (this.mesa.manoActual - 1) * this.mesa.jugadores.length;
+      return this.mesa.cartasMesa.length - inicio;
+    }
   }
 
   // Determinar ganador de la mano actual
@@ -297,20 +413,65 @@ export class TrucoEngine {
   // Preparar siguiente mano dentro de la ronda
   private prepararSiguienteMano(): void {
     this.mesa.manoActual++;
-    // El turno lo inicia el ganador de la mano anterior, o el mano si hubo empate
     const ganadorAnterior = this.mesa.ganadoresManos[this.mesa.ganadoresManos.length - 1];
-    if (ganadorAnterior !== null) {
-      // Buscar primer jugador del equipo ganador
-      const primerJugador = this.mesa.jugadores.findIndex(j => j.equipo === ganadorAnterior);
-      this.mesa.turnoActual = primerJugador >= 0 ? primerJugador : this.mesa.indiceMano;
+
+    if (this.mesa.modoPicoAPico) {
+      // En pico a pico con orden alternado: [E1, E2, E1, E2, E1, E2]
+      // Los pares enfrentados son: (0,1), (2,3), (4,5)
+      // Cada mano la juega un par diferente, rotando al siguiente par
+
+      let siguienteJugador: number;
+      const numPares = this.mesa.jugadores.length / 2; // 3 pares en 3v3
+
+      if (this.mesa.turnosPicoAPico) {
+        const jugadorAnterior = this.mesa.turnosPicoAPico.jugadorActual;
+        // Calcular el par actual (0, 1, o 2)
+        const parActual = Math.floor(jugadorAnterior / 2);
+        // Pasar al siguiente par
+        const siguientePar = (parActual + 1) % numPares;
+
+        // Determinar quién inicia del siguiente par
+        // El jugador del equipo ganador inicia (índice par = E1, índice impar = E2)
+        if (ganadorAnterior === 1) {
+          // Equipo 1 ganó, inicia el índice par del siguiente par
+          siguienteJugador = siguientePar * 2;
+        } else if (ganadorAnterior === 2) {
+          // Equipo 2 ganó, inicia el índice impar del siguiente par
+          siguienteJugador = siguientePar * 2 + 1;
+        } else {
+          // Empate: inicia el que es "mano" o su compañero de par
+          // Por defecto el del mismo equipo que el mano
+          const equipoMano = this.mesa.jugadores[this.mesa.indiceMano].equipo;
+          siguienteJugador = siguientePar * 2 + (equipoMano === 2 ? 1 : 0);
+        }
+      } else {
+        // Primera mano de pico a pico - ya debería estar configurado
+        siguienteJugador = this.mesa.indiceMano;
+      }
+
+      this.mesa.turnoActual = siguienteJugador;
+      this.mesa.turnosPicoAPico = {
+        jugadorActual: siguienteJugador,
+        oponenteEnfrente: this.obtenerOponenteEnfrente(siguienteJugador)
+      };
     } else {
-      this.mesa.turnoActual = this.mesa.indiceMano;
+      // Modo conjunto: el turno lo inicia el ganador de la mano anterior, o el mano si hubo empate
+      if (ganadorAnterior !== null) {
+        // Buscar primer jugador del equipo ganador
+        const primerJugador = this.mesa.jugadores.findIndex(j => j.equipo === ganadorAnterior);
+        this.mesa.turnoActual = primerJugador >= 0 ? primerJugador : this.mesa.indiceMano;
+      } else {
+        this.mesa.turnoActual = this.mesa.indiceMano;
+      }
     }
   }
 
   // Iniciar siguiente ronda (llamado después de mostrar resultado)
   iniciarSiguienteRonda(): void {
     if (this.mesa.estado === 'terminado') return;
+
+    // Incrementar número de ronda
+    this.mesa.rondaNumero++;
 
     // Rotar el mano
     this.mesa.indiceMano = (this.mesa.indiceMano + 1) % this.mesa.jugadores.length;

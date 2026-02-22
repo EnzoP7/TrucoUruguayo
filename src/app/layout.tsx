@@ -31,11 +31,11 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://trucouruguayo.onre
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Truco Uruguayo Online Gratis - Juga con Amigos",
+    default: "Truco Uruguayo Online Gratis - Jugá con Amigos en Tiempo Real",
     template: "%s | Truco Uruguayo Online",
   },
   description:
-    "Juga al Truco Uruguayo online gratis. Partidas 1v1, 2v2, 3v3 en tiempo real. Envido, Truco, Flor. 100% gratis.",
+    "Jugá al Truco Uruguayo online gratis con amigos. Partidas 1v1, 2v2 y 3v3 en tiempo real. Envido, Truco, Retruco, Flor. Sin registro, 100% gratis.",
   keywords: [
     "truco uruguayo",
     "truco uruguayo online",
@@ -79,9 +79,9 @@ export const metadata: Metadata = {
     locale: "es_UY",
     url: SITE_URL,
     siteName: "Truco Uruguayo Online",
-    title: "Truco Uruguayo Online Gratis - Juga con Amigos",
+    title: "Truco Uruguayo Online Gratis - Jugá con Amigos en Tiempo Real",
     description:
-      "El auténtico Truco Uruguayo online. Jugá gratis con amigos en tiempo real. Modos 1v1, 2v2 y 3v3.",
+      "Jugá al Truco Uruguayo online gratis con amigos. Partidas 1v1, 2v2 y 3v3 en tiempo real. Envido, Truco, Retruco, Flor. Sin registro, 100% gratis.",
     images: [
       {
         url: "/og-image.png",
@@ -93,9 +93,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Truco Uruguayo Online Gratis - Juga con Amigos",
+    title: "Truco Uruguayo Online Gratis - Jugá con Amigos en Tiempo Real",
     description:
-      "El autentico Truco Uruguayo online. Juga gratis con amigos en tiempo real.",
+      "Jugá al Truco Uruguayo online gratis con amigos. Partidas 1v1, 2v2 y 3v3 en tiempo real. Envido, Truco, Retruco, Flor.",
     images: ["/og-image.png"],
     creator: "@trucouruguayo",
   },

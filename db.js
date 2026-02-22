@@ -339,7 +339,7 @@ async function obtenerHistorial(userId, limite = 20) {
 
 async function obtenerRanking(limite = 50) {
   const result = await db.execute({
-    sql: `SELECT u.apodo, u.es_premium, e.*
+    sql: `SELECT u.id, u.apodo, u.es_premium, u.avatar_url, e.*
       FROM estadisticas e
       JOIN usuarios u ON u.id = e.usuario_id
       WHERE e.partidas_jugadas > 0
