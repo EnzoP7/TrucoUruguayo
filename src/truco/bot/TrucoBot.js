@@ -179,35 +179,110 @@ class TrucoBot {
   // DECISIÓN DE CARTA - LÓGICA INTELIGENTE
   // ============================================
 
-  decidirCarta(cartasMesa, manoActual, esPrimeraMano) {
+  decidirCarta(cartasMesa, manoActual, esPrimeraMano, jugadores = null, inicioManoActual = 0) {
     return new Promise((resolve) => {
       const tiempo = this.personalidad.impulsivo
         ? this.config.tiempoRespuestaMin
         : this.config.tiempoRespuestaMin + Math.random() * (this.config.tiempoRespuestaMax - this.config.tiempoRespuestaMin);
 
       setTimeout(() => {
-        const carta = this._elegirCartaInteligente(cartasMesa, manoActual, esPrimeraMano);
+        const carta = this._elegirCartaInteligente(cartasMesa, manoActual, esPrimeraMano, jugadores, inicioManoActual);
         resolve(carta);
       }, tiempo);
     });
   }
 
-  _elegirCartaInteligente(cartasMesa, manoActual, esPrimeraMano) {
+  _elegirCartaInteligente(cartasMesa, manoActual, esPrimeraMano, jugadores, inicioManoActual) {
     if (this.cartas.length === 0) return null;
 
     const ordenadas = this.ordenarCartasPorPoder();
     const { matas, altas } = this.clasificarMano();
 
-    // Encontrar la carta del oponente en esta mano (si la hay)
-    const cartaOponenteActual = this._getCartaOponenteEnManoActual(cartasMesa, manoActual);
+    // Obtener cartas de la mano actual (usando inicioManoActual)
+    const cartasManoActual = cartasMesa.slice(inicioManoActual);
+
+    // Analizar contexto de equipo
+    const contextoEquipo = this._analizarContextoEquipo(cartasManoActual, jugadores);
+
+    // === CASO: MI EQUIPO YA VA GANANDO Y SOY EL ÚLTIMO ===
+    if (contextoEquipo.equipoGanando && contextoEquipo.todosYaTiraron) {
+      // Mi equipo tiene la carta más alta, tirar la peor
+      return ordenadas[ordenadas.length - 1];
+    }
+
+    // Encontrar la carta más alta del rival en esta mano
+    const cartaRivalMasAlta = this._getCartaRivalMasAlta(cartasManoActual, jugadores);
 
     // === CASO 1: SOY EL PRIMERO EN TIRAR ===
-    if (!cartaOponenteActual) {
+    if (!cartaRivalMasAlta) {
       return this._elegirCartaComoMano(ordenadas, manoActual, esPrimeraMano, matas, altas);
     }
 
     // === CASO 2: DEBO RESPONDER A UNA CARTA ===
-    return this._elegirCartaComoRespuesta(ordenadas, cartaOponenteActual, manoActual);
+    return this._elegirCartaComoRespuesta(ordenadas, cartaRivalMasAlta, manoActual);
+  }
+
+  // Analizar si el equipo del bot ya va ganando la mano actual
+  _analizarContextoEquipo(cartasManoActual, jugadores) {
+    if (!jugadores || cartasManoActual.length === 0) {
+      return { equipoGanando: false, todosYaTiraron: false };
+    }
+
+    // Contar cuántos jugadores activos hay y cuántos ya tiraron
+    const jugadoresActivos = jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo);
+    const totalActivos = jugadoresActivos.length;
+    // El bot aún no tiró, así que las cartas en mesa son de otros
+    const yaTiraron = cartasManoActual.length;
+    // Si todos los demás ya tiraron, el bot es el último
+    const todosYaTiraron = yaTiraron === totalActivos - 1;
+
+    if (!todosYaTiraron || yaTiraron === 0) {
+      return { equipoGanando: false, todosYaTiraron: false };
+    }
+
+    // Encontrar la carta más alta en la mesa
+    let mejorPoder = -1;
+    let equipoMejorCarta = null;
+
+    cartasManoActual.forEach(cm => {
+      const poder = this.getPoderCarta(cm.carta);
+      const jugador = jugadores.find(j => j.id === cm.jugadorId);
+      if (poder > mejorPoder) {
+        mejorPoder = poder;
+        equipoMejorCarta = jugador?.equipo;
+      } else if (poder === mejorPoder && jugador?.equipo !== equipoMejorCarta) {
+        // Empate entre equipos diferentes - no está claro quién gana
+        equipoMejorCarta = null;
+      }
+    });
+
+    return {
+      equipoGanando: equipoMejorCarta === this.equipo,
+      todosYaTiraron: true,
+    };
+  }
+
+  // Obtener la carta más alta del rival en la mano actual
+  _getCartaRivalMasAlta(cartasManoActual, jugadores) {
+    if (!cartasManoActual || cartasManoActual.length === 0) return null;
+
+    let mejorCartaRival = null;
+    let mejorPoderRival = -1;
+
+    cartasManoActual.forEach(cm => {
+      const jugador = jugadores ? jugadores.find(j => j.id === cm.jugadorId) : null;
+      const esRival = jugador ? jugador.equipo !== this.equipo : cm.jugadorId !== this.id;
+
+      if (esRival) {
+        const poder = this.getPoderCarta(cm.carta);
+        if (poder > mejorPoderRival) {
+          mejorPoderRival = poder;
+          mejorCartaRival = cm.carta;
+        }
+      }
+    });
+
+    return mejorCartaRival;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -263,6 +338,8 @@ class TrucoBot {
 
   _elegirCartaComoRespuesta(ordenadas, cartaOponente, manoActual) {
     const poderOponente = this.getPoderCarta(cartaOponente);
+    const voyPerdiendo = this.manosGanadas[0] < this.manosGanadas[1];
+    const voyGanando = this.manosGanadas[0] > this.manosGanadas[1];
 
     // Buscar cartas que le ganen
     const cartasQueGanan = ordenadas.filter(c => this.getPoderCarta(c) > poderOponente);
@@ -273,11 +350,15 @@ class TrucoBot {
 
     if (cartasQueGanan.length > 0) {
       // Tengo cartas que ganan
-
-      // ¿Vale la pena ganar esta mano?
-      const diferenciaPoder = this.getPoderCarta(cartasQueGanan[cartasQueGanan.length - 1]) - poderOponente;
       const cartaMasBajaQueGana = cartasQueGanan[cartasQueGanan.length - 1];
       const poderCartaMasBaja = this.getPoderCarta(cartaMasBajaQueGana);
+      const diferenciaPoder = poderCartaMasBaja - poderOponente;
+
+      // === SITUACIÓN CRÍTICA: VOY PERDIENDO, NECESITO GANAR ===
+      // Si ya perdí una mano y debo ganar esta, SIEMPRE jugar para ganar
+      if (voyPerdiendo) {
+        return cartaMasBajaQueGana; // Usar la más baja que gane (eficiente pero segura)
+      }
 
       // Si la carta del oponente es muy baja (4, 5, 6) y mi carta más baja que gana es alta (3, 2, 1)
       // evaluar si vale la pena
@@ -285,7 +366,7 @@ class TrucoBot {
         // El oponente tiró basura
 
         // Si voy ganando la ronda, no desperdiciar
-        if (this.manosGanadas[0] > this.manosGanadas[1]) {
+        if (voyGanando) {
           // Tirar mi peor carta, perder esta mano no importa
           return ordenadas[ordenadas.length - 1];
         }
@@ -304,7 +385,7 @@ class TrucoBot {
       }
 
       // Si la diferencia de poder es razonable (no estoy desperdiciando mucho)
-      // o si necesito ganar esta mano, usar la carta más baja que gane
+      // o si estamos empatados, usar la carta más baja que gane
       if (diferenciaPoder <= 3 || this.manosGanadas[0] <= this.manosGanadas[1]) {
         return cartaMasBajaQueGana;
       }
@@ -325,8 +406,8 @@ class TrucoBot {
 
     if (cartasQueEmpatan.length > 0) {
       // Puedo empatar - a veces conviene
-      // Si voy ganando la ronda, empatar me sirve
-      if (this.manosGanadas[0] > this.manosGanadas[1]) {
+      // Si voy ganando la ronda o empatados, empatar me sirve
+      if (this.manosGanadas[0] >= this.manosGanadas[1]) {
         return cartasQueEmpatan[0];
       }
     }

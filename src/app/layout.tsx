@@ -284,7 +284,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} bg-table-wood`}>
         <GoogleAnalytics />
-        <Providers>{children}</Providers>
+        <Providers><main>{children}</main></Providers>
       </body>
     </html>
   );

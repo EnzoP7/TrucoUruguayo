@@ -260,6 +260,12 @@ function iniciarRondaFase1(mesa) {
   mesa.esperandoRespuestasGrupales = false;
   mesa.tipoRespuestaGrupal = null;
 
+  // Resetear estado de ronda en todos los bots
+  const botsActivosRonda = activeBots.get(mesa.id) || [];
+  botsActivosRonda.forEach(bot => {
+    bot.resetearRonda();
+  });
+
   // === MODO ALTERNADO 6 JUGADORES (Pico a Pico en Truco Uruguayo) ===
   // Secuencia correcta:
   // 1. Primera ronda: En conjunto (3v3)
@@ -737,7 +743,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
   // === JUGAR CARTA ===
   let carta = null;
   try {
-    carta = await bot.decidirCarta(mesa.cartasMesa, mesa.manoActual, mesa.manoActual === 1);
+    carta = await bot.decidirCarta(mesa.cartasMesa, mesa.manoActual, mesa.manoActual === 1, mesa.jugadores, mesa.inicioManoActual || 0);
   } catch (err) {
     console.error(`[Bot] Error en decidirCarta: ${err.message}`);
   }
@@ -1300,8 +1306,8 @@ async function botResponderFlor(mesaId, io) {
 
     console.log(`[Bot TIMEOUT] ${bot.nombre} no respondió a la flor en 6s, forzando QUIERO`);
 
-    // Forzar respuesta "quiero" (más seguro que no_quiero para flor)
-    const result = responderFlor(currentMesa, bot.id, 'quiero');
+    // Forzar respuesta "quiero" - sin diferir puntos en timeout (resolución rápida)
+    const result = responderFlor(currentMesa, bot.id, 'quiero', false);
     if (result.success && !result.pendiente) {
       // Notificar resolución de flor
       emitirResultadoFlor(currentRoom, currentMesa, result, io);
@@ -1346,8 +1352,11 @@ async function botResponderFlor(mesaId, io) {
 
     console.log(`[Bot] ${bot.nombre} responde a la flor: ${tipoRespuesta}`);
 
+    // Determinar si es contienda para diferir puntos
+    const esContiendaBot = (currentMesa.florPendiente?.ultimoTipo === 'contra_flor' || currentMesa.florPendiente?.ultimoTipo === 'con_flor_envido') && tipoRespuesta === 'quiero';
+
     // Usar la función responderFlor del servidor
-    const result = responderFlor(currentMesa, bot.id, tipoRespuesta);
+    const result = responderFlor(currentMesa, bot.id, tipoRespuesta, esContiendaBot);
 
     if (!result.success) {
       console.log(`[Bot] Error respondiendo flor: ${result.error}`);
@@ -1372,7 +1381,69 @@ async function botResponderFlor(mesaId, io) {
       return;
     }
 
-    // Notificar resultado de flor
+    // Si es contienda, mostrar declaraciones paso a paso como hace el envido
+    const esContiendaResult = (result.resultado?.esContraFlor || result.resultado?.esConFlorEnvido) && tipoRespuesta === 'quiero';
+    if (esContiendaResult && result.resultado.floresCantadas && result.resultado.floresCantadas.length > 0) {
+      const declaraciones = result.resultado.floresCantadas;
+
+      declaraciones.forEach((decl, index) => {
+        setTimeout(() => {
+          room.jugadores.forEach(p => {
+            if (!p.isBot) {
+              io.to(p.socketId).emit('flor-cantada', {
+                jugadorId: decl.jugadorId,
+                audioCustomUrl: currentMesa.audiosCustom?.[decl.jugadorId]?.['flor'] || null,
+                declaracion: {
+                  ...decl,
+                  puntos: decl.puntos,
+                },
+                esDeclaracionContienda: true,
+                estado: getEstadoParaJugador(currentMesa, p.socketId),
+              });
+            }
+          });
+        }, (index + 1) * 1500);
+      });
+
+      // Después de todas las declaraciones, sumar puntos y emitir resultado
+      setTimeout(() => {
+        const ganador = result.resultado.ganador;
+        const puntosGanados = result.resultado.puntosGanados;
+        if (ganador) {
+          const equipo = currentMesa.equipos.find(e => e.id === ganador);
+          if (equipo) {
+            equipo.puntaje += puntosGanados;
+            if (equipo.puntaje >= currentMesa.puntosLimite) {
+              currentMesa.winnerJuego = ganador;
+              currentMesa.estado = 'terminado';
+              currentMesa.mensajeRonda = `¡Equipo ${ganador} ganó el juego!`;
+              currentMesa.fase = 'finalizada';
+            }
+          }
+        }
+
+        emitirResultadoFlor(room, currentMesa, result, io);
+
+        if (currentMesa.winnerJuego !== null) {
+          room.estado = 'terminado';
+          guardarResultadoPartida(room, currentMesa);
+          room.jugadores.forEach(p => {
+            if (!p.isBot) {
+              io.to(p.socketId).emit('juego-finalizado', {
+                ganadorEquipo: currentMesa.winnerJuego,
+                estado: getEstadoParaJugador(currentMesa, p.socketId),
+              });
+            }
+          });
+          broadcastLobby(io);
+        } else {
+          setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+        }
+      }, (declaraciones.length + 1) * 1500 + 500);
+      return;
+    }
+
+    // No es contienda - emitir resultado inmediatamente
     emitirResultadoFlor(room, currentMesa, result, io);
 
     // Verificar si el juego terminó
@@ -1707,6 +1778,12 @@ function evaluarEstadoRonda(mesa) {
   // Store pending action for after delay
   mesa.manoTerminada = true;
   mesa.manoGanadorEquipo = ganadores[ganadores.length - 1];
+
+  // Registrar resultado de la mano en todos los bots para que tomen mejores decisiones
+  const botsActivos = activeBots.get(mesa.id) || [];
+  botsActivos.forEach(bot => {
+    bot.registrarResultadoMano(mesa.manoGanadorEquipo);
+  });
 
   if (ganadorRonda !== null) {
     mesa.pendienteFinalizarRonda = ganadorRonda;
@@ -2839,7 +2916,7 @@ function resolverFlor(mesa) {
 
 // Responder a la flor cuando ambos equipos tienen flor
 // tipoRespuesta: 'quiero' (comparar flores normal), 'contra_flor' (gana el partido), 'no_quiero' (pierde su flor)
-function responderFlor(mesa, jugadorId, tipoRespuesta) {
+function responderFlor(mesa, jugadorId, tipoRespuesta, diferirPuntos = false) {
   if (!mesa.esperandoRespuestaFlor || !mesa.florPendiente) {
     return { success: false, error: 'No hay flor pendiente de respuesta' };
   }
@@ -2974,21 +3051,23 @@ function responderFlor(mesa, jugadorId, tipoRespuesta) {
     puntosGanados = 3 * floresTotal + 2; // 3 pts por flor + 2 pts de envido base
   }
 
-  // Aplicar puntos
+  // Aplicar puntos (solo si no se difieren para animaciones)
   if (ganador) {
-    const equipo = mesa.equipos.find(e => e.id === ganador);
-    if (equipo) equipo.puntaje += puntosGanados;
-
     mesa.envidoYaCantado = true;
     mesa.envidoActivo = null;
     mesa.florYaCantada = true;
     mesa.florPendiente = null;
 
-    if (equipo && equipo.puntaje >= mesa.puntosLimite) {
-      mesa.winnerJuego = ganador;
-      mesa.estado = 'terminado';
-      mesa.mensajeRonda = `¡Equipo ${ganador} ganó el juego!`;
-      mesa.fase = 'finalizada';
+    if (!diferirPuntos) {
+      const equipo = mesa.equipos.find(e => e.id === ganador);
+      if (equipo) equipo.puntaje += puntosGanados;
+
+      if (equipo && equipo.puntaje >= mesa.puntosLimite) {
+        mesa.winnerJuego = ganador;
+        mesa.estado = 'terminado';
+        mesa.mensajeRonda = `¡Equipo ${ganador} ganó el juego!`;
+        mesa.fase = 'finalizada';
+      }
     }
   }
 
@@ -5783,7 +5862,10 @@ app.prepare().then(async () => {
         const mesa = engines.get(room.mesaId);
         if (!mesa) { callback(false, 'Motor no encontrado'); return; }
 
-        const result = responderFlor(mesa, socket.id, tipoRespuesta);
+        // Para contiendas con "quiero", diferir puntos para mostrar animaciones primero
+        const esContiendaPrevia = (mesa.florPendiente?.ultimoTipo === 'contra_flor' || mesa.florPendiente?.ultimoTipo === 'con_flor_envido');
+        const seraContienda = esContiendaPrevia && tipoRespuesta === 'quiero';
+        const result = responderFlor(mesa, socket.id, tipoRespuesta, seraContienda);
         if (!result.success) { callback(false, result.error); return; }
 
         // Si es escalación (contra_flor / con_flor_envido), el otro equipo debe responder
@@ -5846,8 +5928,24 @@ app.prepare().then(async () => {
             }, (index + 1) * 1500); // 1.5 segundos entre cada declaración
           });
 
-          // Después de todas las declaraciones, emitir el resultado final
+          // Después de todas las declaraciones, sumar puntos y emitir el resultado final
           setTimeout(() => {
+            // AHORA sumar los puntos al marcador (después de las animaciones)
+            const ganador = result.resultado.ganador;
+            const puntosGanados = result.resultado.puntosGanados;
+            if (ganador) {
+              const equipo = mesa.equipos.find(e => e.id === ganador);
+              if (equipo) {
+                equipo.puntaje += puntosGanados;
+                if (equipo.puntaje >= mesa.puntosLimite) {
+                  mesa.winnerJuego = ganador;
+                  mesa.estado = 'terminado';
+                  mesa.mensajeRonda = `¡Equipo ${ganador} ganó el juego!`;
+                  mesa.fase = 'finalizada';
+                }
+              }
+            }
+
             room.jugadores.forEach(p => {
               io.to(p.socketId).emit('flor-resuelta', {
                 resultado: {
