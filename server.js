@@ -565,10 +565,13 @@ function getEstadoParaJugador(mesa, jugadorId) {
       puntos: f.equipo === miEquipo ? f.puntos : null,
     }));
   }
-  // Hide jugadoresConFlor from opponents - only reveal if the requesting player has flor
-  // This prevents opponents from knowing about flor before it's declared
+  // Hide jugadoresConFlor from opponents - reveal teammates with flor so they know
+  // not to call envido, but hide opponents' flor until declared
   if (copia.jugadoresConFlor && !copia.florYaCantada) {
-    copia.jugadoresConFlor = copia.jugadoresConFlor.filter(id => id === jugadorId);
+    copia.jugadoresConFlor = copia.jugadoresConFlor.filter(id => {
+      const j = mesa.jugadores.find(jj => jj.id === id);
+      return j && j.equipo === miEquipo;
+    });
   }
 
   // Incluir cosméticos de todos los jugadores premium para que el cliente los aplique
@@ -2000,6 +2003,7 @@ function iniciarSiguienteCrucePicoAPico(mesa) {
 function cantarTruco(mesa, jugadorId, tipo) {
   const jugador = mesa.jugadores.find(j => j.id === jugadorId);
   if (!jugador || mesa.estado !== 'jugando' || mesa.gritoActivo || mesa.envidoActivo) return false;
+  if (jugador.seVaAlMazo) return false; // No puede cantar si se fue al mazo
 
   if (tipo === 'truco' && mesa.nivelGritoAceptado !== null) return false;
   if (tipo === 'retruco' && mesa.nivelGritoAceptado !== 'truco') return false;
@@ -2035,7 +2039,7 @@ function cantarTruco(mesa, jugadorId, tipo) {
 // Obtener jugadores del equipo que deben responder (participan en la ronda)
 function getJugadoresEquipoQueResponden(mesa, equipo) {
   return mesa.jugadores.filter(j =>
-    j.equipo === equipo && j.participaRonda !== false
+    j.equipo === equipo && j.participaRonda !== false && !j.seVaAlMazo
   );
 }
 
@@ -2072,6 +2076,9 @@ function responderTruco(mesa, jugadorId, acepta, escalar = null) {
   // En modo pico a pico, solo los jugadores que participan pueden responder
   if (jugador.participaRonda === false) {
     return { success: false, error: 'No participas en esta ronda' };
+  }
+  if (jugador.seVaAlMazo) {
+    return { success: false, error: 'Ya te fuiste al mazo' };
   }
 
   // Si escala (quiero retruco / quiero vale4), es decisión inmediata del jugador
@@ -2195,6 +2202,10 @@ function cantarEnvido(mesa, jugadorId, tipo, puntosCustom = null) {
   const jugador = mesa.jugadores.find(j => j.id === jugadorId);
   if (!jugador || mesa.estado !== 'jugando') return false;
   if (mesa.fase !== 'jugando') return false;
+  if (jugador.seVaAlMazo) return false; // No puede cantar si se fue al mazo
+
+  // Si hay flores sin resolver, no se puede cantar envido (la flor anula el envido)
+  if (mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0 && !mesa.florYaCantada) return false;
 
   // El envido solo se puede cantar en la primera mano (mano 1)
   if (mesa.manoActual !== 1) return false;
@@ -2802,6 +2813,7 @@ function detectarJugadoresConFlor(mesa) {
 function cantarFlor(mesa, jugadorId) {
   const jugador = mesa.jugadores.find(j => j.id === jugadorId);
   if (!jugador) return { success: false, error: 'Jugador no encontrado' };
+  if (jugador.seVaAlMazo) return { success: false, error: 'Ya te fuiste al mazo' };
 
   if (!tieneFlor(jugador, mesa.muestra)) {
     return { success: false, error: 'No tenés flor' };
@@ -2925,10 +2937,16 @@ function responderFlor(mesa, jugadorId, tipoRespuesta, diferirPuntos = false) {
 
   const jugador = mesa.jugadores.find(j => j.id === jugadorId);
   if (!jugador) return { success: false, error: 'Jugador no encontrado' };
+  if (jugador.seVaAlMazo) return { success: false, error: 'Ya te fuiste al mazo' };
 
   // Solo el equipo que debe responder puede hacerlo
   if (jugador.equipo !== mesa.florPendiente.equipoQueResponde) {
     return { success: false, error: 'No es tu turno de responder' };
+  }
+
+  // Solo jugadores que tienen flor pueden responder a la flor
+  if (!mesa.jugadoresConFlor || !mesa.jugadoresConFlor.includes(jugadorId)) {
+    return { success: false, error: 'No tenés flor, no podés responder' };
   }
 
   // Si la respuesta es contra_flor o con_flor_envido, el otro equipo debe aceptar/rechazar
@@ -3113,6 +3131,10 @@ function resolverEnvido(mesa) {
 
 function responderEnvido(mesa, jugadorId, acepta) {
   if (!mesa.envidoActivo) return { success: false, error: 'No hay envido activo' };
+  // Si hay flores sin resolver, el envido se anula
+  if (mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0 && !mesa.florYaCantada) {
+    return { success: false, error: 'Hay flor en la mesa, el envido se anula' };
+  }
   const jugador = mesa.jugadores.find(j => j.id === jugadorId);
   if (!jugador || jugador.equipo === mesa.envidoActivo.equipoQueCanta) {
     return { success: false, error: 'No puedes responder a tu propio envido' };
@@ -3120,6 +3142,9 @@ function responderEnvido(mesa, jugadorId, acepta) {
   // En modo pico a pico, solo los jugadores que participan pueden responder
   if (jugador.participaRonda === false) {
     return { success: false, error: 'No participas en esta ronda' };
+  }
+  if (jugador.seVaAlMazo) {
+    return { success: false, error: 'Ya te fuiste al mazo' };
   }
 
   const equipoQueResponde = jugador.equipo;

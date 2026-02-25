@@ -1659,6 +1659,7 @@ function GamePage() {
   // === HELPERS ===
   const miJugador = mesa?.jugadores.find((j) => j.id === socketId);
   const miEquipo = miJugador?.equipo;
+  const meFuiAlMazo = miJugador?.seVaAlMazo === true;
 
   const esMiTurno = (): boolean => {
     if (!mesa || !socketId || mesa.estado !== "jugando") return false;
@@ -1703,6 +1704,7 @@ function GamePage() {
 
   const puedoCantarTruco = (): boolean => {
     if (!mesa || !socketId || mesa.estado !== "jugando") return false;
+    if (meFuiAlMazo) return false;
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
     if (mesa.fase !== "jugando") return false;
     if (!miEquipo) return false;
@@ -1714,6 +1716,7 @@ function GamePage() {
 
   const puedoCantarRetruco = (): boolean => {
     if (!mesa || !miEquipo) return false;
+    if (meFuiAlMazo) return false;
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
     if (mesa.nivelGritoAceptado !== "truco") return false;
     // Solo el equipo que ACEPTÓ el truco tiene la palabra para retruco
@@ -1724,6 +1727,7 @@ function GamePage() {
 
   const puedoCantarVale4 = (): boolean => {
     if (!mesa || !miEquipo) return false;
+    if (meFuiAlMazo) return false;
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
     if (mesa.nivelGritoAceptado !== "retruco") return false;
     // Solo el equipo que ACEPTÓ el retruco tiene la palabra para vale4
@@ -1734,9 +1738,12 @@ function GamePage() {
 
   const puedoCantarEnvido = (): boolean => {
     if (!mesa || !socketId || mesa.estado !== "jugando") return false;
+    if (meFuiAlMazo) return false;
     if (mesa.fase !== "jugando") return false;
     // El envido solo se puede cantar en la primera mano
     if (mesa.manoActual !== 1) return false;
+    // Si hay flor sin resolver en la mesa (propia o de compañero), no se puede cantar envido
+    if (mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0 && !mesa.florYaCantada) return false;
     // Verificar si YO ya jugué mi carta en esta mano
     // Usar número de participantes activos para pico a pico
     const numParticipantesEnvido = mesa.jugadores.filter(
@@ -1758,6 +1765,7 @@ function GamePage() {
 
   const deboResponderGrito = (): boolean => {
     if (!mesa || !miEquipo || !mesa.gritoActivo || !socketId) return false;
+    if (meFuiAlMazo) return false;
     // En modo pico a pico, solo los jugadores que participan pueden responder
     const miJugador = mesa.jugadores.find((j: Jugador) => j.id === socketId);
     if (miJugador?.participaRonda === false) return false;
@@ -1766,6 +1774,9 @@ function GamePage() {
 
   const deboResponderEnvido = (): boolean => {
     if (!mesa || !miEquipo || !mesa.envidoActivo || !socketId) return false;
+    if (meFuiAlMazo) return false;
+    // Si hay flor sin resolver, el envido se anula - no mostrar panel de respuesta
+    if (mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0 && !mesa.florYaCantada) return false;
     // En modo pico a pico, solo los jugadores que participan pueden responder
     const miJugador = mesa.jugadores.find((j: Jugador) => j.id === socketId);
     if (miJugador?.participaRonda === false) return false;
@@ -4512,6 +4523,22 @@ function GamePage() {
           {/* close flex-row wrapper for side players */}
           {/* Wrapper para paneles de respuesta - flotan en mobile para no tapar las cartas */}
           <div className="fixed inset-x-0 bottom-[155px] z-30 px-3 sm:static sm:inset-auto sm:bottom-auto sm:z-auto sm:px-0">
+            {/* Preview compacto de mis cartas cuando hay panel de respuesta activo */}
+            {((deboResponderGrito() && mesa.gritoActivo) ||
+              (deboResponderEnvido() && mesa.envidoActivo) ||
+              (florPendiente && miEquipo === florPendiente.equipoQueResponde && tengoFlor())) &&
+              misCartas().length > 0 && (
+                <div className="flex justify-center items-center gap-1.5 sm:gap-2 mb-1.5">
+                  <span className="text-gold-500/50 text-xs hidden sm:inline">Tus cartas:</span>
+                  {misCartas().map((carta, index) => (
+                    <CartaImg
+                      key={`preview-${carta.palo}-${carta.valor}-${index}`}
+                      carta={carta}
+                      size="small"
+                    />
+                  ))}
+                </div>
+              )}
             {/* Panel de respuesta a Truco */}
             {deboResponderGrito() && mesa.gritoActivo && (
               <div className="glass-gold rounded-xl p-3 my-1.5 text-center border border-gold-600/40 animate-slide-up">
@@ -4666,6 +4693,7 @@ function GamePage() {
             {/* Panel de respuesta a Flor */}
             {florPendiente &&
               miEquipo === florPendiente.equipoQueResponde &&
+              tengoFlor() &&
               (() => {
                 const ultimo = florPendiente.ultimoTipo;
                 const esContraFlor = ultimo === "contra_flor";
@@ -4810,6 +4838,14 @@ function GamePage() {
           )}
           {/* Mis cartas y controles */}
           <div className="glass rounded-xl p-2 sm:p-3 mt-1 relative z-10 border border-gold-800/20">
+            {/* Modo espectador: se fue al mazo */}
+            {meFuiAlMazo && mesa.estado === "jugando" && (
+              <div className="flex items-center justify-center gap-2 py-4 text-gold-500/60">
+                <span className="text-lg">👀</span>
+                <span className="text-sm font-medium">Te fuiste al mazo — mirando la ronda</span>
+              </div>
+            )}
+
             {/* Bocadillo de diálogo para mí */}
             {socketId &&
               speechBubbles.find((b) => b.jugadorId === socketId) &&
@@ -4849,6 +4885,7 @@ function GamePage() {
               })()}
 
             {/* Barra superior con info y botones de cantos */}
+            {!meFuiAlMazo && (
             <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2">
               <div
                 className={`hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm ${
@@ -4981,8 +5018,10 @@ function GamePage() {
                   )}
               </div>
             </div>
+            )}
 
             {/* Mis cartas */}
+            {!meFuiAlMazo && (
             <div className="flex justify-center items-center gap-2 sm:gap-3">
               {misCartas().map((carta, index) => (
                 <div
@@ -5011,6 +5050,7 @@ function GamePage() {
                 </div>
               )}
             </div>
+            )}
           </div>
         </div>
       </div>
