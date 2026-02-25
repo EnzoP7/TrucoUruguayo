@@ -19,8 +19,8 @@ async function registrar(apodo, password) {
   if (apodo.trim().length > 20) {
     return { success: false, error: 'El apodo no puede tener más de 20 caracteres' };
   }
-  if (!password || password.length < 4) {
-    return { success: false, error: 'La contraseña debe tener al menos 4 caracteres' };
+  if (!password || password.length < 8) {
+    return { success: false, error: 'La contraseña debe tener al menos 8 caracteres' };
   }
 
   const apodoLimpio = apodo.trim();
@@ -128,8 +128,8 @@ async function vincularCuentaGoogle(userId, googleId, email) {
 
 // Agregar contraseña a cuenta que solo tiene Google
 async function agregarPassword(userId, password) {
-  if (!password || password.length < 4) {
-    return { success: false, error: 'La contraseña debe tener al menos 4 caracteres' };
+  if (!password || password.length < 8) {
+    return { success: false, error: 'La contraseña debe tener al menos 8 caracteres' };
   }
 
   try {

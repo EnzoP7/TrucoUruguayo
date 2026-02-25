@@ -109,7 +109,7 @@ export const metadata: Metadata = {
   category: "games",
   classification: "Card Games",
   verification: {
-    google: "tu-codigo-de-verificacion-google",
+    google: process.env.NEXT_PUBLIC_GOOGLE_VERIFICATION || undefined,
   },
   other: {
     "apple-mobile-web-app-title": "Truco Uruguayo",

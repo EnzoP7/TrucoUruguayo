@@ -3975,11 +3975,49 @@ app.prepare().then(async () => {
     });
   }, 5000);
 
+  // ============================================================
+  // Rate Limiting
+  // ============================================================
+  const rateLimiters = new Map(); // socketId → { event → { count, resetTime } }
+
+  const RATE_LIMITS = {
+    'crear-partida': { max: 3, windowMs: 60000 },       // 3 por minuto
+    'enviar-mensaje': { max: 10, windowMs: 10000 },      // 10 por 10 segundos
+    'registrar': { max: 5, windowMs: 60000 },             // 5 por minuto
+    'login': { max: 5, windowMs: 60000 },                 // 5 por minuto
+  };
+
+  function checkRateLimit(socketId, eventName) {
+    const limit = RATE_LIMITS[eventName];
+    if (!limit) return true; // sin límite para este evento
+
+    if (!rateLimiters.has(socketId)) {
+      rateLimiters.set(socketId, {});
+    }
+    const socketLimits = rateLimiters.get(socketId);
+    const now = Date.now();
+
+    if (!socketLimits[eventName] || now > socketLimits[eventName].resetTime) {
+      socketLimits[eventName] = { count: 1, resetTime: now + limit.windowMs };
+      return true;
+    }
+
+    socketLimits[eventName].count++;
+    return socketLimits[eventName].count <= limit.max;
+  }
+
+  function cleanupRateLimiter(socketId) {
+    rateLimiters.delete(socketId);
+  }
+
   io.on('connection', (socket) => {
     console.log(`[Socket.IO] Connected: ${socket.id}`);
 
     // === REGISTRO ===
     socket.on('registrar', async (data, callback) => {
+      if (!checkRateLimit(socket.id, 'registrar')) {
+        return callback({ success: false, error: 'Demasiados intentos. Esperá un momento.' });
+      }
       try {
         const result = await registrar(data.apodo, data.password);
         if (result.success) {
@@ -3994,6 +4032,9 @@ app.prepare().then(async () => {
 
     // === LOGIN ===
     socket.on('login', async (data, callback) => {
+      if (!checkRateLimit(socket.id, 'login')) {
+        return callback({ success: false, error: 'Demasiados intentos. Esperá un momento.' });
+      }
       try {
         const result = await login(data.apodo, data.password);
         if (result.success) {
@@ -4493,6 +4534,9 @@ app.prepare().then(async () => {
 
     // === CREAR PARTIDA ===
     socket.on('crear-partida', (data, callback) => {
+      if (!checkRateLimit(socket.id, 'crear-partida')) {
+        return callback({ success: false, error: 'Estás creando partidas muy rápido. Esperá un momento.' });
+      }
       console.log(`[Socket.IO] ${socket.id} crear-partida:`, data);
       try {
         const { nombre, tamañoSala = '2v2', modoAlternado = true, modoAyuda = false, esPractica = false } = data;
@@ -6596,6 +6640,9 @@ app.prepare().then(async () => {
 
     // === CHAT EN PARTIDA ===
     socket.on('enviar-mensaje', (data, callback) => {
+      if (!checkRateLimit(socket.id, 'enviar-mensaje')) {
+        return callback(false);
+      }
       try {
         const { mensaje, tipo } = data;
         const room = findRoomBySocket(socket.id);
@@ -7247,6 +7294,7 @@ app.prepare().then(async () => {
     // === DISCONNECT ===
     socket.on('disconnect', () => {
       console.log(`[Socket.IO] Disconnected: ${socket.id}`);
+      cleanupRateLimiter(socket.id);
       socketUsuarios.delete(socket.id);
       socket.leave('lobby');
 

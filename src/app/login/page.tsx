@@ -143,7 +143,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="input-glass w-full px-4 py-3 rounded-xl"
-                placeholder={mode === 'registro' ? 'Mínimo 4 caracteres' : 'Tu contraseña'}
+                placeholder={mode === 'registro' ? 'Mínimo 8 caracteres' : 'Tu contraseña'}
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               />
             </div>
