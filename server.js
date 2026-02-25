@@ -1382,7 +1382,9 @@ async function botResponderFlor(mesaId, io) {
     }
 
     // Si es contienda, mostrar declaraciones paso a paso como hace el envido
-    const esContiendaResult = (result.resultado?.esContraFlor || result.resultado?.esConFlorEnvido) && tipoRespuesta === 'quiero';
+    // Usar esContiendaBot (ya calculado arriba) en vez de result.resultado.esContraFlor
+    // porque esContraFlor se basa en tipoRespuesta que es 'quiero' al aceptar
+    const esContiendaResult = esContiendaBot;
     if (esContiendaResult && result.resultado.floresCantadas && result.resultado.floresCantadas.length > 0) {
       const declaraciones = result.resultado.floresCantadas;
 
@@ -3621,6 +3623,18 @@ function irseAlMazo(mesa, jugadorId) {
       intentos++;
     }
     mesa.turnoActual = next;
+  }
+
+  // Verificar si la mano actual ya tiene suficientes cartas jugadas para resolverse
+  // (el jugador que se fue no jugó carta, pero ahora hay menos participantes activos)
+  if (!mesa.manoTerminada) {
+    const numParticipanActuales = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo).length;
+    const inicio = mesa.inicioManoActual || 0;
+    const cartasEnEstaMano = mesa.cartasMesa.length - inicio;
+    if (cartasEnEstaMano >= numParticipanActuales && cartasEnEstaMano > 0) {
+      // La mano ya tiene todas las cartas necesarias, resolverla
+      determinarGanadorMano(mesa);
+    }
   }
 
   mesa.mensajeRonda = `${jugador.nombre} se fue al mazo`;
@@ -5903,7 +5917,9 @@ app.prepare().then(async () => {
         const florRespAudioUrl = mesa.audiosCustom?.[socket.id]?.[florRespAudioTipo] || null;
 
         // Si es contra flor o con flor envido con "quiero", mostrar declaraciones paso a paso
-        const esContienda = (result.resultado.esContraFlor || result.resultado.esConFlorEnvido) && tipoRespuesta === 'quiero';
+        // Usar seraContienda (ya calculado arriba) porque result.resultado.esContraFlor
+        // se basa en tipoRespuesta que es 'quiero' al aceptar, no 'contra_flor'
+        const esContienda = seraContienda;
 
         if (esContienda && result.resultado.floresCantadas && result.resultado.floresCantadas.length > 0) {
           // Mostrar declaraciones paso a paso antes del resultado
@@ -6037,10 +6053,82 @@ app.prepare().then(async () => {
         });
 
         if (result === 'parcial') {
-          // Solo un jugador se fue, el equipo sigue - actualizar estado
-          room.jugadores.forEach(p => {
-            io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(mesa, p.socketId));
-          });
+          // Solo un jugador se fue, el equipo sigue
+
+          // Verificar si al irse al mazo se completó la mano actual
+          if (mesa.manoTerminada) {
+            // Emitir mano-finalizada y continuar flujo igual que jugar-carta
+            room.jugadores.forEach(p => {
+              io.to(p.socketId).emit('mano-finalizada', {
+                ganadorEquipo: mesa.manoGanadorEquipo,
+                manoNumero: mesa.manoActual,
+                estado: getEstadoParaJugador(mesa, p.socketId),
+              });
+            });
+
+            const DELAY_MANO = 2000;
+            setTimeout(() => {
+              const currentMesa = engines.get(room.mesaId);
+              const currentRoom = lobbyRooms.get(room.mesaId);
+              if (!currentMesa || !currentRoom) return;
+
+              const resultado = continuarDespuesDeDelay(currentMesa);
+              if (!resultado) return;
+
+              if (resultado.tipo === 'ronda') {
+                currentRoom.jugadores.forEach(p => {
+                  io.to(p.socketId).emit('ronda-finalizada', {
+                    ganadorEquipo: currentMesa.winnerRonda,
+                    puntosGanados: currentMesa.puntosEnJuego,
+                    cartasFlorReveladas: currentMesa.cartasFlorReveladas || [],
+                    cartasEnvidoReveladas: currentMesa.cartasEnvidoReveladas || [],
+                    muestra: currentMesa.muestra,
+                    estado: getEstadoParaJugador(currentMesa, p.socketId),
+                  });
+                });
+
+                if (currentMesa.winnerJuego !== null) {
+                  currentRoom.estado = 'terminado';
+                  guardarResultadoPartida(currentRoom, currentMesa);
+                  currentRoom.jugadores.forEach(p => {
+                    io.to(p.socketId).emit('juego-finalizado', {
+                      ganadorEquipo: currentMesa.winnerJuego,
+                      estado: getEstadoParaJugador(currentMesa, p.socketId),
+                    });
+                  });
+                  broadcastLobby(io);
+                } else {
+                  scheduleNextRound(io, currentRoom);
+                }
+              } else if (resultado.tipo === 'mano') {
+                currentRoom.jugadores.forEach(p => {
+                  if (!p.isBot) {
+                    io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(currentMesa, p.socketId));
+                  }
+                });
+
+                setTimeout(() => {
+                  const botMesa = engines.get(room.mesaId);
+                  if (botMesa && botMesa.fase === 'jugando' && !botMesa.gritoActivo && !botMesa.envidoActivo) {
+                    procesarTurnoBot(room.mesaId, io);
+                  }
+                }, 500);
+              }
+            }, DELAY_MANO);
+          } else {
+            // La mano sigue en curso - actualizar estado
+            room.jugadores.forEach(p => {
+              io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(mesa, p.socketId));
+            });
+
+            // Si es turno de un bot, procesar
+            setTimeout(() => {
+              const currentMesa = engines.get(room.mesaId);
+              if (currentMesa && currentMesa.fase === 'jugando' && !currentMesa.gritoActivo && !currentMesa.envidoActivo && !currentMesa.manoTerminada) {
+                procesarTurnoBot(room.mesaId, io);
+              }
+            }, 1000);
+          }
         } else {
           // Todo el equipo se fue al mazo - finalizar ronda
           room.jugadores.forEach(p => {
