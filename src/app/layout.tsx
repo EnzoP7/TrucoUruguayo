@@ -283,8 +283,14 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body className={`${inter.className} bg-table-wood`}>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-gold-500 focus:text-black focus:font-bold focus:text-sm"
+        >
+          Saltar al contenido principal
+        </a>
         <GoogleAnalytics />
-        <Providers><main>{children}</main></Providers>
+        <Providers><main id="main-content">{children}</main></Providers>
       </body>
     </html>
   );

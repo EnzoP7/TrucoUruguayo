@@ -646,7 +646,7 @@ function PerrosResponseModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Te echaron los Perros">
       <div className="glass rounded-2xl p-6 max-w-lg w-full border-2 border-orange-600/50 animate-slide-up">
         <div className="text-center mb-4">
           <span className="text-4xl">🐕</span>
@@ -2309,18 +2309,28 @@ function GamePage() {
             style={{
               background: `linear-gradient(to bottom right, ${reversoActivo[0]}, ${reversoActivo[1]})`,
             }}
+            aria-hidden="true"
           >
             <div className="w-2/3 h-2/3 rounded border border-white/10 bg-white/5" />
           </div>
         );
       }
-      return <div className={`${sizeClasses[size]} card-back rounded-lg`} />;
+      return <div className={`${sizeClasses[size]} card-back rounded-lg`} aria-hidden="true" />;
     }
+
+    const cartaLabel = `Jugar ${carta.valor} de ${carta.palo}`;
 
     return (
       <button
         onClick={onClick}
         disabled={disabled || !onClick}
+        aria-label={cartaLabel}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && onClick && !disabled) {
+            e.preventDefault();
+            onClick();
+          }
+        }}
         className={`${sizeClasses[size]} rounded-lg overflow-hidden transition-all duration-300 relative
           ${onClick && !disabled ? "card-interactive cursor-pointer" : ""}
           ${disabled ? "opacity-50 cursor-not-allowed" : ""}
@@ -2420,7 +2430,7 @@ function GamePage() {
       <div className="min-h-screen bg-table-wood p-4 sm:p-8">
         {/* Tirar Reyes Animation Overlay */}
         {reyesAnimacion && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Tirando Reyes">
             <div className="glass rounded-2xl p-6 sm:p-8 max-w-2xl w-full border border-gold-600/40 animate-slide-up">
               <h2 className="text-2xl sm:text-3xl font-bold text-gold-400 text-center mb-2">
                 Tirando Reyes
@@ -3490,7 +3500,7 @@ function GamePage() {
 
       {/* Notificación de jugador desconectado */}
       {jugadorDesconectado && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Jugador desconectado">
           <div className="glass rounded-2xl p-6 max-w-sm w-full border border-red-600/50 animate-slide-up text-center">
             <div className="text-4xl mb-3">⚠️</div>
             <h3 className="text-lg font-bold text-red-300 mb-2">
@@ -3629,7 +3639,9 @@ function GamePage() {
               </div>
               {/* Input */}
               <div className="p-2 border-t border-celeste-500/20 flex gap-2">
+                <label htmlFor="chat-input" className="sr-only">Mensaje de chat</label>
                 <input
+                  id="chat-input"
                   type="text"
                   value={inputChat}
                   onChange={(e) => setInputChat(e.target.value)}
@@ -3645,6 +3657,7 @@ function GamePage() {
                 <button
                   onClick={handleEnviarMensaje}
                   disabled={!inputChat.trim() || enviadoChat}
+                  aria-label="Enviar mensaje"
                   className="px-3 py-1.5 rounded-lg bg-celeste-600 hover:bg-celeste-500 text-white text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   ➤
