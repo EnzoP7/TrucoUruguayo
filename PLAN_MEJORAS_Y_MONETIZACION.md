@@ -107,64 +107,57 @@ server/
 
 ---
 
-## FASE 3: Sistema de Monedas
+## FASE 3: Sistema de Monedas ✅ IMPLEMENTADO
 
 > **Impacto:** Alto | **Esfuerzo:** Medio
-> Pilar central de la monetización. La DB ya tiene soporte (`precio_monedas` en cosmeticos).
+> Modelo híbrido: partidas casuales gratis + partidas rankeadas con costo de monedas.
 
-### 3.1 Definir economía de monedas
+### 3.1 Economía de monedas (IMPLEMENTADO)
 
-**Formas de ganar monedas:**
+**Modelo híbrido:**
+- Partidas casuales: siempre gratis, sin límite
+- Partidas rankeadas: cuestan 10 monedas por jugador, recompensa mayor al ganar
 
-| Acción | Monedas | Límite |
-|--------|---------|--------|
-| Ganar partida 1v1 | 20 | Sin límite |
-| Ganar partida 2v2 | 25 | Sin límite |
-| Ganar partida 3v3 | 30 | Sin límite |
-| Perder partida (participación) | 5 | Sin límite |
-| Racha de 3 victorias | +15 bonus | Por racha |
-| Racha de 5 victorias | +30 bonus | Por racha |
-| Login diario | 10 (día 1) → 25 (día 7) | 1 por día |
-| Logro desbloqueado | 50-200 según dificultad | 1 por logro |
-| Video publicitario | 75 | 5 por día |
+| Acción | Monedas |
+|--------|---------|
+| **Registro nuevo (bienvenida)** | +100 |
+| Ganar casual 1v1 | +15 |
+| Ganar casual 2v2 | +20 |
+| Ganar casual 3v3 | +25 |
+| Ganar rankeada 1v1 | +30 |
+| Ganar rankeada 2v2 | +40 |
+| Ganar rankeada 3v3 | +50 |
+| Perder partida (participación) | +5 |
+| Racha de 3 victorias | +15 bonus |
+| Racha de 5 victorias | +30 bonus |
+| Login diario | 15 (día 1) → 50 (día 7) |
+| Premium bonus | x1.5 en recompensas |
+| Costo partida rankeada | -10 por jugador |
 
-### 3.2 Implementar backend de monedas
-- **Archivo:** `db.js`
-- Agregar campo `monedas INTEGER DEFAULT 0` a tabla `usuarios` (si no existe)
-- Funciones:
-  - `agregarMonedas(userId, cantidad, motivo)`
-  - `gastarMonedas(userId, cantidad)`
-  - `getMonedas(userId)`
-- **Tabla de historial** (opcional pero recomendado):
-```sql
-CREATE TABLE IF NOT EXISTS historial_monedas (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  usuario_id INTEGER NOT NULL,
-  cantidad INTEGER NOT NULL,
-  motivo TEXT NOT NULL,
-  balance_despues INTEGER NOT NULL,
-  creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
-)
-```
+### 3.2 Backend de monedas (IMPLEMENTADO)
+- **`db.js`**: tabla `historial_monedas`, columnas `monedas/ultimo_login_recompensa/dias_consecutivos_login` en usuarios
+- Funciones: `obtenerMonedas`, `agregarMonedas`, `gastarMonedas`, `obtenerRecompensaDiaria`, `reclamarRecompensaDiaria`
+- `comprarCosmetico()` ahora verifica y descuenta monedas reales
 
-### 3.3 Otorgar monedas al finalizar partida
-- **Archivo:** `server.js` (en los handlers de `ronda-finalizada` y `juego-finalizado`)
-- Al finalizar juego: llamar `agregarMonedas()` según resultado
-- Emitir evento `monedas-ganadas` al cliente con la cantidad y nuevo balance
-- Frontend: mostrar animación "+20 monedas" al terminar partida
+### 3.3 Monedas al finalizar partida (IMPLEMENTADO)
+- `guardarResultadoPartida()` calcula y otorga monedas según modo, resultado, racha y premium
+- Emite evento `monedas-ganadas` con cantidad y balance
+- Frontend muestra toast dorado "+X monedas" al terminar
 
-### 3.4 Login diario con recompensa
-- **Archivo:** `db.js` + `server.js`
-- Tabla o campo: `ultimo_login_recompensa DATE`, `dias_consecutivos INTEGER`
-- Al hacer login, verificar si ya reclamó hoy
-- Si no: dar monedas según racha de días consecutivos
-- Frontend: modal de "Recompensa diaria" al entrar al lobby
+### 3.4 Login diario con recompensa (IMPLEMENTADO)
+- Racha de 7 días: 15→20→25→30→35→40→50 monedas
+- Modal de recompensa diaria al entrar al lobby
+- Handler `reclamar-recompensa-diaria` en server.js
 
-### 3.5 Integrar monedas en la tienda existente
-- **Archivo:** `server.js` (handler `comprar-cosmetico`)
-- La función `comprarCosmetico` ya existe en db.js (~línea 733)
-- Verificar que descuente monedas correctamente
-- Frontend: mostrar balance de monedas en header y en tienda
+### 3.5 Partidas rankeadas (IMPLEMENTADO)
+- Toggle "Partida Rankeada" en panel de crear partida (solo usuarios registrados)
+- Cobra 10 monedas al crear y al unirse
+- Devuelve monedas si la partida se cancela
+- Badge "Rankeada" en lista de partidas del lobby
+
+### 3.6 Integración con tienda (IMPLEMENTADO)
+- `comprarCosmetico()` descuenta monedas del precio del cosmético
+- Balance visible en header del lobby
 
 ---
 

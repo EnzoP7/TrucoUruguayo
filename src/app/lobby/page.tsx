@@ -19,6 +19,7 @@ interface Partida {
   estado: string;
   creadorNombre?: string;
   jugadoresNombres?: string[];
+  esRankeada?: boolean;
 }
 
 // Icono de basura/eliminar
@@ -93,8 +94,12 @@ function LobbyPageContent() {
   const [loading, setLoading] = useState(false);
   const [tamañoSala, setTamañoSala] = useState<'1v1' | '2v2' | '3v3'>('2v2');
   const [modoAlternado, setModoAlternado] = useState(true);
+  const [esRankeada, setEsRankeada] = useState(false);
   const [partidaGuardada, setPartidaGuardada] = useState<string | null>(null);
   const [googleAuthPending, setGoogleAuthPending] = useState(false);
+  const [monedas, setMonedas] = useState<number | null>(null);
+  const [recompensaDiaria, setRecompensaDiaria] = useState<{ yaReclamado: boolean; monedas: number; diasConsecutivos: number } | null>(null);
+  const [mostrarModalDiario, setMostrarModalDiario] = useState(false);
 
   // Auth state
   const [usuario, setUsuario] = useState<Usuario | null>(null);
@@ -174,10 +179,16 @@ function LobbyPageContent() {
                 // Actualizar usuario con datos frescos del servidor (avatar_url, etc.)
                 if (loginResult.usuario) {
                   setUsuario(loginResult.usuario);
+                  setMonedas(loginResult.usuario.monedas ?? 0);
                   sessionStorage.setItem('truco_usuario', JSON.stringify(loginResult.usuario));
                 }
                 if (loginResult.partidasActivas) {
                   setMisPartidas(loginResult.partidasActivas);
+                }
+                // Verificar recompensa diaria
+                if (loginResult.recompensaDiaria && !loginResult.recompensaDiaria.yaReclamado) {
+                  setRecompensaDiaria(loginResult.recompensaDiaria);
+                  setMostrarModalDiario(true);
                 }
               }
             }
@@ -349,11 +360,12 @@ function LobbyPageContent() {
 
     setLoading(true);
     try {
-      const mesaId = await socketService.crearPartida(nombre.trim(), tamañoSala, modoAlternado, false);
+      const mesaId = await socketService.crearPartida(nombre.trim(), tamañoSala, modoAlternado, false, esRankeada);
       if (mesaId) {
+        if (esRankeada && monedas !== null) setMonedas(monedas - 10);
         navigateToGame(mesaId);
       } else {
-        alert('Error al crear la partida');
+        alert('Error al crear la partida. Verificá que tengas monedas suficientes.');
       }
     } catch (error) {
       console.error('Error creating game:', error);
@@ -567,6 +579,12 @@ function LobbyPageContent() {
                   <div className="text-white font-bold">{usuario.apodo}</div>
                   <div className="text-celeste-400/60 text-xs">Jugador registrado</div>
                 </div>
+                {monedas !== null && (
+                  <div className="ml-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gold-500/15 border border-gold-500/30">
+                    <span className="text-gold-400 text-sm">&#x1FA99;</span>
+                    <span className="text-gold-300 font-bold text-sm">{monedas}</span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Link href="/tutorial" className="px-3 py-1.5 rounded-lg text-xs text-green-400/70 hover:text-green-300 hover:bg-green-500/10 transition-all">
@@ -800,11 +818,40 @@ function LobbyPageContent() {
             </div>
           )}
 
+          {/* Partida Rankeada (solo para usuarios registrados) */}
+          {usuario && (
+            <div className="mb-6">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={esRankeada}
+                    onChange={(e) => setEsRankeada(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-celeste-900/50 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-gold-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold-500"></div>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-white font-medium group-hover:text-gold-200 transition-colors">
+                    Partida Rankeada
+                  </span>
+                  <span className="text-white/60 text-xs">
+                    Entrada: 10 monedas por jugador. Recompensa mayor al ganar.
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
+
           {/* Botón crear */}
           <button
             onClick={handleCrearPartida}
-            disabled={loading || !nombre.trim()}
-            className="w-full text-white text-lg py-4 px-6 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-celeste-500 to-celeste-600 hover:from-celeste-400 hover:to-celeste-500 transition-all shadow-lg shadow-celeste-600/30 font-bold"
+            disabled={loading || !nombre.trim() || (esRankeada && (monedas ?? 0) < 10)}
+            className={`w-full text-white text-lg py-4 px-6 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg font-bold ${
+              esRankeada
+                ? 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 shadow-gold-500/30'
+                : 'bg-gradient-to-r from-celeste-500 to-celeste-600 hover:from-celeste-400 hover:to-celeste-500 shadow-celeste-600/30'
+            }`}
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -816,7 +863,7 @@ function LobbyPageContent() {
               </span>
             ) : (
               <span className="flex items-center justify-center gap-2">
-                Crear Partida {tamañoSala}
+                {esRankeada ? `Crear Rankeada ${tamañoSala} (10 monedas)` : `Crear Partida ${tamañoSala}`}
                 <ArrowIcon className="w-5 h-5" />
               </span>
             )}
@@ -927,6 +974,11 @@ function LobbyPageContent() {
                           <span className="px-2.5 py-0.5 bg-celeste-600/30 text-celeste-300 rounded-full text-xs font-medium">
                             {partida.tamañoSala}
                           </span>
+                          {partida.esRankeada && (
+                            <span className="px-2.5 py-0.5 bg-gold-500/20 text-gold-300 rounded-full text-xs font-bold">
+                              Rankeada
+                            </span>
+                          )}
 
                           {/* Estado */}
                           <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium flex items-center gap-1.5 ${
@@ -1177,6 +1229,44 @@ function LobbyPageContent() {
 
       {/* Modal de feedback */}
       <FeedbackModal isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+
+      {/* Modal de recompensa diaria */}
+      {mostrarModalDiario && recompensaDiaria && !recompensaDiaria.yaReclamado && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setMostrarModalDiario(false)}>
+          <div className="glass rounded-2xl p-8 max-w-sm w-full border border-gold-500/30 bg-gradient-to-b from-gold-900/20 to-transparent text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-5xl mb-4">&#x1FA99;</div>
+            <h3 className="font-[var(--font-cinzel)] text-2xl font-bold text-gold-400 mb-2">Recompensa Diaria</h3>
+            <p className="text-white/70 text-sm mb-1">
+              Racha: {recompensaDiaria.diasConsecutivos} {recompensaDiaria.diasConsecutivos === 1 ? 'dia' : 'dias'} consecutivos
+            </p>
+            <div className="flex items-center justify-center gap-2 my-4">
+              {[1,2,3,4,5,6,7].map(dia => (
+                <div key={dia} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                  dia <= recompensaDiaria.diasConsecutivos
+                    ? 'bg-gold-500 text-black'
+                    : 'bg-white/10 text-white/40'
+                }`}>
+                  {dia}
+                </div>
+              ))}
+            </div>
+            <p className="text-gold-300 text-3xl font-bold mb-6">+{recompensaDiaria.monedas} monedas</p>
+            <button
+              onClick={async () => {
+                const result = await socketService.reclamarRecompensaDiaria();
+                if (result.success) {
+                  setMonedas(result.balance);
+                  setRecompensaDiaria({ ...recompensaDiaria, yaReclamado: true });
+                }
+                setMostrarModalDiario(false);
+              }}
+              className="w-full py-3 rounded-xl font-bold text-lg bg-gradient-to-r from-gold-500 to-gold-600 text-black hover:from-gold-400 hover:to-gold-500 transition-all shadow-lg shadow-gold-500/30"
+            >
+              Reclamar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal invitar amigos */}
       {inviteModalMesaId && (

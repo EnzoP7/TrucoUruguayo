@@ -117,6 +117,15 @@ async function initDB() {
         PRIMARY KEY (usuario_id, cosmetico_id)
       );
 
+      CREATE TABLE IF NOT EXISTS historial_monedas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+        cantidad INTEGER NOT NULL,
+        motivo TEXT NOT NULL,
+        balance_despues INTEGER NOT NULL,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS sugerencias (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
@@ -135,6 +144,10 @@ async function initDB() {
     // Personalización de mesa (premium)
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN tema_mesa TEXT DEFAULT "clasico"'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN reverso_cartas TEXT DEFAULT "clasico"'); } catch { /* ya existe */ }
+    // Sistema de monedas
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN monedas INTEGER DEFAULT 0'); } catch { /* ya existe */ }
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN ultimo_login_recompensa TEXT DEFAULT NULL'); } catch { /* ya existe */ }
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN dias_consecutivos_login INTEGER DEFAULT 0'); } catch { /* ya existe */ }
     // Google Auth columns (sin UNIQUE porque SQLite no lo soporta en ALTER TABLE)
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN email TEXT'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN google_id TEXT'); } catch { /* ya existe */ }
@@ -759,7 +772,12 @@ async function comprarCosmetico(userId, cosmeticoId) {
     return { error: `Necesitas nivel ${cosmetico.nivel_requerido}` };
   }
 
-  // Por ahora no hay sistema de monedas, dar gratis si cumple nivel
+  // Verificar y descontar monedas
+  if (cosmetico.precio_monedas > 0) {
+    const gasto = await gastarMonedas(userId, cosmetico.precio_monedas, `cosmetico:${cosmeticoId}`);
+    if (gasto.error) return { error: gasto.error };
+  }
+
   // Desequipar otros del mismo tipo primero
   await db.execute({
     sql: `UPDATE usuario_cosmeticos SET equipado = 0
@@ -916,6 +934,88 @@ async function actualizarEstadoSugerencia(id, estado) {
   });
 }
 
+// ============ MONEDAS ============
+
+async function obtenerMonedas(userId) {
+  const result = await db.execute({
+    sql: 'SELECT monedas FROM usuarios WHERE id = ?',
+    args: [userId],
+  });
+  return result.rows[0]?.monedas ?? 0;
+}
+
+async function agregarMonedas(userId, cantidad, motivo) {
+  await db.execute({
+    sql: 'UPDATE usuarios SET monedas = monedas + ? WHERE id = ?',
+    args: [cantidad, userId],
+  });
+  const nuevoBalance = await obtenerMonedas(userId);
+  await db.execute({
+    sql: 'INSERT INTO historial_monedas (usuario_id, cantidad, motivo, balance_despues) VALUES (?, ?, ?, ?)',
+    args: [userId, cantidad, motivo, nuevoBalance],
+  });
+  return nuevoBalance;
+}
+
+async function gastarMonedas(userId, cantidad, motivo) {
+  const balanceActual = await obtenerMonedas(userId);
+  if (balanceActual < cantidad) {
+    return { error: `No tenés suficientes monedas (tenés ${balanceActual}, necesitás ${cantidad})` };
+  }
+  await db.execute({
+    sql: 'UPDATE usuarios SET monedas = monedas - ? WHERE id = ?',
+    args: [cantidad, userId],
+  });
+  const nuevoBalance = await obtenerMonedas(userId);
+  await db.execute({
+    sql: 'INSERT INTO historial_monedas (usuario_id, cantidad, motivo, balance_despues) VALUES (?, ?, ?, ?)',
+    args: [userId, -cantidad, motivo, nuevoBalance],
+  });
+  return { success: true, balance: nuevoBalance };
+}
+
+const RECOMPENSA_DIARIA = [15, 20, 25, 30, 35, 40, 50]; // día 1-7
+
+async function obtenerRecompensaDiaria(userId) {
+  const result = await db.execute({
+    sql: 'SELECT ultimo_login_recompensa, dias_consecutivos_login FROM usuarios WHERE id = ?',
+    args: [userId],
+  });
+  const usuario = result.rows[0];
+  if (!usuario) return { yaReclamado: true, monedas: 0, diasConsecutivos: 0 };
+
+  const hoy = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const ultimoReclamo = usuario.ultimo_login_recompensa;
+
+  if (ultimoReclamo === hoy) {
+    return { yaReclamado: true, monedas: 0, diasConsecutivos: Number(usuario.dias_consecutivos_login) };
+  }
+
+  // Calcular si es consecutivo
+  const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const esConsecutivo = ultimoReclamo === ayer;
+  const diasConsecutivos = esConsecutivo ? Math.min(Number(usuario.dias_consecutivos_login) + 1, 7) : 1;
+  const monedas = RECOMPENSA_DIARIA[diasConsecutivos - 1];
+
+  return { yaReclamado: false, monedas, diasConsecutivos };
+}
+
+async function reclamarRecompensaDiaria(userId) {
+  const info = await obtenerRecompensaDiaria(userId);
+  if (info.yaReclamado) {
+    return { success: false, error: 'Ya reclamaste tu recompensa hoy', diasConsecutivos: info.diasConsecutivos };
+  }
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  await db.execute({
+    sql: 'UPDATE usuarios SET ultimo_login_recompensa = ?, dias_consecutivos_login = ? WHERE id = ?',
+    args: [hoy, info.diasConsecutivos, userId],
+  });
+
+  const nuevoBalance = await agregarMonedas(userId, info.monedas, `recompensa_diaria:dia${info.diasConsecutivos}`);
+  return { success: true, monedas: info.monedas, balance: nuevoBalance, diasConsecutivos: info.diasConsecutivos };
+}
+
 module.exports = {
   db,
   initDB,
@@ -964,4 +1064,10 @@ module.exports = {
   crearSugerencia,
   obtenerSugerencias,
   actualizarEstadoSugerencia,
+  // Monedas
+  obtenerMonedas,
+  agregarMonedas,
+  gastarMonedas,
+  obtenerRecompensaDiaria,
+  reclamarRecompensaDiaria,
 };

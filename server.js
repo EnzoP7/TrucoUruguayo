@@ -3,7 +3,7 @@ const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
 const { Server: SocketIOServer } = require('socket.io');
-const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples, actualizarPersonalizacion, obtenerPersonalizacion, inicializarLogros, inicializarCosmeticos, obtenerEstadisticasDetalladas, actualizarEstadisticasDetalladas, verificarYDesbloquearLogros, obtenerLogrosUsuario, obtenerCosmeticosUsuario, comprarCosmetico, equiparCosmetico, obtenerCosmeticosEquipados } = require('./db');
+const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples, actualizarPersonalizacion, obtenerPersonalizacion, inicializarLogros, inicializarCosmeticos, obtenerEstadisticasDetalladas, actualizarEstadisticasDetalladas, verificarYDesbloquearLogros, obtenerLogrosUsuario, obtenerCosmeticosUsuario, comprarCosmetico, equiparCosmetico, obtenerCosmeticosEquipados, obtenerMonedas, agregarMonedas, gastarMonedas, obtenerRecompensaDiaria, reclamarRecompensaDiaria } = require('./db');
 const { registrar, login, loginConGoogle, vincularCuentaGoogle, agregarPassword } = require('./auth');
 const TrucoBot = require('./src/truco/bot/TrucoBot');
 
@@ -3693,6 +3693,7 @@ function broadcastLobby(io) {
       jugadoresNombres: room.jugadores.map(j => j.nombre), // Lista de nombres para reconexión
       modoAlternado: room.modoAlternado, // Pico a Pico
       modoAyuda: room.modoAyuda, // Modo ayuda para principiantes
+      esRankeada: room.esRankeada || false,
     }));
   io.to('lobby').emit('partidas-disponibles', partidas);
 }
@@ -3895,6 +3896,41 @@ app.prepare().then(async () => {
                 console.log(`[Logros] ${roomJugador.nombre} desbloqueó ${logrosDesbloqueados.length} logro(s)`);
               }
             }
+            // === MONEDAS ===
+            const tieneBotsEnPartida = room.jugadores.some(rj => rj.isBot);
+            const esRankeada = (room.esRankeada || false) && !tieneBotsEnPartida;
+            const recompensasCasual = { '1v1': 15, '2v2': 20, '3v3': 25 };
+            const recompensasRankeada = { '1v1': 30, '2v2': 40, '3v3': 50 };
+            let monedasGanadas = gano
+              ? (esRankeada ? recompensasRankeada : recompensasCasual)[room.tamañoSala] || 15
+              : 5;
+
+            // Bonus premium x1.5
+            const usuarioSocket = socketUsuarios.get(roomJugador?.socketId);
+            if (usuarioSocket?.es_premium) {
+              monedasGanadas = Math.floor(monedasGanadas * 1.5);
+            }
+
+            // Bonus racha
+            if (gano && estadisticasBasicas) {
+              if (Number(estadisticasBasicas.racha_actual) === 3) monedasGanadas += 15;
+              if (Number(estadisticasBasicas.racha_actual) === 5) monedasGanadas += 30;
+            }
+
+            const motivoMonedas = gano
+              ? `victoria_${esRankeada ? 'rankeada' : 'casual'}_${room.tamañoSala}`
+              : `participacion_${room.tamañoSala}`;
+            const nuevoBalance = await agregarMonedas(j.userId, monedasGanadas, motivoMonedas);
+
+            if (roomJugador?.socketId) {
+              io.to(roomJugador.socketId).emit('monedas-ganadas', {
+                cantidad: monedasGanadas,
+                balance: nuevoBalance,
+                motivo: motivoMonedas,
+              });
+            }
+            console.log(`[Monedas] ${roomJugador?.nombre || j.userId}: +${monedasGanadas} (${motivoMonedas}) → balance: ${nuevoBalance}`);
+
           } catch (err) {
             console.error(`[DB] Error actualizando stats detalladas para ${j.userId}:`, err);
           }
@@ -4021,6 +4057,9 @@ app.prepare().then(async () => {
       try {
         const result = await registrar(data.apodo, data.password);
         if (result.success) {
+          // Monedas de bienvenida
+          const balance = await agregarMonedas(result.usuario.id, 100, 'bienvenida');
+          result.usuario.monedas = balance;
           socketUsuarios.set(socket.id, result.usuario);
         }
         callback(result);
@@ -4038,6 +4077,9 @@ app.prepare().then(async () => {
       try {
         const result = await login(data.apodo, data.password);
         if (result.success) {
+          // Agregar monedas y recompensa diaria al resultado
+          result.usuario.monedas = await obtenerMonedas(result.usuario.id);
+          result.recompensaDiaria = await obtenerRecompensaDiaria(result.usuario.id);
           socketUsuarios.set(socket.id, result.usuario);
 
           // Buscar partidas activas del usuario
@@ -4086,6 +4128,8 @@ app.prepare().then(async () => {
 
         const result = await loginConGoogle(googleId, email, nombre, avatarUrl);
         if (result.success) {
+          result.usuario.monedas = await obtenerMonedas(result.usuario.id);
+          result.recompensaDiaria = await obtenerRecompensaDiaria(result.usuario.id);
           socketUsuarios.set(socket.id, result.usuario);
 
           // Buscar partidas activas del usuario (mismo código que login normal)
@@ -4159,6 +4203,34 @@ app.prepare().then(async () => {
       } catch (err) {
         console.error('[Auth] Error agregar-password:', err);
         callback({ success: false, error: 'Error interno del servidor' });
+      }
+    });
+
+    // === MONEDAS ===
+    socket.on('obtener-monedas', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario?.id) return callback({ success: false, error: 'No autenticado' });
+        const monedas = await obtenerMonedas(usuario.id);
+        callback({ success: true, monedas });
+      } catch (err) {
+        console.error('[Monedas] Error obtener-monedas:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('reclamar-recompensa-diaria', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario?.id) return callback({ success: false, error: 'No autenticado' });
+        const resultado = await reclamarRecompensaDiaria(usuario.id);
+        if (resultado.success) {
+          usuario.monedas = resultado.balance;
+        }
+        callback(resultado);
+      } catch (err) {
+        console.error('[Monedas] Error reclamar-recompensa-diaria:', err);
+        callback({ success: false, error: 'Error interno' });
       }
     });
 
@@ -4533,17 +4605,30 @@ app.prepare().then(async () => {
     });
 
     // === CREAR PARTIDA ===
-    socket.on('crear-partida', (data, callback) => {
+    socket.on('crear-partida', async (data, callback) => {
       if (!checkRateLimit(socket.id, 'crear-partida')) {
         return callback({ success: false, error: 'Estás creando partidas muy rápido. Esperá un momento.' });
       }
       console.log(`[Socket.IO] ${socket.id} crear-partida:`, data);
       try {
-        const { nombre, tamañoSala = '2v2', modoAlternado = true, modoAyuda = false, esPractica = false } = data;
+        const { nombre, tamañoSala = '2v2', modoAlternado = true, modoAyuda = false, esPractica = false, esRankeada = false } = data;
+
+        // Si es rankeada, verificar y cobrar monedas al creador
+        const usuarioCreador = socketUsuarios.get(socket.id);
+        if (esRankeada && !esPractica) {
+          if (!usuarioCreador?.id) {
+            return callback(false, 'Necesitás una cuenta para jugar partidas rankeadas');
+          }
+          const gasto = await gastarMonedas(usuarioCreador.id, 10, 'entrada_rankeada');
+          if (gasto.error) {
+            return callback(false, gasto.error);
+          }
+          usuarioCreador.monedas = gasto.balance;
+        }
+
         const mesaId = `mesa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const maxJugadores = getMaxJugadores(tamañoSala);
 
-        const usuarioCreador = socketUsuarios.get(socket.id);
         const room = {
           mesaId,
           jugadores: [{ socketId: socket.id, nombre, userId: usuarioCreador?.id || null, es_premium: usuarioCreador?.es_premium || false }],
@@ -4554,8 +4639,9 @@ app.prepare().then(async () => {
           creadorSocketId: socket.id,
           modoAlternado,
           modoAyuda,
-          esPractica, // Flag para partidas de práctica (no guardan estadísticas)
-          inicioPartida: null, // timestamp para calcular duración
+          esPractica,
+          esRankeada: esRankeada && !esPractica,
+          inicioPartida: null,
         };
         lobbyRooms.set(mesaId, room);
 
@@ -4579,6 +4665,7 @@ app.prepare().then(async () => {
           jugadoresNombres: room.jugadores.map(j => j.nombre),
           modoAlternado: room.modoAlternado,
           modoAyuda: room.modoAyuda,
+          esRankeada: room.esRankeada,
         });
         broadcastLobby(io);
 
@@ -4590,7 +4677,7 @@ app.prepare().then(async () => {
     });
 
     // === ELIMINAR/CANCELAR PARTIDA ===
-    socket.on('eliminar-partida', (data, callback) => {
+    socket.on('eliminar-partida', async (data, callback) => {
       console.log(`[Socket.IO] ${socket.id} eliminar-partida:`, data);
       try {
         const { mesaId, nombre } = data;
@@ -4619,6 +4706,16 @@ app.prepare().then(async () => {
           mensaje: 'La partida fue cancelada por el creador'
         });
 
+        // Devolver monedas si es partida rankeada
+        if (room.esRankeada) {
+          for (const p of room.jugadores) {
+            if (p.userId) {
+              const nuevoBalance = await agregarMonedas(p.userId, 10, 'devolucion_rankeada_cancelada');
+              io.to(p.socketId).emit('monedas-ganadas', { cantidad: 10, balance: nuevoBalance, motivo: 'devolucion_rankeada_cancelada' });
+            }
+          }
+        }
+
         // Mover a todos los jugadores de vuelta al lobby
         room.jugadores.forEach(p => {
           const playerSocket = io.sockets.sockets.get(p.socketId);
@@ -4644,7 +4741,7 @@ app.prepare().then(async () => {
     });
 
     // === UNIRSE A PARTIDA ===
-    socket.on('unirse-partida', (data, callback) => {
+    socket.on('unirse-partida', async (data, callback) => {
       try {
         const { mesaId, nombre } = data;
         const room = lobbyRooms.get(mesaId);
@@ -4710,6 +4807,20 @@ app.prepare().then(async () => {
         if (room.jugadores.length >= room.maxJugadores) { callback(false, 'La partida está llena'); return; }
 
         const usuarioAuth = socketUsuarios.get(socket.id);
+
+        // Cobrar monedas si es partida rankeada
+        if (room.esRankeada) {
+          if (!usuarioAuth?.id) {
+            callback(false, 'Necesitás una cuenta para jugar partidas rankeadas');
+            return;
+          }
+          const gasto = await gastarMonedas(usuarioAuth.id, 10, 'entrada_rankeada');
+          if (gasto.error) {
+            callback(false, gasto.error);
+            return;
+          }
+          usuarioAuth.monedas = gasto.balance;
+        }
         room.jugadores.push({ socketId: socket.id, nombre, userId: usuarioAuth?.id || null, es_premium: usuarioAuth?.es_premium || false });
 
         const halfPoint = Math.ceil(room.maxJugadores / 2);
@@ -4897,6 +5008,7 @@ app.prepare().then(async () => {
         const { dificultad = 'medio', equipo: equipoSolicitado } = data || {};
         const room = findRoomBySocket(socket.id);
         if (!room) { callback({ success: false, error: 'No estás en ninguna partida' }); return; }
+        if (room.esRankeada) { callback({ success: false, error: 'No se pueden agregar bots en partidas rankeadas' }); return; }
         if (room.jugadores[0].socketId !== socket.id) { callback({ success: false, error: 'Solo el anfitrión puede agregar bots' }); return; }
         if (room.estado !== 'esperando') { callback({ success: false, error: 'La partida ya comenzó' }); return; }
         if (room.jugadores.length >= room.maxJugadores) { callback({ success: false, error: 'La partida está llena' }); return; }
@@ -4973,6 +5085,7 @@ app.prepare().then(async () => {
         const { dificultad = 'medio' } = data || {};
         const room = findRoomBySocket(socket.id);
         if (!room) { callback({ success: false, error: 'No estás en ninguna partida' }); return; }
+        if (room.esRankeada) { callback({ success: false, error: 'No se pueden agregar bots en partidas rankeadas' }); return; }
         if (room.jugadores[0].socketId !== socket.id) { callback({ success: false, error: 'Solo el anfitrión puede agregar bots' }); return; }
         if (room.estado !== 'esperando') { callback({ success: false, error: 'La partida ya comenzó' }); return; }
 

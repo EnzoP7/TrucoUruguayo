@@ -829,6 +829,7 @@ function GamePage() {
   const [conectado, setConectado] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [monedasGanadas, setMonedasGanadas] = useState<{ cantidad: number; balance: number; motivo: string } | null>(null);
   const [esperandoInicio, setEsperandoInicio] = useState(true);
   const [cutAnimating, setCutAnimating] = useState(false);
   const [cutPosition, setCutPosition] = useState<number | null>(null);
@@ -1310,6 +1311,14 @@ function GamePage() {
           setTimeout(() => {
             if (mounted) setMensaje(null);
           }, 10000);
+        });
+
+        socketService.onMonedasGanadas((data) => {
+          if (!mounted) return;
+          setMonedasGanadas(data);
+          setTimeout(() => {
+            if (mounted) setMonedasGanadas(null);
+          }, 8000);
         });
 
         socketService.onJugadorAlMazo((data) => {
@@ -3432,6 +3441,19 @@ function GamePage() {
       {mensaje && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 toast px-6 py-3 rounded-xl animate-slide-down">
           <span className="text-gold-300 font-bold text-lg">{mensaje}</span>
+        </div>
+      )}
+
+      {/* Notificación de monedas ganadas */}
+      {monedasGanadas && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl animate-slide-down bg-gradient-to-r from-gold-600/90 to-gold-500/90 backdrop-blur-sm border border-gold-400/50 shadow-lg shadow-gold-500/30">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">&#x1FA99;</span>
+            <div>
+              <span className="text-black font-bold text-lg">+{monedasGanadas.cantidad} monedas</span>
+              <span className="text-black/60 text-sm ml-2">Balance: {monedasGanadas.balance}</span>
+            </div>
+          </div>
         </div>
       )}
 

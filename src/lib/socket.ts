@@ -119,10 +119,10 @@ class SocketService {
     });
   }
 
-  async crearPartida(nombre: string, tamañoSala?: '1v1' | '2v2' | '3v3', modoAlternado?: boolean, modoAyuda?: boolean): Promise<string | null> {
+  async crearPartida(nombre: string, tamañoSala?: '1v1' | '2v2' | '3v3', modoAlternado?: boolean, modoAyuda?: boolean, esRankeada?: boolean): Promise<string | null> {
     if (!this.socket) return null;
     return new Promise((resolve) => {
-      this.socket!.emit('crear-partida', { nombre, tamañoSala, modoAlternado, modoAyuda }, (success, mesaId) => {
+      this.socket!.emit('crear-partida', { nombre, tamañoSala, modoAlternado, modoAyuda, esRankeada }, (success, mesaId) => {
         resolve(success ? mesaId || null : null);
       });
     });
@@ -620,6 +620,29 @@ class SocketService {
     this.socket?.on('juego-finalizado', callback);
   }
 
+  // === MONEDAS ===
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async obtenerMonedas(): Promise<{ success: boolean; monedas?: number }> {
+    if (!this.socket) return { success: false };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-monedas' as any, (result: any) => resolve(result));
+    });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async reclamarRecompensaDiaria(): Promise<any> {
+    if (!this.socket) return { success: false };
+    return new Promise((resolve) => {
+      this.socket!.emit('reclamar-recompensa-diaria' as any, (result: any) => resolve(result));
+    });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onMonedasGanadas(callback: (data: { cantidad: number; balance: number; motivo: string }) => void): void {
+    this.socket?.on('monedas-ganadas' as any, callback);
+  }
+
   onJugadorAlMazo(callback: (data: any) => void): void {
     this.socket?.on('jugador-al-mazo', callback);
   }
@@ -698,7 +721,8 @@ class SocketService {
       'flor-cantada', 'flor-resuelta',
       'tirar-reyes-resultado',
       'perros-echados', 'perros-cancelados', 'perros-respondidos',
-      'mensaje-recibido'
+      'mensaje-recibido',
+      'monedas-ganadas'
     ];
     events.forEach(e => this.socket?.off(e));
   }

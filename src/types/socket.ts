@@ -6,7 +6,7 @@ export interface ClientToServerEvents {
   'join-lobby': (callback: (success: boolean, message?: string) => void) => void;
 
   // Partidas
-  'crear-partida': (data: { nombre: string; tamañoSala?: '1v1' | '2v2' | '3v3'; modoAlternado?: boolean; modoAyuda?: boolean; esPractica?: boolean }, callback: (success: boolean, mesaId?: string) => void) => void;
+  'crear-partida': (data: { nombre: string; tamañoSala?: '1v1' | '2v2' | '3v3'; modoAlternado?: boolean; modoAyuda?: boolean; esPractica?: boolean; esRankeada?: boolean }, callback: (success: boolean, mesaId?: string) => void) => void;
   'unirse-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
   'iniciar-partida': (callback: (success: boolean, message?: string) => void) => void;
   'reconectar-partida': (data: { mesaId: string; nombre: string; userId?: number }, callback: (success: boolean, message?: string) => void) => void;
@@ -88,6 +88,8 @@ export interface ServerToClientEvents {
   'invitacion-recibida': (data: { de: string; deUserId: number; mesaId: string; tamañoSala: string }) => void;
   // Chat
   'mensaje-recibido': (data: { jugadorId: string; jugadorNombre: string; equipo: number; mensaje: string; tipo: 'general' | 'equipo'; timestamp: number }) => void;
+  // Monedas
+  'monedas-ganadas': (data: { cantidad: number; balance: number; motivo: string }) => void;
 }
 
 // Types for step-by-step envido
