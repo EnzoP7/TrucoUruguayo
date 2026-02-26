@@ -3,7 +3,7 @@ const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
 const { Server: SocketIOServer } = require('socket.io');
-const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples, actualizarPersonalizacion, obtenerPersonalizacion, inicializarLogros, inicializarCosmeticos, obtenerEstadisticasDetalladas, actualizarEstadisticasDetalladas, verificarYDesbloquearLogros, obtenerLogrosUsuario, obtenerCosmeticosUsuario, comprarCosmetico, equiparCosmetico, obtenerCosmeticosEquipados, obtenerMonedas, agregarMonedas, gastarMonedas, obtenerRecompensaDiaria, reclamarRecompensaDiaria } = require('./db');
+const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples, actualizarPersonalizacion, obtenerPersonalizacion, inicializarLogros, inicializarCosmeticos, obtenerEstadisticasDetalladas, actualizarEstadisticasDetalladas, verificarYDesbloquearLogros, obtenerLogrosUsuario, obtenerCosmeticosUsuario, comprarCosmetico, equiparCosmetico, obtenerCosmeticosEquipados, obtenerMonedas, agregarMonedas, gastarMonedas, obtenerRecompensaDiaria, reclamarRecompensaDiaria, verificarExpiracionPremium, obtenerEstadoPremium } = require('./db');
 const { registrar, login, loginConGoogle, vincularCuentaGoogle, agregarPassword } = require('./auth');
 const TrucoBot = require('./src/truco/bot/TrucoBot');
 
@@ -4097,6 +4097,16 @@ app.prepare().then(async () => {
       try {
         const result = await login(data.apodo, data.password);
         if (result.success) {
+          // Verificar si el premium expiro
+          if (result.usuario.es_premium) {
+            const estadoPremium = await verificarExpiracionPremium(result.usuario.id);
+            if (estadoPremium.expirado) {
+              result.usuario.es_premium = false;
+              result.usuario.premium_expira = null;
+            } else {
+              result.usuario.premium_expira = estadoPremium.premium_expira || null;
+            }
+          }
           // Agregar monedas y recompensa diaria al resultado
           result.usuario.monedas = await obtenerMonedas(result.usuario.id);
           result.recompensaDiaria = await obtenerRecompensaDiaria(result.usuario.id);
@@ -4148,6 +4158,16 @@ app.prepare().then(async () => {
 
         const result = await loginConGoogle(googleId, email, nombre, avatarUrl);
         if (result.success) {
+          // Verificar si el premium expiro
+          if (result.usuario.es_premium) {
+            const estadoPremium = await verificarExpiracionPremium(result.usuario.id);
+            if (estadoPremium.expirado) {
+              result.usuario.es_premium = false;
+              result.usuario.premium_expira = null;
+            } else {
+              result.usuario.premium_expira = estadoPremium.premium_expira || null;
+            }
+          }
           result.usuario.monedas = await obtenerMonedas(result.usuario.id);
           result.recompensaDiaria = await obtenerRecompensaDiaria(result.usuario.id);
           socketUsuarios.set(socket.id, result.usuario);
@@ -4355,6 +4375,18 @@ app.prepare().then(async () => {
       }
     });
 
+    socket.on('obtener-estado-premium', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario?.id) return callback({ success: false, error: 'No autenticado' });
+        const estado = await obtenerEstadoPremium(usuario.id);
+        callback({ success: true, ...estado });
+      } catch (err) {
+        console.error('[Premium] Error obtener-estado-premium:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
     socket.on('eliminar-audio-custom', async (data, callback) => {
       try {
         const usuario = socketUsuarios.get(socket.id);
@@ -4374,6 +4406,14 @@ app.prepare().then(async () => {
       'azul': 'mesa_noche',
       'rojo': 'mesa_rojo',
       'dorado': 'mesa_dorado',
+    };
+    // Mapeo inverso: cosmético ID → nombre de tema para sincronizar usuarios table
+    const reverseMapeoTemas = Object.fromEntries(Object.entries(mapeoTemas).map(([k, v]) => [v, k]));
+    const reverseMapeoReversos = {
+      'reverso_clasico': 'clasico',
+      'reverso_azul': 'azul',
+      'reverso_rojo': 'rojo',
+      'reverso_dorado': 'dorado',
     };
     const mapeoReversos = {
       'clasico': 'reverso_clasico',
@@ -4502,6 +4542,17 @@ app.prepare().then(async () => {
         if (resultado.error) {
           callback({ success: false, error: resultado.error });
         } else {
+          // Sincronizar columnas de personalización si es tema/reverso
+          const cosmeticoId = data.cosmeticoId;
+          if (reverseMapeoTemas[cosmeticoId]) {
+            const temaNombre = reverseMapeoTemas[cosmeticoId];
+            await actualizarPersonalizacion(usuario.id, temaNombre, usuario.reverso_cartas || 'clasico');
+            usuario.tema_mesa = temaNombre;
+          } else if (reverseMapeoReversos[cosmeticoId]) {
+            const reversoNombre = reverseMapeoReversos[cosmeticoId];
+            await actualizarPersonalizacion(usuario.id, usuario.tema_mesa || 'clasico', reversoNombre);
+            usuario.reverso_cartas = reversoNombre;
+          }
           callback({ success: true, cosmetico: resultado.cosmetico });
         }
       } catch (err) {
@@ -4518,6 +4569,17 @@ app.prepare().then(async () => {
         if (resultado.error) {
           callback({ success: false, error: resultado.error });
         } else {
+          // Sincronizar columnas de personalización en usuarios si es tema/reverso
+          const cosmeticoId = data.cosmeticoId;
+          if (reverseMapeoTemas[cosmeticoId]) {
+            const temaNombre = reverseMapeoTemas[cosmeticoId];
+            await actualizarPersonalizacion(usuario.id, temaNombre, usuario.reverso_cartas || 'clasico');
+            usuario.tema_mesa = temaNombre;
+          } else if (reverseMapeoReversos[cosmeticoId]) {
+            const reversoNombre = reverseMapeoReversos[cosmeticoId];
+            await actualizarPersonalizacion(usuario.id, usuario.tema_mesa || 'clasico', reversoNombre);
+            usuario.reverso_cartas = reversoNombre;
+          }
           callback({ success: true });
         }
       } catch (err) {

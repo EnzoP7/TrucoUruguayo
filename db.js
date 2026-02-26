@@ -136,6 +136,30 @@ async function initDB() {
         estado TEXT DEFAULT 'pendiente',
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS pagos_premium (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+        payment_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        monto REAL NOT NULL,
+        moneda TEXT DEFAULT 'UYU',
+        premium_inicio TEXT NOT NULL,
+        premium_expira TEXT NOT NULL,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS pagos_monedas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+        payment_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        monto REAL NOT NULL,
+        moneda TEXT DEFAULT 'UYU',
+        monedas_compradas INTEGER NOT NULL,
+        pack_id TEXT NOT NULL,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // Agregar columnas nuevas a usuarios (ignorar si ya existen)
@@ -148,6 +172,10 @@ async function initDB() {
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN monedas INTEGER DEFAULT 0'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN ultimo_login_recompensa TEXT DEFAULT NULL'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN dias_consecutivos_login INTEGER DEFAULT 0'); } catch { /* ya existe */ }
+    // Premium con expiracion
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN premium_inicio TEXT DEFAULT NULL'); } catch { /* ya existe */ }
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN premium_expira TEXT DEFAULT NULL'); } catch { /* ya existe */ }
+    try { await db.execute('ALTER TABLE usuarios ADD COLUMN mercadopago_payment_id TEXT DEFAULT NULL'); } catch { /* ya existe */ }
     // Google Auth columns (sin UNIQUE porque SQLite no lo soporta en ALTER TABLE)
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN email TEXT'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN google_id TEXT'); } catch { /* ya existe */ }
@@ -248,6 +276,75 @@ async function setPremium(userId, isPremium) {
     sql: 'UPDATE usuarios SET es_premium = ? WHERE id = ?',
     args: [isPremium ? 1 : 0, userId],
   });
+}
+
+async function activarPremium(userId, paymentId, dias = 30, monto = 0, moneda = 'UYU') {
+  const ahora = new Date();
+  const expira = new Date(ahora.getTime() + dias * 24 * 60 * 60 * 1000);
+  const premiumInicio = ahora.toISOString();
+  const premiumExpira = expira.toISOString();
+
+  await db.execute({
+    sql: `UPDATE usuarios SET es_premium = 1, premium_inicio = ?, premium_expira = ?, mercadopago_payment_id = ? WHERE id = ?`,
+    args: [premiumInicio, premiumExpira, paymentId, userId],
+  });
+
+  await db.execute({
+    sql: `INSERT INTO pagos_premium (usuario_id, payment_id, status, monto, moneda, premium_inicio, premium_expira) VALUES (?, ?, 'approved', ?, ?, ?, ?)`,
+    args: [userId, paymentId, monto, moneda, premiumInicio, premiumExpira],
+  });
+
+  return { success: true, premium_inicio: premiumInicio, premium_expira: premiumExpira };
+}
+
+async function verificarExpiracionPremium(userId) {
+  const result = await db.execute({
+    sql: 'SELECT es_premium, premium_expira FROM usuarios WHERE id = ?',
+    args: [userId],
+  });
+  if (result.rows.length === 0) return { expirado: false };
+
+  const usuario = result.rows[0];
+  if (!usuario.es_premium) return { expirado: false, es_premium: false };
+  if (!usuario.premium_expira) return { expirado: false, es_premium: true };
+
+  const ahora = new Date();
+  const expira = new Date(usuario.premium_expira);
+
+  if (ahora > expira) {
+    // Premium expirado - desactivar
+    await db.execute({
+      sql: 'UPDATE usuarios SET es_premium = 0 WHERE id = ?',
+      args: [userId],
+    });
+    return { expirado: true, es_premium: false };
+  }
+
+  return { expirado: false, es_premium: true, premium_expira: usuario.premium_expira };
+}
+
+async function obtenerEstadoPremium(userId) {
+  const result = await db.execute({
+    sql: 'SELECT es_premium, premium_inicio, premium_expira FROM usuarios WHERE id = ?',
+    args: [userId],
+  });
+  if (result.rows.length === 0) return { es_premium: false };
+
+  const usuario = result.rows[0];
+  let diasRestantes = 0;
+
+  if (usuario.premium_expira) {
+    const ahora = new Date();
+    const expira = new Date(usuario.premium_expira);
+    diasRestantes = Math.max(0, Math.ceil((expira.getTime() - ahora.getTime()) / (24 * 60 * 60 * 1000)));
+  }
+
+  return {
+    es_premium: !!usuario.es_premium,
+    premium_inicio: usuario.premium_inicio || null,
+    premium_expira: usuario.premium_expira || null,
+    dias_restantes: diasRestantes,
+  };
 }
 
 async function actualizarAvatarUrl(userId, url) {
@@ -974,6 +1071,34 @@ async function gastarMonedas(userId, cantidad, motivo) {
   return { success: true, balance: nuevoBalance };
 }
 
+// ============ PAGOS DE MONEDAS ============
+
+const COIN_PACKS = {
+  'pack_500': { monedas: 500, precio: 49, nombre: 'Basico' },
+  'pack_1200': { monedas: 1200, precio: 99, nombre: 'Popular' },
+  'pack_3000': { monedas: 3000, precio: 199, nombre: 'Mejor Valor' },
+  'pack_7500': { monedas: 7500, precio: 399, nombre: 'Mega Pack' },
+};
+
+async function procesarPagoMonedas(userId, paymentId, packId, monto, moneda) {
+  const pack = COIN_PACKS[packId];
+  if (!pack) {
+    return { error: 'Pack no encontrado' };
+  }
+
+  // Registrar el pago
+  await db.execute({
+    sql: `INSERT INTO pagos_monedas (usuario_id, payment_id, status, monto, moneda, monedas_compradas, pack_id) VALUES (?, ?, 'approved', ?, ?, ?, ?)`,
+    args: [userId, paymentId, monto, moneda, pack.monedas, packId],
+  });
+
+  // Agregar las monedas al usuario
+  const nuevoBalance = await agregarMonedas(userId, pack.monedas, `compra:${packId}:${paymentId}`);
+
+  console.log(`[DB] Pago monedas procesado: userId=${userId}, pack=${packId}, monedas=${pack.monedas}, balance=${nuevoBalance}`);
+  return { success: true, monedas: pack.monedas, balance: nuevoBalance };
+}
+
 const RECOMPENSA_DIARIA = [15, 20, 25, 30, 35, 40, 50]; // día 1-7
 
 async function obtenerRecompensaDiaria(userId) {
@@ -1070,4 +1195,11 @@ module.exports = {
   gastarMonedas,
   obtenerRecompensaDiaria,
   reclamarRecompensaDiaria,
+  // Premium con pagos
+  activarPremium,
+  verificarExpiracionPremium,
+  obtenerEstadoPremium,
+  // Pagos de monedas
+  COIN_PACKS,
+  procesarPagoMonedas,
 };

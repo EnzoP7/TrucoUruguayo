@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import socketService from '@/lib/socket';
 import { useUploadThing } from '@/lib/uploadthing';
+import { RewardedAd } from '@/components/ads';
 
 interface Stats {
   partidas_jugadas: number;
@@ -115,6 +116,8 @@ export default function PerfilPage() {
 
   // Premium state
   const [esPremium, setEsPremium] = useState(false);
+  const [diasRestantesPremium, setDiasRestantesPremium] = useState(0);
+  const [cargandoPago, setCargandoPago] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [audiosCustom, setAudiosCustom] = useState<AudioCustom[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -142,6 +145,11 @@ export default function PerfilPage() {
   const [cosmeticos, setCosmeticos] = useState<Cosmetico[]>([]);
   const [comprando, setComprando] = useState<string | null>(null);
   const [equipando, setEquipando] = useState<string | null>(null);
+  const [monedas, setMonedas] = useState<number | null>(null);
+  const [mostrarRewardedAd, setMostrarRewardedAd] = useState(false);
+  const [videosRestantes, setVideosRestantes] = useState<number | null>(null);
+  const [videoCooldown, setVideoCooldown] = useState(0);
+  const [comprandoPack, setComprandoPack] = useState<string | null>(null);
 
   // Refs for dynamic headers in UploadThing hooks
   const uploadTipoRef = useRef<string>('');
@@ -227,6 +235,13 @@ export default function PerfilPage() {
           setAudiosCustom(result.audiosCustom || []);
         }
 
+        // Cargar estado premium con expiracion
+        const premiumResult = await socketService.obtenerEstadoPremium();
+        if (premiumResult.success) {
+          setEsPremium(!!premiumResult.es_premium);
+          setDiasRestantesPremium(premiumResult.dias_restantes || 0);
+        }
+
         const amigosResult = await socketService.obtenerAmigos();
         if (amigosResult.success) {
           setAmigos(amigosResult.amigos);
@@ -259,6 +274,19 @@ export default function PerfilPage() {
         if (cosmeticosResult.success) {
           setCosmeticos(cosmeticosResult.cosmeticos || []);
         }
+
+        // Cargar monedas y estado de videos
+        const monedasResult = await socketService.obtenerMonedas();
+        if (monedasResult.success) {
+          setMonedas(monedasResult.monedas ?? 0);
+        }
+        const videosResult = await socketService.obtenerEstadoVideos();
+        if (videosResult.success) {
+          setVideosRestantes(videosResult.videosRestantes ?? 0);
+          if (videosResult.cooldownRestante && videosResult.cooldownRestante > 0) {
+            setVideoCooldown(videosResult.cooldownRestante);
+          }
+        }
       } catch (err) {
         console.error('Error cargando perfil:', err);
       } finally {
@@ -268,6 +296,18 @@ export default function PerfilPage() {
 
     cargarPerfil();
   }, []);
+
+  // Cooldown timer para rewarded ads
+  useEffect(() => {
+    if (videoCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setVideoCooldown(prev => {
+        if (prev <= 1) { clearInterval(timer); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [videoCooldown]);
 
   const handleBuscar = async () => {
     if (!busqueda.trim()) return;
@@ -318,6 +358,58 @@ export default function PerfilPage() {
     }
   };
 
+  const handleComprarPremium = async () => {
+    const userId = getUserId();
+    if (!userId) return alert('Debes estar logueado para comprar premium');
+    setCargandoPago(true);
+    try {
+      const res = await fetch('/api/payments/premium', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      if (data.init_point) {
+        window.location.href = data.init_point;
+      }
+    } catch (err) {
+      console.error('Error creando pago:', err);
+      alert('Error al conectar con MercadoPago. Intenta de nuevo.');
+    } finally {
+      setCargandoPago(false);
+    }
+  };
+
+  const handleComprarPack = async (packId: string) => {
+    const userId = getUserId();
+    if (!userId) return alert('Debes estar logueado para comprar monedas');
+    setComprandoPack(packId);
+    try {
+      const res = await fetch('/api/payments/monedas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, packId }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      if (data.init_point) {
+        window.location.href = data.init_point;
+      }
+    } catch (err) {
+      console.error('Error creando pago de monedas:', err);
+      alert('Error al conectar con MercadoPago. Intenta de nuevo.');
+    } finally {
+      setComprandoPack(null);
+    }
+  };
+
   const handleGuardarPersonalizacion = async () => {
     setGuardandoPersonalizacion(true);
     console.log('[Perfil] Guardando personalizacion:', { temaMesa, reversoCartas, connected: socketService.connected() });
@@ -363,8 +455,12 @@ export default function PerfilPage() {
           }
           return c;
         }));
+        // Actualizar balance de monedas
+        if (cosmeticoComprado && monedas !== null) {
+          setMonedas(monedas - cosmeticoComprado.precio_monedas);
+        }
       } else {
-        console.error('Error comprando:', result.error);
+        alert(result.error || 'Error al comprar cosmético');
       }
     } catch (err) {
       console.error('Error comprando cosmético:', err);
@@ -612,18 +708,44 @@ export default function PerfilPage() {
             </div>
           </div>
 
-          {/* Toggle Premium (dev) */}
+          {/* Premium */}
           <div className="mt-4 pt-4 border-t border-gold-800/20">
-            <button
-              onClick={handleTogglePremium}
-              className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${
-                esPremium
-                  ? 'bg-yellow-600/30 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-600/40'
-                  : 'bg-gray-600/30 text-gray-300 border border-gray-500/20 hover:bg-gray-600/40'
-              }`}
-            >
-              {esPremium ? 'Desactivar Premium (dev)' : 'Activar Premium (dev)'}
-            </button>
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Boton dev toggle */}
+              <button
+                onClick={handleTogglePremium}
+                className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${
+                  esPremium
+                    ? 'bg-yellow-600/30 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-600/40'
+                    : 'bg-gray-600/30 text-gray-300 border border-gray-500/20 hover:bg-gray-600/40'
+                }`}
+              >
+                {esPremium ? 'Desactivar Premium (dev)' : 'Activar Premium (dev)'}
+              </button>
+
+              {/* Boton comprar premium con MercadoPago */}
+              {!esPremium ? (
+                <button
+                  onClick={handleComprarPremium}
+                  disabled={cargandoPago}
+                  className="px-5 py-2 rounded-lg text-sm font-bold transition-all bg-gradient-to-r from-gold-500 to-gold-600 text-black hover:from-gold-400 hover:to-gold-500 shadow-lg shadow-gold-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {cargandoPago ? 'Redirigiendo...' : '\u{1F451} Comprar Pase Premium - 30 dias'}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold-500/15 border border-gold-500/30">
+                  <span className="text-gold-400 text-sm">{'\u{1F451}'}</span>
+                  <div>
+                    <div className="text-gold-300 text-sm font-bold">Premium activo</div>
+                    {diasRestantesPremium > 0 && (
+                      <div className="text-gold-500/60 text-xs">
+                        {diasRestantesPremium} {diasRestantesPremium === 1 ? 'dia' : 'dias'} restantes
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1038,118 +1160,217 @@ export default function PerfilPage() {
 
         {/* Tienda (tab tienda) */}
         {tab === 'tienda' && (
-          <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gold-300 font-bold">Tienda de Cosméticos</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-purple-400 font-medium">Nivel {nivel}</span>
+          <div className="space-y-4">
+            {/* Header con balance */}
+            <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-gold-300 font-bold text-lg">Tienda</h3>
+                <span className="text-purple-400 font-medium text-sm">Nivel {nivel}</span>
+              </div>
+
+              {/* Balance de monedas */}
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-gold-500/10 border border-gold-500/20">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">&#x1FA99;</span>
+                  <div>
+                    <div className="text-gold-300 font-bold text-xl">{monedas ?? 0}</div>
+                    <div className="text-gold-500/50 text-xs">monedas disponibles</div>
+                  </div>
+                </div>
+                <div className="ml-auto flex items-center gap-2">
+                  {!esPremium && videosRestantes !== null && videosRestantes > 0 && (
+                    <button
+                      onClick={() => setMostrarRewardedAd(true)}
+                      disabled={videoCooldown > 0}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        videoCooldown > 0
+                          ? 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
+                          : 'bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25'
+                      }`}
+                    >
+                      <span>&#x1F4FA;</span>
+                      {videoCooldown > 0 ? <span>{videoCooldown}s</span> : <span>+75</span>}
+                    </button>
+                  )}
+                  {!esPremium && videosRestantes === 0 && (
+                    <span className="text-white/30 text-xs">Videos agotados hoy</span>
+                  )}
+                </div>
               </div>
             </div>
 
-            <p className="text-gold-500/40 text-xs mb-6">
-              Desbloquea cosméticos subiendo de nivel. Los elementos premium requieren ser usuario premium.
-            </p>
+            {/* Packs de monedas */}
+            <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20">
+              <h4 className="text-gold-400/80 font-medium mb-1">Packs de Monedas</h4>
+              <p className="text-gold-500/40 text-xs mb-4">Compra monedas para desbloquear cosmeticos mas rapido.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { id: 'pack_500', nombre: 'Basico', monedas: 500, precio: '$49', bonus: null },
+                  { id: 'pack_1200', nombre: 'Popular', monedas: 1200, precio: '$99', bonus: '+20%' },
+                  { id: 'pack_3000', nombre: 'Mejor Valor', monedas: 3000, precio: '$199', bonus: '+50%' },
+                  { id: 'pack_7500', nombre: 'Mega Pack', monedas: 7500, precio: '$399', bonus: '+87%' },
+                ].map(pack => (
+                  <div key={pack.id} className={`rounded-xl border overflow-hidden ${
+                    pack.nombre === 'Mejor Valor' ? 'border-gold-400/40 ring-1 ring-gold-400/20' : 'border-gold-500/20'
+                  } bg-black/20`}>
+                    <div className="p-3 text-center">
+                      {pack.bonus && (
+                        <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-green-500/20 text-green-400 rounded-full mb-2">
+                          {pack.bonus}
+                        </span>
+                      )}
+                      <div className="text-gold-400 text-2xl font-bold">&#x1FA99;</div>
+                      <div className="text-white font-bold text-sm mt-1">{pack.monedas.toLocaleString()}</div>
+                      <div className="text-gold-500/50 text-xs">{pack.nombre}</div>
+                    </div>
+                    <button
+                      onClick={() => handleComprarPack(pack.id)}
+                      disabled={comprandoPack !== null}
+                      className={`w-full py-2 text-xs font-medium border-t border-gold-500/20 transition-all ${
+                        comprandoPack === pack.id
+                          ? 'bg-gold-500/20 text-gold-300 cursor-wait'
+                          : comprandoPack !== null
+                            ? 'bg-gold-500/10 text-gold-500/40 cursor-not-allowed'
+                            : 'bg-gold-500/15 text-gold-400 hover:bg-gold-500/25 cursor-pointer'
+                      }`}
+                    >
+                      {comprandoPack === pack.id ? 'Redirigiendo...' : `${pack.precio} UYU`}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-            {/* Tipos de cosméticos */}
-            {['tema_mesa', 'reverso_cartas', 'marco_avatar'].map(tipo => {
-              const cosmeticosTipo = cosmeticos.filter(c => c.tipo === tipo);
-              if (cosmeticosTipo.length === 0) return null;
+            {/* Cosméticos */}
+            <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20">
+              <h4 className="text-gold-400/80 font-medium mb-1">Cosmeticos</h4>
+              <p className="text-gold-500/40 text-xs mb-4">
+                Desbloquea cosmeticos con monedas. Los elementos premium requieren ser usuario premium.
+              </p>
 
-              const nombreTipo = {
-                tema_mesa: '🎨 Temas de Mesa',
-                reverso_cartas: '🃏 Reversos de Cartas',
-                marco_avatar: '🖼️ Marcos de Avatar',
-              }[tipo] || tipo;
+              {['tema_mesa', 'reverso_cartas', 'marco_avatar'].map(tipo => {
+                const cosmeticosTipo = cosmeticos.filter(c => c.tipo === tipo);
+                if (cosmeticosTipo.length === 0) return null;
 
-              return (
-                <div key={tipo} className="mb-6">
-                  <h4 className="text-gold-400/80 text-sm font-medium mb-3">{nombreTipo}</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {cosmeticosTipo.map(cosmetico => {
-                      const desbloqueado = cosmetico.desbloqueado === 1;
-                      const equipado = cosmetico.equipado === 1;
-                      const puedeComprar = nivel >= cosmetico.nivel_requerido && (!cosmetico.es_premium || esPremium);
-                      const comprando_ = comprando === cosmetico.id;
-                      const equipando_ = equipando === cosmetico.id;
+                const nombreTipo = {
+                  tema_mesa: '🎨 Temas de Mesa',
+                  reverso_cartas: '🃏 Reversos de Cartas',
+                  marco_avatar: '🖼️ Marcos de Avatar',
+                }[tipo] || tipo;
 
-                      return (
-                        <div
-                          key={cosmetico.id}
-                          className={`rounded-xl overflow-hidden border transition-all ${
-                            equipado
-                              ? 'ring-2 ring-green-500 border-green-500/30'
-                              : desbloqueado
-                                ? 'border-gold-500/30'
-                                : 'border-gold-700/10 opacity-70'
-                          }`}
-                        >
-                          {/* Preview */}
-                          <div className={`h-20 flex items-center justify-center ${
-                            tipo === 'tema_mesa' ? 'bg-gradient-to-br from-emerald-800 to-emerald-900' :
-                            tipo === 'reverso_cartas' ? 'bg-gradient-to-br from-blue-800 to-blue-900' :
-                            'bg-gradient-to-br from-purple-800 to-purple-900'
-                          }`}>
-                            <span className="text-3xl">{
-                              tipo === 'tema_mesa' ? '🎨' :
-                              tipo === 'reverso_cartas' ? '🃏' : '🖼️'
-                            }</span>
-                          </div>
+                return (
+                  <div key={tipo} className="mb-6">
+                    <h4 className="text-gold-400/80 text-sm font-medium mb-3">{nombreTipo}</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {cosmeticosTipo.map(cosmetico => {
+                        const desbloqueado = cosmetico.desbloqueado === 1;
+                        const equipado = cosmetico.equipado === 1;
+                        const tieneNivel = nivel >= cosmetico.nivel_requerido;
+                        const tienePremium = !cosmetico.es_premium || esPremium;
+                        const tieneMonedas = monedas !== null && monedas >= cosmetico.precio_monedas;
+                        const puedeComprar = tieneNivel && tienePremium && tieneMonedas;
+                        const comprando_ = comprando === cosmetico.id;
+                        const equipando_ = equipando === cosmetico.id;
 
-                          {/* Info */}
-                          <div className="p-3 bg-black/30">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-white text-sm font-medium">{cosmetico.nombre}</span>
-                              {cosmetico.es_premium === 1 && (
-                                <span className="px-1.5 py-0.5 text-[10px] bg-yellow-500/20 text-yellow-400 rounded">
-                                  PRO
+                        return (
+                          <div
+                            key={cosmetico.id}
+                            className={`rounded-xl overflow-hidden border transition-all ${
+                              equipado
+                                ? 'ring-2 ring-green-500 border-green-500/30'
+                                : desbloqueado
+                                  ? 'border-gold-500/30'
+                                  : 'border-gold-700/10 opacity-70'
+                            }`}
+                          >
+                            {/* Preview */}
+                            <div className={`h-20 flex items-center justify-center relative ${
+                              tipo === 'tema_mesa' ? 'bg-gradient-to-br from-emerald-800 to-emerald-900' :
+                              tipo === 'reverso_cartas' ? 'bg-gradient-to-br from-blue-800 to-blue-900' :
+                              'bg-gradient-to-br from-purple-800 to-purple-900'
+                            }`}>
+                              <span className="text-3xl">{
+                                tipo === 'tema_mesa' ? '🎨' :
+                                tipo === 'reverso_cartas' ? '🃏' : '🖼️'
+                              }</span>
+                              {/* Precio en esquina */}
+                              {!desbloqueado && cosmetico.precio_monedas > 0 && (
+                                <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  tieneMonedas ? 'bg-gold-500/30 text-gold-300' : 'bg-red-500/30 text-red-300'
+                                }`}>
+                                  &#x1FA99; {cosmetico.precio_monedas}
+                                </span>
+                              )}
+                              {desbloqueado && !equipado && (
+                                <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-gold-500/20 text-gold-400">
+                                  Comprado
                                 </span>
                               )}
                             </div>
-                            <p className="text-gold-500/50 text-xs mb-2">{cosmetico.descripcion}</p>
 
-                            {/* Requisito de nivel */}
-                            {!desbloqueado && (
-                              <div className="text-xs mb-2">
-                                <span className={nivel >= cosmetico.nivel_requerido ? 'text-green-400' : 'text-red-400'}>
-                                  Nivel {cosmetico.nivel_requerido} requerido
-                                </span>
+                            {/* Info */}
+                            <div className="p-3 bg-black/30">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-white text-sm font-medium">{cosmetico.nombre}</span>
+                                {cosmetico.es_premium === 1 && (
+                                  <span className="px-1.5 py-0.5 text-[10px] bg-yellow-500/20 text-yellow-400 rounded">
+                                    PRO
+                                  </span>
+                                )}
                               </div>
-                            )}
+                              <p className="text-gold-500/50 text-xs mb-2">{cosmetico.descripcion}</p>
 
-                            {/* Botón de acción */}
-                            {desbloqueado ? (
-                              <button
-                                onClick={() => handleEquiparCosmetico(cosmetico.id, cosmetico.tipo)}
-                                disabled={equipado || equipando_}
-                                className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all ${
-                                  equipado
-                                    ? 'bg-green-600/30 text-green-300 cursor-default'
-                                    : 'bg-gold-600/30 text-gold-300 hover:bg-gold-600/50'
-                                }`}
-                              >
-                                {equipando_ ? '...' : equipado ? '✓ Equipado' : 'Equipar'}
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleComprarCosmetico(cosmetico.id)}
-                                disabled={!puedeComprar || comprando_}
-                                className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all ${
-                                  puedeComprar
-                                    ? 'bg-purple-600/30 text-purple-300 hover:bg-purple-600/50'
-                                    : 'bg-gray-600/20 text-gray-500 cursor-not-allowed'
-                                }`}
-                              >
-                                {comprando_ ? '...' : puedeComprar ? 'Desbloquear' : 'Bloqueado'}
-                              </button>
-                            )}
+                              {/* Requisitos */}
+                              {!desbloqueado && (
+                                <div className="text-xs mb-2 space-y-0.5">
+                                  {cosmetico.nivel_requerido > 1 && (
+                                    <div className={tieneNivel ? 'text-green-400' : 'text-red-400'}>
+                                      Nivel {cosmetico.nivel_requerido}
+                                    </div>
+                                  )}
+                                  {cosmetico.precio_monedas > 0 && !tieneMonedas && (
+                                    <div className="text-red-400">
+                                      Faltan {cosmetico.precio_monedas - (monedas ?? 0)} monedas
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Botón de acción */}
+                              {desbloqueado ? (
+                                <button
+                                  onClick={() => handleEquiparCosmetico(cosmetico.id, cosmetico.tipo)}
+                                  disabled={equipado || equipando_}
+                                  className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                    equipado
+                                      ? 'bg-green-600/30 text-green-300 cursor-default'
+                                      : 'bg-gold-600/30 text-gold-300 hover:bg-gold-600/50'
+                                  }`}
+                                >
+                                  {equipando_ ? '...' : equipado ? '✓ Equipado' : 'Equipar'}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleComprarCosmetico(cosmetico.id)}
+                                  disabled={!puedeComprar || comprando_}
+                                  className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                    puedeComprar
+                                      ? 'bg-purple-600/30 text-purple-300 hover:bg-purple-600/50'
+                                      : 'bg-gray-600/20 text-gray-500 cursor-not-allowed'
+                                  }`}
+                                >
+                                  {comprando_ ? '...' : !tieneNivel ? 'Nivel insuficiente' : !tienePremium ? 'Requiere Premium' : !tieneMonedas ? 'Monedas insuficientes' : `Comprar &#x1FA99; ${cosmetico.precio_monedas}`}
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -1379,6 +1600,23 @@ export default function PerfilPage() {
           </div>
         )}
       </div>
+
+      {/* Rewarded Ad Modal */}
+      {mostrarRewardedAd && (
+        <RewardedAd
+          rewardAmount={75}
+          onRewardEarned={async () => {
+            const result = await socketService.reclamarRecompensaVideo();
+            if (result.success) {
+              setMonedas(result.balance ?? monedas);
+              setVideosRestantes(result.videosRestantes ?? 0);
+              setVideoCooldown(30);
+            }
+            setMostrarRewardedAd(false);
+          }}
+          onCancel={() => setMostrarRewardedAd(false)}
+        />
+      )}
     </div>
   );
 }

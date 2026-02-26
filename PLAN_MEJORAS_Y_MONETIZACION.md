@@ -193,71 +193,80 @@ server/
 
 ---
 
-## FASE 5: Premium con Pagos Reales
+## FASE 5: Premium con MercadoPago ✅ IMPLEMENTADO
 
 > **Impacto:** Alto | **Esfuerzo:** Alto
-> Implementar cuando haya base de usuarios estable (+200-500 activos).
+> Pase Premium de 30 dias con pago unico via MercadoPago.
 
-### 5.1 Elegir pasarela de pagos
-- **MercadoPago** - Ideal para Argentina/Uruguay. API simple, bajas comisiones locales.
-- **Stripe** - Ideal para mercado global. Más features pero comisiones más altas en LATAM.
-- **Recomendación:** MercadoPago para MVP, Stripe después si escalás internacionalmente.
+### 5.1 Pasarela: MercadoPago (IMPLEMENTADO)
+- SDK `mercadopago` instalado
+- Pago unico (no suscripcion) - $59 UYU por 30 dias
+- Se necesita configurar `MERCADOPAGO_ACCESS_TOKEN` en `.env`
+- Obtener en: https://www.mercadopago.com.uy/developers
 
-### 5.2 Implementar suscripción premium ($1/mes)
-- **Archivos nuevos:**
-  - `src/app/api/payments/route.ts` - Endpoint para crear preferencia de pago
-  - `src/app/api/webhooks/mercadopago/route.ts` - Webhook para confirmar pagos
-  - `src/app/premium/page.tsx` - Página de planes y checkout
-- **DB:** Agregar campos:
-  - `premium_inicio DATETIME`
-  - `premium_expira DATETIME`
-  - `mercadopago_subscription_id TEXT`
-- **Flujo:**
-  1. Usuario va a `/premium`
-  2. Clickea "Suscribirse"
-  3. Redirect a MercadoPago checkout
-  4. Webhook confirma pago → activar premium
-  5. Cron job diario verifica expiración
+### 5.2 Arquitectura implementada
+- **`src/app/api/payments/premium/route.ts`** - Crea preferencia de pago en MercadoPago
+- **`src/app/api/webhooks/mercadopago/route.ts`** - Webhook recibe confirmacion de pago
+- **`src/app/premium/resultado/page.tsx`** - Pagina de resultado (aprobado/fallido/pendiente)
+- **`db.js`** - Tabla `pagos_premium`, columnas `premium_inicio/premium_expira/mercadopago_payment_id`
+- **`server.js`** - Verificacion de expiracion en login, handler `obtener-estado-premium`
 
-### 5.3 Features premium (resumen)
+### 5.3 Flujo de pago
+1. Usuario clickea "Comprar Pase Premium" en su perfil
+2. Frontend hace POST a `/api/payments/premium` con userId
+3. Backend crea preferencia en MercadoPago y retorna `init_point`
+4. Usuario es redirigido al checkout de MercadoPago
+5. Webhook recibe confirmacion → `activarPremium(userId, paymentId, 30)`
+6. Usuario es redirigido a `/premium/resultado?status=approved`
+
+### 5.4 Expiracion automatica
+- En cada login (normal y Google), se verifica `premium_expira`
+- Si expiro → `es_premium = 0` automaticamente
+- Perfil muestra "Premium activo - X dias restantes"
+
+### 5.5 Features premium (resumen)
 - Sin ads (banners ni interstitials)
-- Audios custom (ya implementado)
-- Cosméticos exclusivos (ya en DB)
-- Badge premium en perfil y partidas
-- Bonus XP x1.5
+- Audios custom
+- Cosmeticos exclusivos
 - Bonus monedas x1.5 por partida
-
-### 5.4 Página de gestión de suscripción
-- Ver estado actual (activo/expirado)
-- Fecha de renovación
-- Cancelar suscripción
-- Historial de pagos
+- Personalizacion de mesa
 
 ---
 
-## FASE 6: Tienda de Monedas (Compra con Dinero Real)
+## FASE 6: Tienda de Monedas ✅ PARCIALMENTE IMPLEMENTADO
 
 > **Impacto:** Medio | **Esfuerzo:** Medio
-> Implementar DESPUÉS de validar que los usuarios valoran las monedas.
+> UI de tienda completa. Falta integrar pasarela de pagos reales.
 
-### 6.1 Packs de monedas
+### 6.1 Tienda de cosmeticos mejorada (IMPLEMENTADO)
+- **Archivo:** `src/app/perfil/page.tsx` - Tab "Tienda" completamente rediseñada
+- Balance de monedas visible en header de la tienda
+- Precios en monedas mostrados en cada cosmetico
+- Feedback claro: "Monedas insuficientes", "Nivel insuficiente", "Requiere Premium"
+- Boton "Ver anuncio +75" para ganar monedas desde la tienda
+- Compra descuenta monedas y actualiza balance en tiempo real
+
+### 6.2 Packs de monedas - UI lista (PENDIENTE PASARELA)
 
 | Pack | Monedas | Precio | Bonus |
 |------|---------|--------|-------|
-| Básico | 500 | $0.99 | - |
+| Basico | 500 | $0.99 | - |
 | Popular | 1,200 | $1.99 | +20% |
 | Mejor valor | 3,000 | $3.99 | +50% |
 | Mega pack | 7,500 | $7.99 | +87% |
 
-### 6.2 Implementación
+Los packs estan visibles en la UI con boton "Proximamente".
+Falta integrar MercadoPago/Stripe para pagos reales.
+
+### 6.3 Pendiente: Pasarela de pagos
 - Misma pasarela que premium (MercadoPago/Stripe)
-- Pagos únicos (no suscripción)
+- Pagos unicos (no suscripcion)
 - Webhook acredita monedas al confirmar pago
 - Registro en historial_monedas con motivo `'compra'`
 
-### 6.3 Consideraciones legales
-- Términos de servicio claros sobre monedas virtuales
-- Política de reembolso
+### 6.4 Consideraciones legales
+- Terminos de servicio claros sobre monedas virtuales
+- Politica de reembolso
 - Las monedas NO son canjeables por dinero real
 - Cumplir regulaciones locales (Uruguay/Argentina)
 

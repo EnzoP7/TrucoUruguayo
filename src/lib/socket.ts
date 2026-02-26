@@ -406,6 +406,14 @@ class SocketService {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async obtenerEstadoPremium(): Promise<{ success: boolean; es_premium?: boolean; premium_expira?: string; dias_restantes?: number }> {
+    if (!this.socket) return { success: false };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-estado-premium' as any, (result: any) => resolve(result));
+    });
+  }
+
   async eliminarAudioCustom(audioId: number): Promise<{ success: boolean; error?: string }> {
     if (!this.socket) return { success: false, error: 'Sin conexión' };
     return new Promise((resolve) => {
