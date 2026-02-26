@@ -161,44 +161,35 @@ server/
 
 ---
 
-## FASE 4: Rewarded Video Ads
+## FASE 4: Rewarded Ads (Interstitial + Timer) ✅ IMPLEMENTADO
 
 > **Impacto:** Medio-Alto | **Esfuerzo:** Medio
 > Genera revenue de usuarios free y engagement con el sistema de monedas.
 
-### 4.1 Elegir proveedor
-- **Opción A: Google AdSense for Games** - Ya tenés AdSense integrado, es la extensión natural
-- **Opción B: Google AdMob** - Mejor para apps móviles/PWA
-- **Recomendación:** Empezar con AdSense Rewarded (ya tenés la cuenta `ca-pub-6217274251244633`)
+### 4.1 Enfoque: AdSense Interstitial + Timer (IMPLEMENTADO)
+- Se usa el mismo AdSense ya integrado (cuenta `ca-pub-6217274251244633`)
+- Interstitial con countdown de 15 segundos
+- Al completar, el usuario reclama monedas vía server-side validation
 
-### 4.2 Crear componente RewardedAd
-- **Archivo nuevo:** `src/components/ads/RewardedAd.tsx`
-- Props: `onRewardEarned`, `onAdClosed`, `onAdFailed`, `rewardAmount`
-- Flujo:
-  1. Usuario clickea "Ver video → +75 monedas"
-  2. Se carga el ad rewarded
-  3. Usuario ve el video completo (no se puede skipear)
-  4. Al completar → callback `onRewardEarned`
-  5. Backend verifica y acredita monedas (server-side validation)
+### 4.2 Componente RewardedAd (IMPLEMENTADO)
+- **Archivo:** `src/components/ads/RewardedAd.tsx`
+- Countdown de 15s con barra de progreso
+- Botón "Reclamar" aparece al completar el countdown
+- Si cancela antes, no recibe recompensa
+- Usuarios premium salteados automáticamente (useUserPremium hook)
 
-### 4.3 Server-side verification
+### 4.3 Server-side verification (IMPLEMENTADO)
 - **Archivo:** `server.js`
-- Evento: `reclamar-recompensa-video`
-- Validaciones:
-  - Verificar que no exceda límite diario (5 videos)
-  - Verificar cooldown mínimo entre videos (30 segundos)
-  - Registrar en historial_monedas con motivo `'video_ad'`
-- **Importante:** NUNCA confiar solo en el cliente para acreditar monedas
+- Handler `reclamar-recompensa-video`: valida auth, premium, límite diario, cooldown
+- Handler `obtener-estado-videos`: retorna estado actual de videos del día
+- **Límites:** 5 videos/día, 30s cooldown entre videos, 75 monedas por video
+- Tracking en memoria con Map por socketId, reset diario automático
+- Registro en historial_monedas con motivo `'video_ad'`
 
-### 4.4 Puntos de integración en la UI
-- **Lobby:** Botón "Ver video → +75 monedas" visible
-- **Post-partida:** Ofrecer duplicar recompensa viendo un video
-- **Tienda:** "No tenés suficientes monedas - Ver video para ganar más"
-- **Perfil:** Contador de videos disponibles hoy
-
-### 4.5 Premium skip
-- Usuarios premium NO ven rewarded ads (ya tienen monedas bonus)
-- O alternativamente: premium gana monedas sin ver video (reward automático diario)
+### 4.4 Puntos de integración en la UI (IMPLEMENTADO)
+- **Lobby:** Botón "+75 monedas" junto al balance, con cooldown visible
+- **Post-partida:** Botón "Duplicar" en el toast de monedas ganadas
+- Premium skip automático
 
 ---
 

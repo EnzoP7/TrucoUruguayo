@@ -34,6 +34,9 @@ export interface ClientToServerEvents {
   'solicitar-estado': (callback: (success: boolean) => void) => void;
   'toggle-ayuda': (data: { modoAyuda: boolean }, callback: (success: boolean) => void) => void;
   'terminar-partida': (callback: (success: boolean, message?: string) => void) => void;
+  // Rewarded Ads
+  'reclamar-recompensa-video': (callback: (result: { success: boolean; balance?: number; videosRestantes?: number; error?: string }) => void) => void;
+  'obtener-estado-videos': (callback: (result: { success: boolean; videosVistos?: number; videosRestantes?: number; cooldownRestante?: number }) => void) => void;
   'invitar-amigo': (data: { amigoId: number; mesaId: string }, callback: (result: { success: boolean; error?: string }) => void) => void;
   // Chat
   'enviar-mensaje': (data: { mensaje: string; tipo: 'general' | 'equipo' }, callback: (success: boolean) => void) => void;

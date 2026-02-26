@@ -643,6 +643,22 @@ class SocketService {
     this.socket?.on('monedas-ganadas' as any, callback);
   }
 
+  // === REWARDED ADS ===
+
+  async reclamarRecompensaVideo(): Promise<{ success: boolean; balance?: number; videosRestantes?: number; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexion' };
+    return new Promise((resolve) => {
+      this.socket!.emit('reclamar-recompensa-video', (result) => resolve(result));
+    });
+  }
+
+  async obtenerEstadoVideos(): Promise<{ success: boolean; videosVistos?: number; videosRestantes?: number; cooldownRestante?: number }> {
+    if (!this.socket) return { success: false };
+    return new Promise((resolve) => {
+      this.socket!.emit('obtener-estado-videos', (result) => resolve(result));
+    });
+  }
+
   onJugadorAlMazo(callback: (data: any) => void): void {
     this.socket?.on('jugador-al-mazo', callback);
   }

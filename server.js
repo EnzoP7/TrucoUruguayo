@@ -4046,6 +4046,26 @@ app.prepare().then(async () => {
     rateLimiters.delete(socketId);
   }
 
+  // === REWARDED ADS TRACKING ===
+  const MAX_VIDEOS_DIARIOS = 5;
+  const VIDEO_COOLDOWN_MS = 30000; // 30 segundos entre videos
+  const RECOMPENSA_VIDEO = 75;
+  const videoAdTracking = new Map(); // socketId -> { count, lastVideoTime, resetDate }
+
+  function getVideoTracking(socketId) {
+    const hoy = new Date().toISOString().split('T')[0];
+    let tracking = videoAdTracking.get(socketId);
+    if (!tracking || tracking.resetDate !== hoy) {
+      tracking = { count: 0, lastVideoTime: 0, resetDate: hoy };
+      videoAdTracking.set(socketId, tracking);
+    }
+    return tracking;
+  }
+
+  function cleanupVideoTracking(socketId) {
+    videoAdTracking.delete(socketId);
+  }
+
   io.on('connection', (socket) => {
     console.log(`[Socket.IO] Connected: ${socket.id}`);
 
@@ -4231,6 +4251,72 @@ app.prepare().then(async () => {
       } catch (err) {
         console.error('[Monedas] Error reclamar-recompensa-diaria:', err);
         callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    // === REWARDED ADS ===
+    socket.on('reclamar-recompensa-video', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario?.id) return callback({ success: false, error: 'No autenticado' });
+        if (usuario.es_premium) return callback({ success: false, error: 'Los usuarios premium no necesitan ver anuncios' });
+
+        const tracking = getVideoTracking(socket.id);
+
+        // Verificar limite diario
+        if (tracking.count >= MAX_VIDEOS_DIARIOS) {
+          return callback({ success: false, error: 'Limite diario alcanzado', videosRestantes: 0 });
+        }
+
+        // Verificar cooldown
+        const ahora = Date.now();
+        const tiempoDesdeUltimo = ahora - tracking.lastVideoTime;
+        if (tiempoDesdeUltimo < VIDEO_COOLDOWN_MS) {
+          const cooldownRestante = Math.ceil((VIDEO_COOLDOWN_MS - tiempoDesdeUltimo) / 1000);
+          return callback({ success: false, error: `Espera ${cooldownRestante}s`, cooldownRestante });
+        }
+
+        // Acreditar monedas
+        const nuevoBalance = await agregarMonedas(usuario.id, RECOMPENSA_VIDEO, 'video_ad');
+
+        // Actualizar tracking
+        tracking.count++;
+        tracking.lastVideoTime = ahora;
+
+        console.log(`[RewardedAd] Usuario ${usuario.apodo} vio video ${tracking.count}/${MAX_VIDEOS_DIARIOS}, +${RECOMPENSA_VIDEO} monedas`);
+
+        callback({
+          success: true,
+          balance: nuevoBalance,
+          videosRestantes: MAX_VIDEOS_DIARIOS - tracking.count,
+        });
+      } catch (err) {
+        console.error('[RewardedAd] Error reclamar-recompensa-video:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
+    socket.on('obtener-estado-videos', async (callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario?.id) return callback({ success: false, error: 'No autenticado' });
+
+        const tracking = getVideoTracking(socket.id);
+        const ahora = Date.now();
+        const tiempoDesdeUltimo = ahora - tracking.lastVideoTime;
+        const cooldownRestante = tracking.lastVideoTime > 0 && tiempoDesdeUltimo < VIDEO_COOLDOWN_MS
+          ? Math.ceil((VIDEO_COOLDOWN_MS - tiempoDesdeUltimo) / 1000)
+          : 0;
+
+        callback({
+          success: true,
+          videosVistos: tracking.count,
+          videosRestantes: MAX_VIDEOS_DIARIOS - tracking.count,
+          cooldownRestante,
+        });
+      } catch (err) {
+        console.error('[RewardedAd] Error obtener-estado-videos:', err);
+        callback({ success: false });
       }
     });
 
@@ -7408,6 +7494,7 @@ app.prepare().then(async () => {
     socket.on('disconnect', () => {
       console.log(`[Socket.IO] Disconnected: ${socket.id}`);
       cleanupRateLimiter(socket.id);
+      cleanupVideoTracking(socket.id);
       socketUsuarios.delete(socket.id);
       socket.leave('lobby');
 

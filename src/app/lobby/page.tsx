@@ -7,7 +7,8 @@ import { useSession, signOut } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import socketService from '@/lib/socket';
 import audioManager from '@/lib/audioManager';
-import { AdBanner } from '@/components/ads';
+import { AdBanner, RewardedAd } from '@/components/ads';
+import { useShowAds } from '@/hooks/useUserPremium';
 import FeedbackModal from '@/components/FeedbackModal';
 import TrucoLoader from '@/components/TrucoLoader';
 
@@ -87,6 +88,7 @@ interface MiPartida {
 function LobbyPageContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
+  const { showAds } = useShowAds();
 
   const [nombre, setNombre] = useState('');
   const [partidas, setPartidas] = useState<Partida[]>([]);
@@ -100,6 +102,9 @@ function LobbyPageContent() {
   const [monedas, setMonedas] = useState<number | null>(null);
   const [recompensaDiaria, setRecompensaDiaria] = useState<{ yaReclamado: boolean; monedas: number; diasConsecutivos: number } | null>(null);
   const [mostrarModalDiario, setMostrarModalDiario] = useState(false);
+  const [mostrarRewardedAd, setMostrarRewardedAd] = useState(false);
+  const [videosRestantes, setVideosRestantes] = useState<number | null>(null);
+  const [videoCooldown, setVideoCooldown] = useState(0);
 
   // Auth state
   const [usuario, setUsuario] = useState<Usuario | null>(null);
@@ -189,6 +194,14 @@ function LobbyPageContent() {
                 if (loginResult.recompensaDiaria && !loginResult.recompensaDiaria.yaReclamado) {
                   setRecompensaDiaria(loginResult.recompensaDiaria);
                   setMostrarModalDiario(true);
+                }
+                // Obtener estado de videos rewarded
+                const estadoVideos = await socketService.obtenerEstadoVideos();
+                if (estadoVideos.success) {
+                  setVideosRestantes(estadoVideos.videosRestantes ?? 0);
+                  if (estadoVideos.cooldownRestante && estadoVideos.cooldownRestante > 0) {
+                    setVideoCooldown(estadoVideos.cooldownRestante);
+                  }
                 }
               }
             }
@@ -300,6 +313,18 @@ function LobbyPageContent() {
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario, conectado]);
+
+  // Cooldown timer para rewarded ads
+  useEffect(() => {
+    if (videoCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setVideoCooldown(prev => {
+        if (prev <= 1) { clearInterval(timer); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [videoCooldown]);
 
   // Reconectar a partida como usuario logueado (usa userId)
   const handleReconectarPartidaUsuario = async (mesaId: string) => {
@@ -584,6 +609,23 @@ function LobbyPageContent() {
                     <span className="text-gold-400 text-sm">&#x1FA99;</span>
                     <span className="text-gold-300 font-bold text-sm">{monedas}</span>
                   </div>
+                )}
+                {usuario && showAds && videosRestantes !== null && videosRestantes > 0 && (
+                  <button
+                    onClick={() => setMostrarRewardedAd(true)}
+                    disabled={videoCooldown > 0}
+                    className={`ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      videoCooldown > 0
+                        ? 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
+                        : 'bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 hover:text-green-300'
+                    }`}
+                  >
+                    <span>&#x1F4FA;</span>
+                    {videoCooldown > 0
+                      ? <span>{videoCooldown}s</span>
+                      : <span>+{75} monedas</span>
+                    }
+                  </button>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -1266,6 +1308,23 @@ function LobbyPageContent() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Modal Rewarded Ad */}
+      {mostrarRewardedAd && (
+        <RewardedAd
+          rewardAmount={75}
+          onRewardEarned={async () => {
+            const result = await socketService.reclamarRecompensaVideo();
+            if (result.success) {
+              setMonedas(result.balance ?? monedas);
+              setVideosRestantes(result.videosRestantes ?? 0);
+              setVideoCooldown(30);
+            }
+            setMostrarRewardedAd(false);
+          }}
+          onCancel={() => setMostrarRewardedAd(false)}
+        />
       )}
 
       {/* Modal invitar amigos */}
