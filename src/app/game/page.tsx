@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import socketService from "@/lib/socket";
 import audioManager from "@/lib/audioManager";
 import TrucoLoader from "@/components/TrucoLoader";
-import { RewardedAd } from "@/components/ads";
+import { RewardedAd, AdBanner } from "@/components/ads";
 import AlertModal, { useAlertModal } from "@/components/AlertModal";
 
 interface Carta {
@@ -1746,20 +1746,20 @@ function GamePage() {
   }, []);
 
   // === HELPERS ===
-  const miJugador = mesa?.jugadores.find((j) => j.id === socketId);
+  const miJugador = useMemo(() => mesa?.jugadores.find((j) => j.id === socketId), [mesa?.jugadores, socketId]);
   const miEquipo = miJugador?.equipo;
   const meFuiAlMazo = miJugador?.seVaAlMazo === true;
 
-  const esMiTurno = (): boolean => {
+  const esMiTurno = useCallback((): boolean => {
     if (!mesa || !socketId || mesa.estado !== "jugando") return false;
     if (mesa.gritoActivo || mesa.envidoActivo) return false;
     if (mesa.fase !== "jugando") return false;
     // No se puede jugar carta si hay flor pendiente de respuesta
     if (mesa.esperandoRespuestaFlor || florPendiente) return false;
     return mesa.jugadores[mesa.turnoActual]?.id === socketId;
-  };
+  }, [mesa, socketId, florPendiente]);
 
-  const misCartas = (): Carta[] => {
+  const misCartasMemo = useMemo((): Carta[] => {
     if (!mesa || !socketId) return [];
     const jugador = mesa.jugadores.find((j) => j.id === socketId);
     const cartas = jugador?.cartas.filter((c) => c.valor !== 0) || [];
@@ -1767,11 +1767,9 @@ function GamePage() {
     // Durante la animación de repartición, mostrar solo las cartas que ya "llegaron"
     if (isDealing && dealingCards.length > 0) {
       const miIndex = mesa.jugadores.findIndex((j) => j.id === socketId);
-      // Contar cuántas cartas me llegaron a mí
       const cartasQueMeLlegaron = dealingCards.filter(
         (d) => d.jugadorIndex === miIndex,
       ).length;
-      // Mostrar solo esa cantidad de cartas
       const cartasVisibles = cartas.slice(0, cartasQueMeLlegaron);
       if (jugador?.modoAyuda) {
         return ordenarCartasPorPoder(cartasVisibles);
@@ -1779,17 +1777,17 @@ function GamePage() {
       return cartasVisibles;
     }
 
-    // Si el modo ayuda está activo para este jugador, ordenar las cartas de mayor a menor poder
     if (jugador?.modoAyuda) {
       return ordenarCartasPorPoder(cartas);
     }
     return cartas;
-  };
+  }, [mesa, socketId, isDealing, dealingCards]);
+  const misCartas = useCallback(() => misCartasMemo, [misCartasMemo]);
 
-  const esAnfitrion = (): boolean => {
+  const esAnfitrion = useCallback((): boolean => {
     if (!mesa || !socketId) return false;
     return mesa.jugadores[0]?.id === socketId;
-  };
+  }, [mesa, socketId]);
 
   const puedoCantarTruco = (): boolean => {
     if (!mesa || !socketId || mesa.estado !== "jugando") return false;
@@ -5201,6 +5199,17 @@ function GamePage() {
           </div>
         </div>
       </div>
+      {/* Banner publicitario pequeño (solo usuarios free) */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none">
+        <div className="pointer-events-auto">
+          <AdBanner
+            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_GAME}
+            size="banner"
+            className="opacity-80 hover:opacity-100 transition-opacity"
+          />
+        </div>
+      </div>
+
       <AlertModal {...alertState} onClose={closeAlert} />
     </div>
   );

@@ -733,7 +733,7 @@ class SocketService {
   }
 
   removeAllListeners(): void {
-    const events: (keyof ServerToClientEvents)[] = [
+    const events: (keyof ServerToClientEvents | string)[] = [
       'partidas-disponibles', 'partida-nueva', 'partida-creada',
       'unido-partida', 'jugador-unido', 'partida-iniciada', 'reconectado',
       'estado-actualizado', 'carta-jugada', 'mano-finalizada',
@@ -742,13 +742,18 @@ class SocketService {
       'envido-cantado', 'envido-respondido', 'envido-respuesta-parcial', 'jugador-al-mazo',
       'corte-solicitado', 'corte-realizado', 'carta-repartida',
       'envido-declarado', 'envido-resuelto',
-      'flor-cantada', 'flor-resuelta',
+      'flor-cantada', 'flor-resuelta', 'flor-pendiente',
       'tirar-reyes-resultado',
-      'perros-echados', 'perros-cancelados', 'perros-respondidos',
+      'perros-echados', 'perros-cancelados', 'perros-respondidos', 'perros-pendientes',
+      'anfitrion-desconectado', 'jugador-desconectado',
+      'partida-eliminada',
       'mensaje-recibido',
-      'monedas-ganadas'
+      'monedas-ganadas',
+      'logros-desbloqueados',
+      'invitacion-recibida',
     ];
-    events.forEach(e => this.socket?.off(e));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    events.forEach(e => this.socket?.off(e as any));
   }
 }
 

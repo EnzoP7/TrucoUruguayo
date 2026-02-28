@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { AdBanner } from '@/components/ads';
 
 // Tipos para el tutorial
 interface Carta {
@@ -1136,6 +1137,14 @@ export default function TutorialPage() {
           <div
             className="h-full bg-gradient-to-r from-celeste-500 to-celeste-400 transition-all duration-500"
             style={{ width: `${((pasoActual + 1) / (leccion?.pasos.length || 1)) * 100}%` }}
+          />
+        </div>
+
+        {/* Publicidad */}
+        <div className="flex justify-center mt-6">
+          <AdBanner
+            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
+            size="banner"
           />
         </div>
       </div>

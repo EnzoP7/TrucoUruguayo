@@ -133,6 +133,77 @@ const activeBots = new Map(); // mesaId -> TrucoBot[] (bots activos en la partid
 const botTurnTimeouts = new Map(); // mesaId -> timeoutId (timeout de seguridad para turnos de bot)
 const botResponseTimeouts = new Map(); // mesaId -> timeoutId (timeout de seguridad para respuestas de bot)
 const lastBotAction = new Map(); // mesaId -> timestamp de última acción de bot
+const afkTimeouts = new Map(); // mesaId -> timeoutId (timeout AFK para jugadores humanos)
+const AFK_TIMEOUT_MS = 60000; // 60 segundos de inactividad
+
+// Iniciar timeout AFK para un jugador humano
+function iniciarAfkTimeout(io, room, mesa) {
+  limpiarAfkTimeout(mesa.id);
+  if (!mesa || mesa.estado !== 'jugando' || mesa.fase !== 'jugando') return;
+  const jugadorActual = mesa.jugadores[mesa.turnoActual];
+  if (!jugadorActual || jugadorActual.isBot) return;
+  // No poner AFK si hay grito/envido/flor pendiente
+  if (mesa.gritoActivo || mesa.envidoActivo || mesa.esperandoRespuestaFlor || mesa.perrosActivos) return;
+
+  const rondaAlIniciar = mesa.rondaNumero;
+  const turnoAlIniciar = mesa.turnoActual;
+  const timeout = setTimeout(() => {
+    afkTimeouts.delete(mesa.id);
+    // Verificar que el estado no haya cambiado
+    if (mesa.rondaNumero !== rondaAlIniciar || mesa.turnoActual !== turnoAlIniciar) return;
+    if (mesa.estado !== 'jugando' || mesa.fase !== 'jugando') return;
+    // Auto irse al mazo
+    console.log(`[AFK] Jugador ${jugadorActual.nombre} se fue al mazo por inactividad (60s)`);
+    const resultado = irseAlMazo(mesa, jugadorActual.id);
+    if (resultado.success) {
+      room.jugadores.forEach(p => {
+        io.to(p.socketId).emit('jugador-al-mazo', {
+          jugadorId: jugadorActual.id,
+          audioCustomUrl: null,
+          estado: getEstadoParaJugador(mesa, p.socketId),
+        });
+      });
+      // Si la ronda terminó por el mazo, emitir ronda-finalizada
+      if (mesa.winnerRonda !== null && mesa.fase === 'finalizada') {
+        const puntosGanados = mesa.puntosEnJuego || 1;
+        room.jugadores.forEach(p => {
+          io.to(p.socketId).emit('ronda-finalizada', {
+            ganadorEquipo: mesa.winnerRonda,
+            puntosGanados,
+            cartasFlorReveladas: mesa.cartasFlorReveladas || [],
+            cartasEnvidoReveladas: mesa.cartasEnvidoReveladas || [],
+            muestra: mesa.muestra || null,
+            estado: getEstadoParaJugador(mesa, p.socketId),
+          });
+        });
+        if (mesa.winnerJuego !== null) {
+          room.estado = 'terminado';
+          guardarResultadoPartida(room, mesa);
+          setTimeout(() => {
+            room.jugadores.forEach(p => {
+              io.to(p.socketId).emit('juego-finalizado', {
+                ganadorEquipo: mesa.winnerJuego,
+                estado: getEstadoParaJugador(mesa, p.socketId),
+              });
+            });
+            broadcastLobby(io);
+          }, 2000);
+        } else {
+          scheduleNextRound(io, room);
+        }
+      }
+    }
+  }, AFK_TIMEOUT_MS);
+  afkTimeouts.set(mesa.id, timeout);
+}
+
+function limpiarAfkTimeout(mesaId) {
+  const timeout = afkTimeouts.get(mesaId);
+  if (timeout) {
+    clearTimeout(timeout);
+    afkTimeouts.delete(mesaId);
+  }
+}
 
 function getMaxJugadores(tamaño) {
   switch (tamaño) {
@@ -209,6 +280,7 @@ function crearEstadoMesa(mesaId, jugadores, puntosLimite = 30, opciones = {}) {
     // Echar los perros system
     perrosActivos: false, // Si está activo el modo "echar los perros"
     perrosConfig: null, // { contraFlor: true, faltaEnvido: true, truco: true }
+    _perrosResolucionVersion: 0, // Guard counter to prevent race conditions in setTimeout callbacks
     // Alternancia de gritos (quién puede gritar qué)
     equipoQueCantoUltimo: null, // Para validar alternancia de truco/retruco/vale4
     // === MODO ALTERNADO 6 JUGADORES (3v3/1v1 en malas) ===
@@ -587,6 +659,7 @@ function getEstadoParaJugador(mesa, jugadorId) {
 // ============================================================
 
 async function procesarTurnoBot(mesaId, io, esReintento = false) {
+  try {
   const mesa = engines.get(mesaId);
   const room = lobbyRooms.get(mesaId);
   const bots = activeBots.get(mesaId) || [];
@@ -864,6 +937,9 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
         procesarTurnoBot(mesaId, io);
       }
     }, 500);
+  }
+  } catch (err) {
+    console.error(`[Bot] Error en procesarTurnoBot para mesa ${mesaId}:`, err);
   }
 }
 
@@ -2951,6 +3027,17 @@ function responderFlor(mesa, jugadorId, tipoRespuesta, diferirPuntos = false) {
 
   // Si la respuesta es contra_flor o con_flor_envido, el otro equipo debe aceptar/rechazar
   if (tipoRespuesta === 'contra_flor' || tipoRespuesta === 'con_flor_envido') {
+    // Validar que el equipo que pasaría a responder (el que cantó originalmente) tiene jugadores con flor
+    // Si no tienen flor, no se puede escalar - solo pueden responder con quiero/no_quiero
+    const equipoNuevoRespondedor = mesa.florPendiente.equipoQueCanta;
+    const nuevoRespondedorTieneFlor = mesa.jugadoresConFlor && mesa.jugadoresConFlor.some(id => {
+      const j = mesa.jugadores.find(jug => jug.id === id);
+      return j && j.equipo === equipoNuevoRespondedor && !j.seVaAlMazo;
+    });
+    if (!nuevoRespondedorTieneFlor) {
+      return { success: false, error: 'No podés escalar, el otro equipo no tiene flor. Solo podés responder quiero o no quiero.' };
+    }
+
     const equipoAnteriorQueCanta = mesa.florPendiente.equipoQueCanta;
     const equipoAnteriorQueResponde = mesa.florPendiente.equipoQueResponde;
     mesa.florPendiente = {
@@ -3743,7 +3830,12 @@ function scheduleNextRound(io, room) {
         setTimeout(() => {
           const botMesa = engines.get(mesaId);
           if (botMesa && botMesa.fase === 'jugando' && !botMesa.gritoActivo && !botMesa.envidoActivo) {
-            procesarTurnoBot(mesaId, io);
+            const nextPlayer = botMesa.jugadores[botMesa.turnoActual];
+            if (nextPlayer && nextPlayer.isBot) {
+              procesarTurnoBot(mesaId, io);
+            } else if (nextPlayer) {
+              iniciarAfkTimeout(io, currentRoom, botMesa);
+            }
           }
         }, 500);
         return;
@@ -4891,6 +4983,7 @@ app.prepare().then(async () => {
         });
 
         // Eliminar la partida
+        limpiarAfkTimeout(mesaId);
         lobbyRooms.delete(mesaId);
         engines.delete(mesaId);
 
@@ -5618,12 +5711,20 @@ app.prepare().then(async () => {
 
         callback(true);
 
+        // Limpiar AFK del jugador que acaba de jugar
+        limpiarAfkTimeout(room.mesaId);
+
         // Procesar turno del bot si es necesario (solo si la mano NO terminó)
         if (!mesa.manoTerminada) {
           setTimeout(() => {
             const currentMesa = engines.get(room.mesaId);
             if (currentMesa && currentMesa.fase === 'jugando' && !currentMesa.gritoActivo && !currentMesa.envidoActivo && !currentMesa.manoTerminada) {
               procesarTurnoBot(room.mesaId, io);
+              // Si no es turno de bot, iniciar AFK para el jugador humano
+              const nextPlayer = currentMesa.jugadores[currentMesa.turnoActual];
+              if (nextPlayer && !nextPlayer.isBot) {
+                iniciarAfkTimeout(io, room, currentMesa);
+              }
             }
           }, 1000);
         }
@@ -7343,8 +7444,10 @@ app.prepare().then(async () => {
 
           // Emitir las declaraciones con delay
           if (resultadoEnvido && resultadoEnvido.declaraciones) {
+            const rondaAlResolver = mesa.rondaNumero;
             resultadoEnvido.declaraciones.forEach((decl, index) => {
               setTimeout(() => {
+                if (mesa.rondaNumero !== rondaAlResolver) return; // Guard: ronda changed
                 room.jugadores.forEach(p => {
                   io.to(p.socketId).emit('envido-declarado', {
                     jugadorId: decl.jugadorId,
@@ -7357,6 +7460,8 @@ app.prepare().then(async () => {
 
             // Emitir resultado después de las declaraciones - AHORA sumar los puntos
             setTimeout(() => {
+              // Guard: skip if ronda changed (perros already resolved)
+              if (mesa.rondaNumero !== rondaAlResolver) return;
               // Sumar los puntos al marcador después de las animaciones
               const ganador = resultadoEnvido.ganador;
               const puntosGanados = resultadoEnvido.puntosGanados;
