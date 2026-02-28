@@ -14,6 +14,7 @@ interface RankingEntry {
   partidas_perdidas: number;
   mejor_racha: number;
   avatar_url?: string | null;
+  es_premium?: number;
 }
 
 interface Amigo {
@@ -390,7 +391,9 @@ export default function RankingPage() {
                       className={`grid grid-cols-12 gap-2 px-4 py-4 items-center transition-all duration-300 ${
                         esSoyYo
                           ? 'bg-gradient-to-r from-celeste-600/20 via-celeste-500/10 to-transparent border-l-4 border-celeste-500'
-                          : 'hover:bg-white/5'
+                          : entry.es_premium
+                            ? 'bg-gradient-to-r from-yellow-500/5 to-transparent hover:from-yellow-500/10 border-l-2 border-yellow-500/30'
+                            : 'hover:bg-white/5'
                       }`}
                       style={{ animationDelay: `${idx * 50}ms` }}
                     >
@@ -415,8 +418,8 @@ export default function RankingPage() {
                           )}
                         </div>
                         <div>
-                          <span className={`font-medium block ${esSoyYo ? 'text-celeste-300' : 'text-white'}`}>
-                            {entry.apodo}
+                          <span className={`font-medium block ${esSoyYo ? 'text-celeste-300' : entry.es_premium ? 'text-yellow-300' : 'text-white'}`}>
+                            {entry.es_premium ? '👑 ' : ''}{entry.apodo}
                           </span>
                           {esSoyYo && <span className="text-celeste-400/60 text-xs">Tu posición</span>}
                         </div>

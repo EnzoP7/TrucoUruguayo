@@ -11,6 +11,7 @@ import { AdBanner, RewardedAd } from '@/components/ads';
 import { useShowAds } from '@/hooks/useUserPremium';
 import FeedbackModal from '@/components/FeedbackModal';
 import TrucoLoader from '@/components/TrucoLoader';
+import AlertModal, { useAlertModal } from '@/components/AlertModal';
 
 interface Partida {
   mesaId: string;
@@ -19,6 +20,7 @@ interface Partida {
   tamañoSala: '1v1' | '2v2' | '3v3';
   estado: string;
   creadorNombre?: string;
+  creadorPremium?: boolean;
   jugadoresNombres?: string[];
   esRankeada?: boolean;
 }
@@ -89,6 +91,7 @@ function LobbyPageContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const { showAds } = useShowAds();
+  const { alertState, showAlert, showConfirm, closeAlert } = useAlertModal();
 
   const [nombre, setNombre] = useState('');
   const [partidas, setPartidas] = useState<Partida[]>([]);
@@ -335,11 +338,11 @@ function LobbyPageContent() {
       if (success) {
         navigateToGame(mesaId);
       } else {
-        alert('Error al reconectar. La partida puede haber terminado.');
+        showAlert('error', 'Error', 'Error al reconectar. La partida puede haber terminado.');
         fetchMisPartidas();
       }
     } catch {
-      alert('Error al reconectar a la partida');
+      showAlert('error', 'Error', 'Error al reconectar a la partida');
       fetchMisPartidas();
     } finally {
       setLoading(false);
@@ -366,7 +369,7 @@ function LobbyPageContent() {
     if (result.success) {
       setInviteSent(prev => new Set(prev).add(amigoId));
     } else {
-      alert(result.error || 'No se pudo invitar');
+      showAlert('error', 'Error', result.error || 'No se pudo invitar');
     }
   };
 
@@ -379,7 +382,7 @@ function LobbyPageContent() {
 
   const handleCrearPartida = async () => {
     if (!nombre.trim()) {
-      alert('Por favor ingresa tu nombre');
+      showAlert('warning', 'Nombre requerido', 'Por favor ingresa tu nombre');
       return;
     }
 
@@ -390,11 +393,11 @@ function LobbyPageContent() {
         if (esRankeada && monedas !== null) setMonedas(monedas - 10);
         navigateToGame(mesaId);
       } else {
-        alert('Error al crear la partida. Verificá que tengas monedas suficientes.');
+        showAlert('error', 'Error', 'Error al crear la partida. Verificá que tengas monedas suficientes.');
       }
     } catch (error) {
       console.error('Error creating game:', error);
-      alert('Error al crear la partida');
+      showAlert('error', 'Error', 'Error al crear la partida');
     } finally {
       setLoading(false);
     }
@@ -402,7 +405,7 @@ function LobbyPageContent() {
 
   const handleUnirsePartida = async (mesaId: string) => {
     if (!nombre.trim()) {
-      alert('Por favor ingresa tu nombre');
+      showAlert('warning', 'Nombre requerido', 'Por favor ingresa tu nombre');
       return;
     }
 
@@ -412,11 +415,11 @@ function LobbyPageContent() {
       if (success) {
         navigateToGame(mesaId);
       } else {
-        alert('Error al unirse a la partida');
+        showAlert('error', 'Error', 'Error al unirse a la partida');
       }
     } catch (error) {
       console.error('Error joining game:', error);
-      alert('Error al unirse a la partida');
+      showAlert('error', 'Error', 'Error al unirse a la partida');
     } finally {
       setLoading(false);
     }
@@ -424,7 +427,7 @@ function LobbyPageContent() {
 
   const handleReconectarPartida = async (mesaId: string) => {
     if (!nombre.trim()) {
-      alert('Por favor ingresa tu nombre');
+      showAlert('warning', 'Nombre requerido', 'Por favor ingresa tu nombre');
       return;
     }
 
@@ -439,14 +442,14 @@ function LobbyPageContent() {
         if (joinSuccess) {
           navigateToGame(mesaId);
         } else {
-          alert('La partida ya no existe');
+          showAlert('info', 'Partida no encontrada', 'La partida ya no existe');
           sessionStorage.removeItem('truco_mesaId');
           setPartidaGuardada(null);
         }
       }
     } catch (error) {
       console.error('Error reconnecting:', error);
-      alert('La partida ya no existe');
+      showAlert('info', 'Partida no encontrada', 'La partida ya no existe');
       sessionStorage.removeItem('truco_mesaId');
       setPartidaGuardada(null);
     } finally {
@@ -455,9 +458,8 @@ function LobbyPageContent() {
   };
 
   const handleEliminarPartida = async (mesaId: string) => {
-    if (!confirm('¿Estás seguro de que querés eliminar esta partida?')) {
-      return;
-    }
+    const confirmed = await showConfirm('Eliminar partida', '¿Estás seguro de que querés eliminar esta partida?');
+    if (!confirmed) return;
 
     setLoading(true);
     try {
@@ -466,11 +468,11 @@ function LobbyPageContent() {
         // La partida se eliminará y el lobby se actualizará automáticamente
         setPartidas(prev => prev.filter(p => p.mesaId !== mesaId));
       } else {
-        alert('Error al eliminar la partida');
+        showAlert('error', 'Error', 'Error al eliminar la partida');
       }
     } catch (error) {
       console.error('Error deleting game:', error);
-      alert('Error al eliminar la partida');
+      showAlert('error', 'Error', 'Error al eliminar la partida');
     } finally {
       setLoading(false);
     }
@@ -952,9 +954,11 @@ function LobbyPageContent() {
                     className={`glass rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 border ${
                       soyJugador
                         ? 'border-celeste-400/50 bg-celeste-900/20'
-                        : puedeUnirse
-                          ? 'border-celeste-500/30 hover:border-celeste-400/50 hover:bg-celeste-900/10'
-                          : 'border-white/10 opacity-60'
+                        : partida.creadorPremium
+                          ? 'border-yellow-500/40 bg-yellow-900/5 hover:border-yellow-400/60 hover:bg-yellow-900/10'
+                          : puedeUnirse
+                            ? 'border-celeste-500/30 hover:border-celeste-400/50 hover:bg-celeste-900/10'
+                            : 'border-white/10 opacity-60'
                     } animate-slide-up`}
                     style={{ animationDelay: `${0.05 * index}s` }}
                   >
@@ -988,7 +992,7 @@ function LobbyPageContent() {
                         {/* Creador */}
                         {partida.creadorNombre && (
                           <div className="text-white/50 text-xs mb-1.5">
-                            Creada por: <span className="text-celeste-300">{partida.creadorNombre}</span>
+                            Creada por: <span className={partida.creadorPremium ? "text-yellow-300" : "text-celeste-300"}>{partida.creadorPremium ? '👑 ' : ''}{partida.creadorNombre}</span>
                           </div>
                         )}
 
@@ -1427,6 +1431,7 @@ function LobbyPageContent() {
           </div>
         </div>
       )}
+      <AlertModal {...alertState} onClose={closeAlert} />
     </div>
   );
 }

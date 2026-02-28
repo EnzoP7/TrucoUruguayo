@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import socketService from "@/lib/socket";
 import audioManager from "@/lib/audioManager";
 import TrucoLoader from "@/components/TrucoLoader";
 import { RewardedAd } from "@/components/ads";
+import AlertModal, { useAlertModal } from "@/components/AlertModal";
 
 interface Carta {
   palo: "oro" | "copa" | "espada" | "basto";
@@ -178,6 +179,26 @@ const TEMAS_MESA: Record<
     accent: "#f59e0b",
     name: "Dorado",
   },
+  mesa_cuero: {
+    colors: ["#4a2c17", "#3b2010", "#2a1508"],
+    accent: "#d97706",
+    name: "Cuero",
+  },
+  mesa_marmol: {
+    colors: ["#374151", "#1f2937", "#111827"],
+    accent: "#9ca3af",
+    name: "Mármol",
+  },
+  mesa_neon: {
+    colors: ["#2e1065", "#1e1b4b", "#0f0a2e"],
+    accent: "#a855f7",
+    name: "Neón",
+  },
+  mesa_medianoche: {
+    colors: ["#0a0a0a", "#0d0d0d", "#050505"],
+    accent: "#6366f1",
+    name: "Medianoche",
+  },
 };
 
 // Configuración de reversos de cartas para usuarios premium (colores CSS directos)
@@ -189,6 +210,18 @@ const REVERSOS_CARTAS: Record<
   reverso_azul: { colors: ["#1d4ed8", "#1e3a8a"], name: "Azul Elegante" },
   reverso_rojo: { colors: ["#991b1b", "#450a0a"], name: "Rojo Fuego" },
   reverso_dorado: { colors: ["#b45309", "#78350f"], name: "Dorado Real" },
+  reverso_verde: { colors: ["#166534", "#14532d"], name: "Verde Bosque" },
+  reverso_purpura: { colors: ["#7e22ce", "#581c87"], name: "Púrpura" },
+  reverso_negro: { colors: ["#1c1c1c", "#0a0a0a"], name: "Obsidiana" },
+  reverso_arcoiris: { colors: ["#ec4899", "#8b5cf6"], name: "Arcoíris" },
+};
+
+const MARCOS_AVATAR: Record<string, { border: string; shadow: string; ring: string }> = {
+  marco_ninguno: { border: "border-gold-600/50", shadow: "", ring: "" },
+  marco_bronce: { border: "border-amber-700", shadow: "shadow-lg shadow-amber-700/30", ring: "ring-1 ring-amber-600/40" },
+  marco_plata: { border: "border-gray-300", shadow: "shadow-lg shadow-gray-300/30", ring: "ring-1 ring-gray-300/40" },
+  marco_oro: { border: "border-yellow-400", shadow: "shadow-lg shadow-yellow-400/40", ring: "ring-2 ring-yellow-400/50" },
+  marco_diamante: { border: "border-cyan-300", shadow: "shadow-lg shadow-cyan-300/50", ring: "ring-2 ring-cyan-300/60" },
 };
 
 function getCartaImageUrl(carta: Carta): string {
@@ -824,6 +857,7 @@ export default function GamePageWrapper() {
 function GamePage() {
   const searchParams = useSearchParams();
   const mesaId = searchParams?.get("mesaId") ?? null;
+  const { alertState, showAlert, showConfirm, closeAlert } = useAlertModal();
 
   const [mesa, setMesa] = useState<Mesa | null>(null);
   const [socketId, setSocketId] = useState<string | null>(null);
@@ -955,9 +989,31 @@ function GamePage() {
     return null;
   }, [mesa?.cosmeticosJugadores, socketId]);
 
+  // Helper: inline style para overridear .card-back con reverso custom
+  const getCardBackStyle = useCallback((): React.CSSProperties | undefined => {
+    const colors = getReversoActivo();
+    if (!colors) return undefined;
+    return {
+      background: `linear-gradient(135deg, ${colors[0]} 0%, ${colors[1]} 100%)`,
+      borderColor: `${colors[0]}cc`,
+    };
+  }, [getReversoActivo]);
+
+  // Helper: obtener marco de avatar para un jugador
+  const getMarcoForPlayer = useCallback((playerId: string) => {
+    if (!mesa?.cosmeticosJugadores) return MARCOS_AVATAR.marco_ninguno;
+    const cosmetics = mesa.cosmeticosJugadores[playerId];
+    if (cosmetics?.marco_avatar && MARCOS_AVATAR[cosmetics.marco_avatar]) {
+      return MARCOS_AVATAR[cosmetics.marco_avatar];
+    }
+    return MARCOS_AVATAR.marco_ninguno;
+  }, [mesa?.cosmeticosJugadores]);
+
+  const mensajeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mostrarMensaje = useCallback((msg: string, duracion = 3000) => {
     setMensaje(msg);
-    setTimeout(() => setMensaje(null), duracion);
+    if (mensajeTimerRef.current) clearTimeout(mensajeTimerRef.current);
+    mensajeTimerRef.current = setTimeout(() => setMensaje(null), duracion);
   }, []);
 
   useEffect(() => {
@@ -1829,7 +1885,7 @@ function GamePage() {
     setLoading(true);
     try {
       const success = await socketService.iniciarPartida();
-      if (!success) alert("Error al iniciar la partida");
+      if (!success) showAlert("error", "Error", "Error al iniciar la partida");
     } finally {
       setLoading(false);
     }
@@ -1840,7 +1896,7 @@ function GamePage() {
     setLoading(true);
     try {
       const success = await socketService.jugarCarta(carta);
-      if (!success) alert("No se pudo jugar la carta");
+      if (!success) showAlert("error", "Error", "No se pudo jugar la carta");
     } finally {
       setLoading(false);
     }
@@ -2060,7 +2116,8 @@ function GamePage() {
   };
 
   const handleTerminarPartida = async () => {
-    if (!confirm("¿Abandonar la partida? Tu equipo pierde.")) return;
+    const confirmed = await showConfirm("Abandonar partida", "¿Abandonar la partida? Tu equipo pierde.");
+    if (!confirmed) return;
     setLoading(true);
     try {
       const success = await socketService.terminarPartida();
@@ -2250,6 +2307,7 @@ function GamePage() {
                       : ""
                   }`}
                   style={{
+                    ...getCardBackStyle(),
                     boxShadow: esMiTurnoCorte
                       ? `1px 2px 6px rgba(0,0,0,0.5), 0 0 10px rgba(202, 138, 4, 0.2)`
                       : `1px 2px 4px rgba(0,0,0,0.4)`,
@@ -2315,7 +2373,7 @@ function GamePage() {
           </div>
         );
       }
-      return <div className={`${sizeClasses[size]} card-back rounded-lg`} aria-hidden="true" />;
+      return <div className={`${sizeClasses[size]} card-back rounded-lg`} style={getCardBackStyle()} aria-hidden="true" />;
     }
 
     const cartaLabel = `Jugar ${carta.valor} de ${carta.palo}`;
@@ -2484,7 +2542,7 @@ function GamePage() {
                           {/* Back of card */}
                           <div
                             className="absolute inset-0 card-back rounded-lg"
-                            style={{ backfaceVisibility: "hidden" }}
+                            style={{ backfaceVisibility: "hidden", ...getCardBackStyle() }}
                           />
                           {/* Front of card */}
                           <div
@@ -3220,9 +3278,7 @@ function GamePage() {
       .map((c) => c.carta);
   };
   // Check if I already played a card in this mano
-  const yaJugueEnEstaMano = cartasManoActual.some(
-    (c) => c.jugadorId === socketId,
-  );
+  const yaJugueEnEstaMano = cartasManoActual.some((c) => c.jugadorId === socketId);
 
   // === SLOT-BASED PLAYER POSITIONING ===
   // Uses posicionRelativa (distance in array from me) so that from EVERY player's
@@ -3244,66 +3300,63 @@ function GamePage() {
 
   const miIndex = mesa.jugadores.findIndex((j) => j.id === socketId);
 
-  const getSlotForPlayer = (jugadorId: string): PlayerSlot | null => {
+  const playerSlotMap = (() => {
+    const map = new Map<string, PlayerSlot>();
     const numJugadores = mesa.jugadores.length;
-    const jugadorIndex = mesa.jugadores.findIndex((j) => j.id === jugadorId);
-    if (jugadorIndex === -1 || jugadorId === socketId) return null;
 
-    // How many seats clockwise from me
-    const posRel = (jugadorIndex - miIndex + numJugadores) % numJugadores;
+    mesa.jugadores.forEach((j, jugadorIndex) => {
+      if (j.id === socketId) return;
+      const posRel = (jugadorIndex - miIndex + numJugadores) % numJugadores;
 
-    if (numJugadores === 2) return "top";
+      let slot: PlayerSlot | null = null;
+      if (numJugadores === 2) slot = "top";
+      else if (numJugadores === 4) {
+        if (posRel === 1) slot = "right";
+        else if (posRel === 2) slot = "top";
+        else if (posRel === 3) slot = "left";
+      } else if (numJugadores === 6) {
+        if (posRel === 1) slot = "side-right";
+        else if (posRel === 2) slot = "top-right";
+        else if (posRel === 3) slot = "top-center";
+        else if (posRel === 4) slot = "top-left";
+        else if (posRel === 5) slot = "side-left";
+      }
+      if (slot) map.set(j.id, slot);
+    });
+    return map;
+  })();
 
-    if (numJugadores === 4) {
-      // posRel 1 → right, 2 → top (across), 3 → left
-      if (posRel === 1) return "right";
-      if (posRel === 2) return "top";
-      if (posRel === 3) return "left";
-    }
-
-    if (numJugadores === 6) {
-      // posRel 1 → side-right, 2 → top-right, 3 → top-center (across),
-      // 4 → top-left, 5 → side-left
-      if (posRel === 1) return "side-right";
-      if (posRel === 2) return "top-right";
-      if (posRel === 3) return "top-center";
-      if (posRel === 4) return "top-left";
-      if (posRel === 5) return "side-left";
-    }
-
-    return null;
+  const getSlotForPlayer = (jugadorId: string): PlayerSlot | null => {
+    return playerSlotMap.get(jugadorId) || null;
   };
 
   // Players grouped by position area
-  const topRowPlayers = mesa.jugadores
-    .filter((j) => {
-      const slot = getSlotForPlayer(j.id);
-      return slot && (slot === "top" || slot.startsWith("top-"));
-    })
-    .sort((a, b) => {
-      const order: Record<string, number> = {
-        "top-left": 0,
-        top: 1,
-        "top-center": 1,
-        "top-right": 2,
-      };
-      return (
-        (order[getSlotForPlayer(a.id) || ""] ?? 1) -
-        (order[getSlotForPlayer(b.id) || ""] ?? 1)
+  const { topRowPlayers, leftSidePlayer, rightSidePlayer } = (() => {
+    const order: Record<string, number> = {
+      "top-left": 0, top: 1, "top-center": 1, "top-right": 2,
+    };
+    const top = mesa.jugadores
+      .filter((j) => {
+        const slot = playerSlotMap.get(j.id);
+        return slot && (slot === "top" || slot.startsWith("top-"));
+      })
+      .sort((a, b) =>
+        (order[playerSlotMap.get(a.id) || ""] ?? 1) -
+        (order[playerSlotMap.get(b.id) || ""] ?? 1)
       );
-    });
 
-  const leftSidePlayer =
-    mesa.jugadores.find((j) => {
-      const slot = getSlotForPlayer(j.id);
+    const left = mesa.jugadores.find((j) => {
+      const slot = playerSlotMap.get(j.id);
       return slot === "left" || slot === "side-left";
     }) || null;
 
-  const rightSidePlayer =
-    mesa.jugadores.find((j) => {
-      const slot = getSlotForPlayer(j.id);
+    const right = mesa.jugadores.find((j) => {
+      const slot = playerSlotMap.get(j.id);
       return slot === "right" || slot === "side-right";
     }) || null;
+
+    return { topRowPlayers: top, leftSidePlayer: left, rightSidePlayer: right };
+  })();
 
   // Helper to render a player indicator (name + cards)
   const renderPlayerIndicator = (
@@ -3353,22 +3406,25 @@ function GamePage() {
               : "equipo-2-light text-red-300"
           } ${esSuTurno ? "turn-glow" : ""}`}
         >
-          {j.avatarUrl ? (
-            <Image
-              src={j.avatarUrl}
-              alt=""
-              width={24}
-              height={24}
-              className={`${compact ? "w-5 h-5" : "w-6 h-6"} rounded-full object-cover border border-gold-600/50`}
-              unoptimized
-            />
-          ) : (
-            <span
-              className={`${compact ? "w-5 h-5 text-[9px]" : "w-6 h-6 text-[10px]"} rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold`}
-            >
-              {j.nombre[0]?.toUpperCase()}
-            </span>
-          )}
+          {(() => {
+            const marco = getMarcoForPlayer(j.id);
+            return j.avatarUrl ? (
+              <Image
+                src={j.avatarUrl}
+                alt=""
+                width={24}
+                height={24}
+                className={`${compact ? "w-5 h-5" : "w-6 h-6"} rounded-full object-cover border-2 ${marco.border} ${marco.shadow} ${marco.ring}`}
+                unoptimized
+              />
+            ) : (
+              <span
+                className={`${compact ? "w-5 h-5 text-[9px]" : "w-6 h-6 text-[10px]"} rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold border-2 ${marco.border} ${marco.shadow} ${marco.ring}`}
+              >
+                {j.nombre[0]?.toUpperCase()}
+              </span>
+            );
+          })()}
           {j.nombre}
           {j.esMano && <MonedaMano isActive={true} />}
         </div>
@@ -3403,6 +3459,7 @@ function GamePage() {
                       ? "w-6 h-9 sm:w-7 sm:h-10 card-back rounded"
                       : "w-7 h-10 sm:w-8 sm:h-12 card-back rounded"
                   }
+                  style={getCardBackStyle()}
                 />
               ))}
         </div>
@@ -4177,7 +4234,7 @@ function GamePage() {
                       Mazo
                     </div>
                     <div className="relative">
-                      <div className="w-10 h-[3.75rem] sm:w-14 sm:h-[5.25rem] lg:w-16 lg:h-24 card-back rounded-lg shadow-lg" />
+                      <div className="w-10 h-[3.75rem] sm:w-14 sm:h-[5.25rem] lg:w-16 lg:h-24 card-back rounded-lg shadow-lg" style={getCardBackStyle()} />
                     </div>
                   </div>
                   {/* Muestra - a la derecha */}
@@ -4212,14 +4269,15 @@ function GamePage() {
                     {/* Stack effect - multiple backs con efecto 3D */}
                     <div
                       className="absolute -top-2 -left-1 w-16 h-24 sm:w-20 sm:h-32 card-back rounded-lg opacity-50"
-                      style={{ transform: "translateZ(-6px)" }}
+                      style={{ transform: "translateZ(-6px)", ...getCardBackStyle() }}
                     />
                     <div
                       className="absolute -top-1 -left-0.5 w-16 h-24 sm:w-20 sm:h-32 card-back rounded-lg opacity-70"
-                      style={{ transform: "translateZ(-3px)" }}
+                      style={{ transform: "translateZ(-3px)", ...getCardBackStyle() }}
                     />
                     <div
                       className={`relative w-16 h-24 sm:w-20 sm:h-32 card-back rounded-lg shadow-2xl ${dealingCards.length > 0 ? "mazo-dealing" : ""}`}
+                      style={getCardBackStyle()}
                     />
 
                     {/* Cartas volando hacia cada jugador - trayectoria extendida con perspectiva */}
@@ -4292,6 +4350,7 @@ function GamePage() {
                           className="absolute top-0 left-0 w-14 h-20 sm:w-16 sm:h-24 card-back rounded-lg shadow-xl animate-deal-card dealing-card"
                           style={
                             {
+                              ...getCardBackStyle(),
                               "--deal-x": `${targetX}px`,
                               "--deal-y": `${targetY}px`,
                               "--deal-rotation": `${rotation}deg`,
@@ -5120,6 +5179,7 @@ function GamePage() {
           </div>
         </div>
       </div>
+      <AlertModal {...alertState} onClose={closeAlert} />
     </div>
   );
 }

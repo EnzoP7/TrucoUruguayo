@@ -7,6 +7,7 @@ const {
   crearUsuarioGoogle,
   vincularGoogle,
   actualizarUltimoLogin,
+  actualizarAvatarUrl,
 } = require('./db');
 
 const SALT_ROUNDS = 10;
@@ -37,7 +38,7 @@ async function registrar(apodo, password) {
 
   return {
     success: true,
-    usuario: { id: userId, apodo: apodoLimpio, es_premium: false, avatar_url: null },
+    usuario: { id: userId, apodo: apodoLimpio, es_premium: false, avatar_url: null, tema_mesa: 'clasico', reverso_cartas: 'clasico' },
   };
 }
 
@@ -60,7 +61,7 @@ async function login(apodo, password) {
 
   return {
     success: true,
-    usuario: { id: Number(usuario.id), apodo: usuario.apodo, es_premium: !!usuario.es_premium, avatar_url: usuario.avatar_url || null },
+    usuario: { id: Number(usuario.id), apodo: usuario.apodo, es_premium: !!usuario.es_premium, avatar_url: usuario.avatar_url || null, tema_mesa: usuario.tema_mesa || 'clasico', reverso_cartas: usuario.reverso_cartas || 'clasico' },
   };
 }
 
@@ -77,6 +78,10 @@ async function loginConGoogle(googleId, email, nombre, avatarUrl) {
       if (existentePorEmail) {
         // Vincular automáticamente si el email coincide
         await vincularGoogle(existentePorEmail.id, googleId, email);
+        // Guardar avatar de Google si no tenía
+        if (avatarUrl && !existentePorEmail.avatar_url) {
+          await actualizarAvatarUrl(existentePorEmail.id, avatarUrl);
+        }
         usuario = await buscarUsuarioPorGoogleId(googleId);
       } else {
         // Crear nuevo usuario
@@ -93,6 +98,12 @@ async function loginConGoogle(googleId, email, nombre, avatarUrl) {
 
     await actualizarUltimoLogin(usuario.id);
 
+    // Sincronizar avatar de Google si cambió o no tenía
+    if (avatarUrl && avatarUrl !== usuario.avatar_url) {
+      await actualizarAvatarUrl(usuario.id, avatarUrl);
+      usuario.avatar_url = avatarUrl;
+    }
+
     return {
       success: true,
       usuario: {
@@ -101,6 +112,8 @@ async function loginConGoogle(googleId, email, nombre, avatarUrl) {
         email: usuario.email,
         es_premium: !!usuario.es_premium,
         avatar_url: usuario.avatar_url || null,
+        tema_mesa: usuario.tema_mesa || 'clasico',
+        reverso_cartas: usuario.reverso_cartas || 'clasico',
       },
     };
   } catch (error) {

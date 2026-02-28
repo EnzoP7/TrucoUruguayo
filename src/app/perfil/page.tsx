@@ -6,6 +6,7 @@ import Image from 'next/image';
 import socketService from '@/lib/socket';
 import { useUploadThing } from '@/lib/uploadthing';
 import { RewardedAd } from '@/components/ads';
+import AlertModal, { useAlertModal } from '@/components/AlertModal';
 
 interface Stats {
   partidas_jugadas: number;
@@ -89,6 +90,22 @@ interface Cosmetico {
   equipado: number;
 }
 
+const MARCOS_AVATAR: Record<string, { border: string; shadow: string; ring: string }> = {
+  marco_ninguno: { border: "border-gold-600/50", shadow: "", ring: "" },
+  marco_bronce: { border: "border-amber-700", shadow: "shadow-lg shadow-amber-700/30", ring: "ring-1 ring-amber-600/40" },
+  marco_plata: { border: "border-gray-300", shadow: "shadow-lg shadow-gray-300/30", ring: "ring-1 ring-gray-300/40" },
+  marco_oro: { border: "border-yellow-400", shadow: "shadow-lg shadow-yellow-400/40", ring: "ring-2 ring-yellow-400/50" },
+  marco_diamante: { border: "border-cyan-300", shadow: "shadow-lg shadow-cyan-300/50", ring: "ring-2 ring-cyan-300/60" },
+};
+
+const FONDOS_PERFIL: Record<string, { gradient: string; name: string }> = {
+  fondo_clasico: { gradient: '', name: 'Clásico' },
+  fondo_celeste: { gradient: 'bg-gradient-to-br from-sky-900/30 via-cyan-900/20 to-blue-900/30', name: 'Celeste' },
+  fondo_atardecer: { gradient: 'bg-gradient-to-br from-orange-900/30 via-rose-900/20 to-amber-900/30', name: 'Atardecer' },
+  fondo_galaxia: { gradient: 'bg-gradient-to-br from-purple-900/40 via-indigo-900/30 to-violet-900/40', name: 'Galaxia' },
+  fondo_fuego: { gradient: 'bg-gradient-to-br from-red-900/40 via-orange-900/30 to-yellow-900/20', name: 'Fuego' },
+};
+
 const TIPOS_AUDIO = [
   { key: 'truco', label: 'Truco' },
   { key: 'retruco', label: 'Retruco' },
@@ -105,6 +122,7 @@ const TIPOS_AUDIO = [
 ];
 
 export default function PerfilPage() {
+  const { alertState, showAlert, closeAlert } = useAlertModal();
   const [stats, setStats] = useState<Stats | null>(null);
   const [historial, setHistorial] = useState<Partida[]>([]);
   const [amigos, setAmigos] = useState<Amigo[]>([]);
@@ -360,7 +378,7 @@ export default function PerfilPage() {
 
   const handleComprarPremium = async () => {
     const userId = getUserId();
-    if (!userId) return alert('Debes estar logueado para comprar premium');
+    if (!userId) return showAlert('warning', 'Sesión requerida', 'Debes estar logueado para comprar premium');
     setCargandoPago(true);
     try {
       const res = await fetch('/api/payments/premium', {
@@ -370,7 +388,7 @@ export default function PerfilPage() {
       });
       const data = await res.json();
       if (data.error) {
-        alert(data.error);
+        showAlert('error', 'Error de pago', data.error);
         return;
       }
       if (data.init_point) {
@@ -378,7 +396,7 @@ export default function PerfilPage() {
       }
     } catch (err) {
       console.error('Error creando pago:', err);
-      alert('Error al conectar con MercadoPago. Intenta de nuevo.');
+      showAlert('error', 'Error de conexión', 'Error al conectar con MercadoPago. Intenta de nuevo.');
     } finally {
       setCargandoPago(false);
     }
@@ -386,7 +404,7 @@ export default function PerfilPage() {
 
   const handleComprarPack = async (packId: string) => {
     const userId = getUserId();
-    if (!userId) return alert('Debes estar logueado para comprar monedas');
+    if (!userId) return showAlert('warning', 'Sesión requerida', 'Debes estar logueado para comprar monedas');
     setComprandoPack(packId);
     try {
       const res = await fetch('/api/payments/monedas', {
@@ -396,7 +414,7 @@ export default function PerfilPage() {
       });
       const data = await res.json();
       if (data.error) {
-        alert(data.error);
+        showAlert('error', 'Error de pago', data.error);
         return;
       }
       if (data.init_point) {
@@ -404,7 +422,7 @@ export default function PerfilPage() {
       }
     } catch (err) {
       console.error('Error creando pago de monedas:', err);
-      alert('Error al conectar con MercadoPago. Intenta de nuevo.');
+      showAlert('error', 'Error de conexión', 'Error al conectar con MercadoPago. Intenta de nuevo.');
     } finally {
       setComprandoPack(null);
     }
@@ -425,14 +443,14 @@ export default function PerfilPage() {
           u.reverso_cartas = reversoCartas;
           sessionStorage.setItem('truco_usuario', JSON.stringify(u));
         }
-        alert('Personalización guardada correctamente');
+        showAlert('success', 'Guardado', 'Personalización guardada correctamente');
       } else {
         console.error('[Perfil] Error:', result.error);
-        alert('Error: ' + (result.error || 'No se pudo guardar'));
+        showAlert('error', 'Error', result.error || 'No se pudo guardar');
       }
     } catch (err) {
       console.error('Error guardando personalizacion:', err);
-      alert('Error al guardar: ' + (err instanceof Error ? err.message : 'Error desconocido'));
+      showAlert('error', 'Error al guardar', err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setGuardandoPersonalizacion(false);
     }
@@ -460,7 +478,7 @@ export default function PerfilPage() {
           setMonedas(monedas - cosmeticoComprado.precio_monedas);
         }
       } else {
-        alert(result.error || 'Error al comprar cosmético');
+        showAlert('error', 'Error', result.error || 'Error al comprar cosmético');
       }
     } catch (err) {
       console.error('Error comprando cosmético:', err);
@@ -630,24 +648,32 @@ export default function PerfilPage() {
         </Link>
 
         {/* Card de perfil */}
-        <div className="glass rounded-2xl p-6 mb-6 border border-gold-800/20">
+        <div className={`glass rounded-2xl p-6 mb-6 border border-gold-800/20 ${(() => {
+          const fondoEquipado = cosmeticos.find(c => c.tipo === 'fondo_perfil' && c.equipado === 1);
+          const fondo = fondoEquipado ? (FONDOS_PERFIL[fondoEquipado.id] || FONDOS_PERFIL.fondo_clasico) : FONDOS_PERFIL.fondo_clasico;
+          return fondo.gradient;
+        })()}`}>
           <div className="flex items-center gap-4 mb-6">
             {/* Avatar */}
             <div className="relative group">
-              {avatarUrl ? (
-                <Image
-                  src={avatarUrl}
-                  alt="Avatar"
-                  width={64}
-                  height={64}
-                  className="w-16 h-16 rounded-full object-cover border-2 border-gold-600/50"
-                  unoptimized
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold text-2xl">
-                  {stats.apodo[0].toUpperCase()}
-                </div>
-              )}
+              {(() => {
+                const marcoEquipado = cosmeticos.find(c => c.tipo === 'marco_avatar' && c.equipado === 1);
+                const marco = marcoEquipado ? (MARCOS_AVATAR[marcoEquipado.id] || MARCOS_AVATAR.marco_ninguno) : MARCOS_AVATAR.marco_ninguno;
+                return avatarUrl ? (
+                  <Image
+                    src={avatarUrl}
+                    alt="Avatar"
+                    width={64}
+                    height={64}
+                    className={`w-16 h-16 rounded-full object-cover border-2 ${marco.border} ${marco.shadow} ${marco.ring}`}
+                    unoptimized
+                  />
+                ) : (
+                  <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-gold-600 to-gold-700 flex items-center justify-center text-wood-950 font-bold text-2xl border-2 ${marco.border} ${marco.shadow} ${marco.ring}`}>
+                    {stats.apodo[0].toUpperCase()}
+                  </div>
+                );
+              })()}
               {esPremium && (
                 <button
                   onClick={() => avatarInputRef.current?.click()}
@@ -709,7 +735,7 @@ export default function PerfilPage() {
           </div>
 
           {/* Premium */}
-          <div className="mt-4 pt-4 border-t border-gold-800/20">
+          <div id="premium-section" className="mt-4 pt-4 border-t border-gold-800/20">
             <div className="flex items-center gap-3 flex-wrap">
               {/* Boton dev toggle */}
               <button
@@ -751,7 +777,7 @@ export default function PerfilPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-4 flex-wrap">
-          {(['stats', 'logros', 'tienda', 'historial', 'amigos', ...(esPremium ? ['audios', 'mesa'] as const : [])] as const).map(t => (
+          {(['stats', 'logros', 'tienda', 'historial', 'amigos', 'audios', 'mesa'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t as typeof tab)}
@@ -761,7 +787,7 @@ export default function PerfilPage() {
                   : 'text-gold-500/50 hover:text-gold-400 hover:bg-white/5'
               }`}
             >
-              {t === 'stats' ? 'Resumen' : t === 'logros' ? '🏆 Logros' : t === 'tienda' ? '🛒 Tienda' : t === 'historial' ? 'Historial' : t === 'amigos' ? 'Amigos' : t === 'audios' ? 'Mis Audios' : 'Mi Mesa'}
+              {t === 'stats' ? 'Resumen' : t === 'logros' ? '🏆 Logros' : t === 'tienda' ? '🛒 Tienda' : t === 'historial' ? 'Historial' : t === 'amigos' ? 'Amigos' : t === 'audios' ? `${!esPremium ? '👑 ' : ''}Mis Audios` : `${!esPremium ? '👑 ' : ''}Mi Mesa`}
             </button>
           ))}
         </div>
@@ -1009,51 +1035,64 @@ export default function PerfilPage() {
               </div>
             </div>
 
-            {/* Estadísticas detalladas */}
+            {/* Estadísticas detalladas - Premium Analytics */}
             {estadisticasDetalladas && (
-              <div className="mb-6">
-                <h4 className="text-gold-400/80 text-sm font-medium mb-3">Estadísticas Detalladas</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
-                    <div className="text-xl font-bold text-celeste-400">{estadisticasDetalladas.trucos_cantados}</div>
-                    <div className="text-gold-500/50 text-xs">Trucos cantados</div>
+              <div className="mb-6 relative">
+                {!esPremium && (
+                  <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-yellow-900/30 to-amber-900/20 border border-yellow-500/20">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">👑</span>
+                      <div>
+                        <p className="text-yellow-300 font-bold text-xs">Analytics Premium</p>
+                        <p className="text-yellow-400/60 text-[10px]">Conseguí el Pase Premium para ver tus estadísticas detalladas.</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
-                    <div className="text-xl font-bold text-green-400">{estadisticasDetalladas.trucos_ganados}</div>
-                    <div className="text-gold-500/50 text-xs">Trucos ganados</div>
+                )}
+                <div className={!esPremium ? 'opacity-40 pointer-events-none select-none blur-[2px]' : ''}>
+                  <h4 className="text-gold-400/80 text-sm font-medium mb-3">Estadísticas Detalladas</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                      <div className="text-xl font-bold text-celeste-400">{estadisticasDetalladas.trucos_cantados}</div>
+                      <div className="text-gold-500/50 text-xs">Trucos cantados</div>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                      <div className="text-xl font-bold text-green-400">{estadisticasDetalladas.trucos_ganados}</div>
+                      <div className="text-gold-500/50 text-xs">Trucos ganados</div>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                      <div className="text-xl font-bold text-yellow-400">{estadisticasDetalladas.envidos_cantados}</div>
+                      <div className="text-gold-500/50 text-xs">Envidos cantados</div>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                      <div className="text-xl font-bold text-green-400">{estadisticasDetalladas.envidos_ganados}</div>
+                      <div className="text-gold-500/50 text-xs">Envidos ganados</div>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                      <div className="text-xl font-bold text-pink-400">{estadisticasDetalladas.flores_cantadas}</div>
+                      <div className="text-gold-500/50 text-xs">Flores cantadas</div>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                      <div className="text-xl font-bold text-amber-400">{estadisticasDetalladas.partidas_perfectas}</div>
+                      <div className="text-gold-500/50 text-xs">Partidas perfectas</div>
+                    </div>
                   </div>
-                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
-                    <div className="text-xl font-bold text-yellow-400">{estadisticasDetalladas.envidos_cantados}</div>
-                    <div className="text-gold-500/50 text-xs">Envidos cantados</div>
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
-                    <div className="text-xl font-bold text-green-400">{estadisticasDetalladas.envidos_ganados}</div>
-                    <div className="text-gold-500/50 text-xs">Envidos ganados</div>
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
-                    <div className="text-xl font-bold text-pink-400">{estadisticasDetalladas.flores_cantadas}</div>
-                    <div className="text-gold-500/50 text-xs">Flores cantadas</div>
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
-                    <div className="text-xl font-bold text-amber-400">{estadisticasDetalladas.partidas_perfectas}</div>
-                    <div className="text-gold-500/50 text-xs">Partidas perfectas</div>
-                  </div>
-                </div>
 
-                {/* Stats por modo */}
-                <h4 className="text-gold-400/80 text-sm font-medium mt-4 mb-3">Por Modo de Juego</h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
-                    <div className="text-lg font-bold text-gold-400">{estadisticasDetalladas.victorias_1v1}/{estadisticasDetalladas.partidas_1v1}</div>
-                    <div className="text-gold-500/50 text-xs">1v1</div>
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
-                    <div className="text-lg font-bold text-gold-400">{estadisticasDetalladas.victorias_2v2}/{estadisticasDetalladas.partidas_2v2}</div>
-                    <div className="text-gold-500/50 text-xs">2v2</div>
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
-                    <div className="text-lg font-bold text-gold-400">{estadisticasDetalladas.victorias_3v3}/{estadisticasDetalladas.partidas_3v3}</div>
-                    <div className="text-gold-500/50 text-xs">3v3</div>
+                  {/* Stats por modo */}
+                  <h4 className="text-gold-400/80 text-sm font-medium mt-4 mb-3">Por Modo de Juego</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                      <div className="text-lg font-bold text-gold-400">{estadisticasDetalladas.victorias_1v1}/{estadisticasDetalladas.partidas_1v1}</div>
+                      <div className="text-gold-500/50 text-xs">1v1</div>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                      <div className="text-lg font-bold text-gold-400">{estadisticasDetalladas.victorias_2v2}/{estadisticasDetalladas.partidas_2v2}</div>
+                      <div className="text-gold-500/50 text-xs">2v2</div>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-3 text-center border border-gold-700/10">
+                      <div className="text-lg font-bold text-gold-400">{estadisticasDetalladas.victorias_3v3}/{estadisticasDetalladas.partidas_3v3}</div>
+                      <div className="text-gold-500/50 text-xs">3v3</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1248,7 +1287,7 @@ export default function PerfilPage() {
                 Desbloquea cosmeticos con monedas. Los elementos premium requieren ser usuario premium.
               </p>
 
-              {['tema_mesa', 'reverso_cartas', 'marco_avatar'].map(tipo => {
+              {['tema_mesa', 'reverso_cartas', 'marco_avatar', 'fondo_perfil', 'pack_sonido'].map(tipo => {
                 const cosmeticosTipo = cosmeticos.filter(c => c.tipo === tipo);
                 if (cosmeticosTipo.length === 0) return null;
 
@@ -1256,6 +1295,8 @@ export default function PerfilPage() {
                   tema_mesa: '🎨 Temas de Mesa',
                   reverso_cartas: '🃏 Reversos de Cartas',
                   marco_avatar: '🖼️ Marcos de Avatar',
+                  fondo_perfil: '🌄 Fondos de Perfil',
+                  pack_sonido: '🔊 Packs de Sonidos',
                 }[tipo] || tipo;
 
                 return (
@@ -1287,11 +1328,15 @@ export default function PerfilPage() {
                             <div className={`h-20 flex items-center justify-center relative ${
                               tipo === 'tema_mesa' ? 'bg-gradient-to-br from-emerald-800 to-emerald-900' :
                               tipo === 'reverso_cartas' ? 'bg-gradient-to-br from-blue-800 to-blue-900' :
+                              tipo === 'fondo_perfil' ? 'bg-gradient-to-br from-rose-800 to-orange-900' :
+                              tipo === 'pack_sonido' ? 'bg-gradient-to-br from-teal-800 to-cyan-900' :
                               'bg-gradient-to-br from-purple-800 to-purple-900'
                             }`}>
                               <span className="text-3xl">{
                                 tipo === 'tema_mesa' ? '🎨' :
-                                tipo === 'reverso_cartas' ? '🃏' : '🖼️'
+                                tipo === 'reverso_cartas' ? '🃏' :
+                                tipo === 'fondo_perfil' ? '🌄' :
+                                tipo === 'pack_sonido' ? '🔊' : '🖼️'
                               }</span>
                               {/* Precio en esquina */}
                               {!desbloqueado && cosmetico.precio_monedas > 0 && (
@@ -1374,229 +1419,346 @@ export default function PerfilPage() {
           </div>
         )}
 
-        {/* Mis Audios (tab audios - solo premium) */}
-        {tab === 'audios' && esPremium && (
+        {/* Mis Audios (tab audios) */}
+        {tab === 'audios' && (
           <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20">
             <h3 className="text-gold-300 font-bold mb-2">Mis Audios Personalizados</h3>
             <p className="text-gold-500/40 text-xs mb-4">
               Subi audios personalizados para cada accion del juego. Cuando realices esa accion, todos los jugadores escucharan tu audio.
             </p>
 
-            {/* Error message */}
-            {uploadError && (
-              <div className="mb-3 p-3 rounded-xl bg-red-900/20 border border-red-500/20 flex items-center justify-between">
-                <span className="text-red-300 text-xs">{uploadError}</span>
-                <button onClick={() => setUploadError(null)} className="text-red-400/60 hover:text-red-300 text-xs ml-2">X</button>
+            {/* Banner premium para no-premium */}
+            {!esPremium && (
+              <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-yellow-900/30 to-amber-900/20 border border-yellow-500/20">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">👑</span>
+                  <div className="flex-1">
+                    <p className="text-yellow-300 font-bold text-sm">Función Premium</p>
+                    <p className="text-yellow-400/60 text-xs">Conseguí el Pase Premium para subir audios personalizados a tus acciones del juego.</p>
+                  </div>
+                </div>
               </div>
             )}
 
-            <div className="space-y-2">
-              {TIPOS_AUDIO.map(({ key, label }) => {
-                const audio = getAudioForTipo(key);
-                const isThisUploading = uploading === key;
-                const isPlaying = playingAudio === key;
-                const isAnyUploading = uploading !== null;
+            {/* Contenedor con overlay para no-premium */}
+            <div className={!esPremium ? 'opacity-50 pointer-events-none select-none' : ''}>
+              {/* Error message */}
+              {uploadError && (
+                <div className="mb-3 p-3 rounded-xl bg-red-900/20 border border-red-500/20 flex items-center justify-between">
+                  <span className="text-red-300 text-xs">{uploadError}</span>
+                  <button onClick={() => setUploadError(null)} className="text-red-400/60 hover:text-red-300 text-xs ml-2">X</button>
+                </div>
+              )}
 
-                return (
-                  <div
-                    key={key}
-                    className={`rounded-xl px-4 py-3 bg-white/5 border transition-all ${
-                      isThisUploading ? 'border-gold-500/30 bg-gold-900/10' : 'border-gold-700/10'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <span className="text-gold-300 text-sm font-medium w-28 shrink-0">{label}</span>
-                        {isThisUploading ? (
-                          <span className="text-gold-400 text-xs animate-pulse">Subiendo...</span>
-                        ) : audio ? (
-                          <span className="text-green-400/60 text-xs truncate">Configurado</span>
-                        ) : (
-                          <span className="text-gold-500/30 text-xs">Sin audio</span>
-                        )}
-                      </div>
+              <div className="space-y-2">
+                {TIPOS_AUDIO.map(({ key, label }) => {
+                  const audio = getAudioForTipo(key);
+                  const isThisUploading = uploading === key;
+                  const isPlaying = playingAudio === key;
+                  const isAnyUploading = uploading !== null;
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Play button */}
-                        {audio && !isThisUploading && (
-                          <button
-                            onClick={() => handlePlayAudio(audio.url_archivo, key)}
-                            className={`p-1.5 rounded-lg transition-all ${
-                              isPlaying
-                                ? 'bg-green-600/30 text-green-300'
-                                : 'text-gold-400/50 hover:text-gold-300 hover:bg-white/10'
-                            }`}
-                            title={isPlaying ? 'Detener' : 'Reproducir'}
-                          >
-                            {isPlaying ? (
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                <rect x="6" y="4" width="4" height="16" />
-                                <rect x="14" y="4" width="4" height="16" />
-                              </svg>
-                            ) : (
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M8 5v14l11-7z" />
-                              </svg>
-                            )}
-                          </button>
-                        )}
-
-                        {/* Delete button */}
-                        {audio && !isThisUploading && (
-                          <button
-                            onClick={() => handleDeleteAudio(Number(audio.id))}
-                            className="p-1.5 rounded-lg text-red-400/50 hover:text-red-300 hover:bg-red-900/20 transition-all"
-                            title="Eliminar"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        )}
-
-                        {/* Upload button */}
-                        {!isThisUploading && (
-                          <button
-                            onClick={() => {
-                              setUploadTipoTarget(key);
-                              setUploadError(null);
-                              fileInputRef.current?.click();
-                            }}
-                            disabled={isAnyUploading}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                              isAnyUploading
-                                ? 'bg-gold-600/10 text-gold-400/30 cursor-not-allowed'
-                                : 'bg-gold-600/30 text-gold-300 hover:bg-gold-600/40 border border-gold-500/20'
-                            }`}
-                          >
-                            {audio ? 'Cambiar' : 'Subir'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Progress bar */}
-                    {isThisUploading && (
-                      <div className="mt-2">
-                        <div className="w-full bg-gold-900/30 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className="bg-gradient-to-r from-gold-500 to-amber-400 h-full rounded-full transition-all duration-300"
-                            style={{ width: `${uploadProgress}%` }}
-                          />
+                  return (
+                    <div
+                      key={key}
+                      className={`rounded-xl px-4 py-3 bg-white/5 border transition-all ${
+                        isThisUploading ? 'border-gold-500/30 bg-gold-900/10' : 'border-gold-700/10'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className="text-gold-300 text-sm font-medium w-28 shrink-0">{label}</span>
+                          {isThisUploading ? (
+                            <span className="text-gold-400 text-xs animate-pulse">Subiendo...</span>
+                          ) : audio ? (
+                            <span className="text-green-400/60 text-xs truncate">Configurado</span>
+                          ) : (
+                            <span className="text-gold-500/30 text-xs">Sin audio</span>
+                          )}
                         </div>
-                        <div className="text-[10px] text-gold-400/50 mt-1 text-right">{uploadProgress}%</div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Play button */}
+                          {audio && !isThisUploading && (
+                            <button
+                              onClick={() => handlePlayAudio(audio.url_archivo, key)}
+                              className={`p-1.5 rounded-lg transition-all ${
+                                isPlaying
+                                  ? 'bg-green-600/30 text-green-300'
+                                  : 'text-gold-400/50 hover:text-gold-300 hover:bg-white/10'
+                              }`}
+                              title={isPlaying ? 'Detener' : 'Reproducir'}
+                            >
+                              {isPlaying ? (
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                  <rect x="6" y="4" width="4" height="16" />
+                                  <rect x="14" y="4" width="4" height="16" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              )}
+                            </button>
+                          )}
+
+                          {/* Delete button */}
+                          {audio && !isThisUploading && (
+                            <button
+                              onClick={() => handleDeleteAudio(Number(audio.id))}
+                              className="p-1.5 rounded-lg text-red-400/50 hover:text-red-300 hover:bg-red-900/20 transition-all"
+                              title="Eliminar"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+
+                          {/* Upload button */}
+                          {!isThisUploading && (
+                            <button
+                              onClick={() => {
+                                setUploadTipoTarget(key);
+                                setUploadError(null);
+                                fileInputRef.current?.click();
+                              }}
+                              disabled={isAnyUploading}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                isAnyUploading
+                                  ? 'bg-gold-600/10 text-gold-400/30 cursor-not-allowed'
+                                  : 'bg-gold-600/30 text-gold-300 hover:bg-gold-600/40 border border-gold-500/20'
+                              }`}
+                            >
+                              {audio ? 'Cambiar' : 'Subir'}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                      {/* Progress bar */}
+                      {isThisUploading && (
+                        <div className="mt-2">
+                          <div className="w-full bg-gold-900/30 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="bg-gradient-to-r from-gold-500 to-amber-400 h-full rounded-full transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                          <div className="text-[10px] text-gold-400/50 mt-1 text-right">{uploadProgress}%</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 p-3 rounded-xl bg-yellow-900/10 border border-yellow-500/10">
+                <p className="text-yellow-300/60 text-xs">
+                  Formatos soportados: MP3, WAV, OGG, M4A. Peso maximo: 512KB por audio.
+                </p>
+              </div>
             </div>
 
-            <div className="mt-4 p-3 rounded-xl bg-yellow-900/10 border border-yellow-500/10">
-              <p className="text-yellow-300/60 text-xs">
-                Formatos soportados: MP3, WAV, OGG, M4A. Peso maximo: 512KB por audio.
-              </p>
-            </div>
+            {/* Botón Obtener Premium para no-premium */}
+            {!esPremium && (
+              <button
+                onClick={() => {
+                  const premiumSection = document.getElementById('premium-section');
+                  if (premiumSection) premiumSection.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="w-full mt-4 py-3 rounded-xl font-bold bg-gradient-to-r from-yellow-600 to-amber-500 text-black hover:from-yellow-500 hover:to-amber-400 transition-all shadow-lg shadow-yellow-600/20 flex items-center justify-center gap-2"
+              >
+                <span>👑</span> Obtener Premium
+              </button>
+            )}
           </div>
         )}
 
-        {/* Personalización de Mesa (tab mesa - solo premium) */}
-        {tab === 'mesa' && esPremium && (
-          <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20">
+        {/* Personalización de Mesa (tab mesa) */}
+        {tab === 'mesa' && (
+          <div className="glass rounded-2xl p-4 sm:p-6 border border-gold-800/20 relative">
             <h3 className="text-gold-300 font-bold mb-2">Personalización de Mesa</h3>
             <p className="text-gold-500/40 text-xs mb-6">
               Personalizá el aspecto de tu mesa de truco. Tus oponentes verán tu tema cuando juegues.
             </p>
 
-            {/* Tema de Mesa */}
-            <div className="mb-6">
-              <h4 className="text-gold-400/80 text-sm font-medium mb-3">Tema de la Mesa</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {[
-                  { id: 'clasico', nombre: 'Clásico', color: 'from-[#1a3d1a] via-[#0d2e0d] to-[#0a2a0a]', desc: 'Verde tradicional' },
-                  { id: 'azul', nombre: 'Noche', color: 'from-[#1a2744] via-[#0d1a2e] to-[#0a1525]', desc: 'Azul nocturno' },
-                  { id: 'rojo', nombre: 'Casino', color: 'from-[#4a1a1a] via-[#2e0d0d] to-[#250a0a]', desc: 'Rojo elegante' },
-                  { id: 'dorado', nombre: 'Dorado', color: 'from-[#3d3010] via-[#2a200a] to-[#1a1505]', desc: 'Premium' },
-                ].map(tema => (
-                  <button
-                    key={tema.id}
-                    onClick={() => setTemaMesa(tema.id)}
-                    className={`relative rounded-xl overflow-hidden transition-all ${
-                      temaMesa === tema.id
-                        ? 'ring-2 ring-gold-400 ring-offset-2 ring-offset-black/50 scale-105'
-                        : 'hover:scale-102 opacity-80 hover:opacity-100'
-                    }`}
-                  >
-                    <div className={`h-20 bg-gradient-to-br ${tema.color}`}>
-                      <div className="absolute inset-0 bg-[url('/Images/felt-texture.png')] opacity-20" />
-                    </div>
-                    <div className="p-2 bg-black/40">
-                      <div className="text-white text-xs font-medium">{tema.nombre}</div>
-                      <div className="text-gold-400/50 text-[10px]">{tema.desc}</div>
-                    </div>
-                    {temaMesa === tema.id && (
-                      <div className="absolute top-1 right-1 w-5 h-5 bg-gold-500 rounded-full flex items-center justify-center">
-                        <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
+            {/* Banner premium para no-premium */}
+            {!esPremium && (
+              <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-yellow-900/30 to-amber-900/20 border border-yellow-500/20">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">👑</span>
+                  <div className="flex-1">
+                    <p className="text-yellow-300 font-bold text-sm">Función Premium</p>
+                    <p className="text-yellow-400/60 text-xs">Conseguí el Pase Premium para personalizar tu mesa y el reverso de tus cartas.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Contenedor con overlay para no-premium */}
+            <div className={!esPremium ? 'opacity-50 pointer-events-none select-none' : ''}>
+              {/* Tema de Mesa */}
+              <div className="mb-6">
+                <h4 className="text-gold-400/80 text-sm font-medium mb-3">Tema de la Mesa</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {[
+                    { id: 'clasico', nombre: 'Clásico', color: 'from-[#1a3d1a] via-[#0d2e0d] to-[#0a2a0a]', desc: 'Verde tradicional' },
+                    { id: 'azul', nombre: 'Noche', color: 'from-[#1a2744] via-[#0d1a2e] to-[#0a1525]', desc: 'Azul nocturno' },
+                    { id: 'rojo', nombre: 'Casino', color: 'from-[#4a1a1a] via-[#2e0d0d] to-[#250a0a]', desc: 'Rojo elegante' },
+                    { id: 'dorado', nombre: 'Dorado', color: 'from-[#3d3010] via-[#2a200a] to-[#1a1505]', desc: 'Dorado real' },
+                    { id: 'cuero', nombre: 'Cuero', color: 'from-[#5c3a1e] via-[#3d2814] to-[#2a1a0d]', desc: 'Marrón cálido' },
+                    { id: 'marmol', nombre: 'Mármol', color: 'from-[#3a3a40] via-[#2a2a30] to-[#1a1a20]', desc: 'Gris frío' },
+                    { id: 'neon', nombre: 'Neón', color: 'from-[#2a1a4a] via-[#1a1040] to-[#0a0825]', desc: '👑 Premium' },
+                    { id: 'medianoche', nombre: 'Medianoche', color: 'from-[#0a0a14] via-[#050510] to-[#02020a]', desc: '👑 Premium' },
+                  ].map(tema => (
+                    <button
+                      key={tema.id}
+                      onClick={() => setTemaMesa(tema.id)}
+                      className={`relative rounded-xl overflow-hidden transition-all ${
+                        temaMesa === tema.id
+                          ? 'ring-2 ring-gold-400 ring-offset-2 ring-offset-black/50 scale-105'
+                          : 'hover:scale-102 opacity-80 hover:opacity-100'
+                      }`}
+                    >
+                      <div className={`h-20 bg-gradient-to-br ${tema.color}`}>
+                        <div className="absolute inset-0 bg-[url('/Images/felt-texture.png')] opacity-20" />
                       </div>
-                    )}
-                  </button>
-                ))}
+                      <div className="p-2 bg-black/40">
+                        <div className="text-white text-xs font-medium">{tema.nombre}</div>
+                        <div className="text-gold-400/50 text-[10px]">{tema.desc}</div>
+                      </div>
+                      {temaMesa === tema.id && (
+                        <div className="absolute top-1 right-1 w-5 h-5 bg-gold-500 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reverso de Cartas */}
+              <div className="mb-6">
+                <h4 className="text-gold-400/80 text-sm font-medium mb-3">Reverso de Cartas</h4>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                  {[
+                    { id: 'clasico', nombre: 'Clásico', color: 'bg-blue-950', patron: 'Diseño tradicional' },
+                    { id: 'azul', nombre: 'Azul', color: 'bg-blue-700', patron: 'Azul elegante' },
+                    { id: 'rojo', nombre: 'Rojo', color: 'bg-red-800', patron: 'Rojo intenso' },
+                    { id: 'dorado', nombre: 'Dorado', color: 'bg-amber-700', patron: 'Dorado real' },
+                    { id: 'verde', nombre: 'Bosque', color: 'bg-green-900', patron: 'Verde oscuro' },
+                    { id: 'purpura', nombre: 'Púrpura', color: 'bg-purple-800', patron: 'Violeta intenso' },
+                    { id: 'negro', nombre: 'Obsidiana', color: 'bg-gray-900', patron: '👑 Premium' },
+                    { id: 'arcoiris', nombre: 'Arcoíris', color: 'bg-gradient-to-r from-red-500 via-yellow-500 to-blue-500', patron: '👑 Premium' },
+                  ].map(reverso => (
+                    <button
+                      key={reverso.id}
+                      onClick={() => setReversoCartas(reverso.id)}
+                      className={`relative rounded-xl overflow-hidden transition-all ${
+                        reversoCartas === reverso.id
+                          ? 'ring-2 ring-gold-400 ring-offset-2 ring-offset-black/50 scale-105'
+                          : 'hover:scale-102 opacity-80 hover:opacity-100'
+                      }`}
+                    >
+                      <div className={`h-24 ${reverso.color} flex items-center justify-center`}>
+                        <div className="w-10 h-14 rounded bg-white/10 border border-white/20 flex items-center justify-center">
+                          <span className="text-white/50 text-lg">🂠</span>
+                        </div>
+                      </div>
+                      <div className="p-1.5 bg-black/40">
+                        <div className="text-white text-[10px] font-medium text-center">{reverso.nombre}</div>
+                      </div>
+                      {reversoCartas === reverso.id && (
+                        <div className="absolute top-1 right-1 w-4 h-4 bg-gold-500 rounded-full flex items-center justify-center">
+                          <svg className="w-2.5 h-2.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Fondo de Perfil */}
+              <div className="mb-6">
+                <h4 className="text-gold-400/80 text-sm font-medium mb-3">Fondo de Perfil</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {[
+                    { id: 'fondo_clasico', nombre: 'Clásico', gradient: 'from-gray-900 to-gray-800', desc: 'Oscuro por defecto' },
+                    { id: 'fondo_celeste', nombre: 'Celeste', gradient: 'from-sky-900 via-cyan-900 to-blue-900', desc: 'Azul suave' },
+                    { id: 'fondo_atardecer', nombre: 'Atardecer', gradient: 'from-orange-900 via-rose-900 to-amber-900', desc: 'Tonos cálidos' },
+                    { id: 'fondo_galaxia', nombre: 'Galaxia', gradient: 'from-purple-900 via-indigo-900 to-violet-900', desc: '👑 Premium' },
+                    { id: 'fondo_fuego', nombre: 'Fuego', gradient: 'from-red-900 via-orange-900 to-yellow-900', desc: '👑 Premium' },
+                  ].map(fondo => {
+                    const equipado = cosmeticos.find(c => c.id === fondo.id && c.equipado === 1);
+                    return (
+                      <button
+                        key={fondo.id}
+                        onClick={async () => {
+                          const cosmetico = cosmeticos.find(c => c.id === fondo.id);
+                          if (cosmetico && cosmetico.desbloqueado) {
+                            await socketService.equiparCosmetico(fondo.id);
+                            setCosmeticos(prev => prev.map(c => {
+                              if (c.tipo === 'fondo_perfil') {
+                                return { ...c, equipado: c.id === fondo.id ? 1 : 0 };
+                              }
+                              return c;
+                            }));
+                          }
+                        }}
+                        className={`relative rounded-xl overflow-hidden transition-all ${
+                          equipado
+                            ? 'ring-2 ring-gold-400 ring-offset-2 ring-offset-black/50 scale-105'
+                            : 'hover:scale-102 opacity-80 hover:opacity-100'
+                        }`}
+                      >
+                        <div className={`h-16 bg-gradient-to-br ${fondo.gradient}`} />
+                        <div className="p-2 bg-black/40">
+                          <div className="text-white text-xs font-medium">{fondo.nombre}</div>
+                          <div className="text-gold-400/50 text-[10px]">{fondo.desc}</div>
+                        </div>
+                        {equipado && (
+                          <div className="absolute top-1 right-1 w-5 h-5 bg-gold-500 rounded-full flex items-center justify-center">
+                            <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* Reverso de Cartas */}
-            <div className="mb-6">
-              <h4 className="text-gold-400/80 text-sm font-medium mb-3">Reverso de Cartas</h4>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-                {[
-                  { id: 'clasico', nombre: 'Clásico', color: 'bg-blue-950', patron: 'Diseño tradicional' },
-                  { id: 'azul', nombre: 'Azul', color: 'bg-blue-700', patron: 'Azul elegante' },
-                  { id: 'rojo', nombre: 'Rojo', color: 'bg-red-800', patron: 'Rojo intenso' },
-                  { id: 'dorado', nombre: 'Dorado', color: 'bg-amber-700', patron: 'Dorado real' },
-                ].map(reverso => (
-                  <button
-                    key={reverso.id}
-                    onClick={() => setReversoCartas(reverso.id)}
-                    className={`relative rounded-xl overflow-hidden transition-all ${
-                      reversoCartas === reverso.id
-                        ? 'ring-2 ring-gold-400 ring-offset-2 ring-offset-black/50 scale-105'
-                        : 'hover:scale-102 opacity-80 hover:opacity-100'
-                    }`}
-                  >
-                    <div className={`h-24 ${reverso.color} flex items-center justify-center`}>
-                      <div className="w-10 h-14 rounded bg-white/10 border border-white/20 flex items-center justify-center">
-                        <span className="text-white/50 text-lg">🂠</span>
-                      </div>
-                    </div>
-                    <div className="p-1.5 bg-black/40">
-                      <div className="text-white text-[10px] font-medium text-center">{reverso.nombre}</div>
-                    </div>
-                    {reversoCartas === reverso.id && (
-                      <div className="absolute top-1 right-1 w-4 h-4 bg-gold-500 rounded-full flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Botón Guardar */}
-            <button
-              onClick={handleGuardarPersonalizacion}
-              disabled={guardandoPersonalizacion}
-              className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-gold-600 to-amber-500 text-black hover:from-gold-500 hover:to-amber-400 transition-all shadow-lg shadow-gold-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {guardandoPersonalizacion ? 'Guardando...' : 'Guardar Cambios'}
-            </button>
-
-            <p className="text-gold-500/40 text-xs text-center mt-3">
-              Tu personalización se aplicará en tu próxima partida
-            </p>
+            {/* Botón Guardar (premium) o Obtener Premium (no premium) */}
+            {esPremium ? (
+              <>
+                <button
+                  onClick={handleGuardarPersonalizacion}
+                  disabled={guardandoPersonalizacion}
+                  className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-gold-600 to-amber-500 text-black hover:from-gold-500 hover:to-amber-400 transition-all shadow-lg shadow-gold-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {guardandoPersonalizacion ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+                <p className="text-gold-500/40 text-xs text-center mt-3">
+                  Tu personalización se aplicará en tu próxima partida
+                </p>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  const premiumSection = document.getElementById('premium-section');
+                  if (premiumSection) premiumSection.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-yellow-600 to-amber-500 text-black hover:from-yellow-500 hover:to-amber-400 transition-all shadow-lg shadow-yellow-600/20 flex items-center justify-center gap-2"
+              >
+                <span>👑</span> Obtener Premium
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1617,6 +1779,7 @@ export default function PerfilPage() {
           onCancel={() => setMostrarRewardedAd(false)}
         />
       )}
+      <AlertModal {...alertState} onClose={closeAlert} />
     </div>
   );
 }

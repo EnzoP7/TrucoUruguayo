@@ -796,12 +796,20 @@ async function inicializarCosmeticos() {
     { id: 'mesa_noche', tipo: 'tema_mesa', nombre: 'Noche', descripcion: 'Tapete azul oscuro elegante', imagen_preview: '/temas/noche.png', precio_monedas: 500, nivel_requerido: 5 },
     { id: 'mesa_rojo', tipo: 'tema_mesa', nombre: 'Casino', descripcion: 'Tapete rojo estilo casino', imagen_preview: '/temas/rojo.png', precio_monedas: 750, nivel_requerido: 10 },
     { id: 'mesa_dorado', tipo: 'tema_mesa', nombre: 'Dorado', descripcion: 'Tapete dorado premium', imagen_preview: '/temas/dorado.png', precio_monedas: 1500, nivel_requerido: 20, es_premium: 1 },
+    { id: 'mesa_cuero', tipo: 'tema_mesa', nombre: 'Cuero', descripcion: 'Tapete estilo cuero envejecido', imagen_preview: '/temas/cuero.png', precio_monedas: 600, nivel_requerido: 8 },
+    { id: 'mesa_marmol', tipo: 'tema_mesa', nombre: 'Mármol', descripcion: 'Elegante superficie de mármol gris', imagen_preview: '/temas/marmol.png', precio_monedas: 800, nivel_requerido: 12 },
+    { id: 'mesa_neon', tipo: 'tema_mesa', nombre: 'Neón', descripcion: 'Estilo cyberpunk con luces neón', imagen_preview: '/temas/neon.png', precio_monedas: 1200, nivel_requerido: 18, es_premium: 1 },
+    { id: 'mesa_medianoche', tipo: 'tema_mesa', nombre: 'Medianoche', descripcion: 'Negro profundo con destellos índigo', imagen_preview: '/temas/medianoche.png', precio_monedas: 2000, nivel_requerido: 25, es_premium: 1 },
 
     // Reversos de cartas
     { id: 'reverso_clasico', tipo: 'reverso_cartas', nombre: 'Clásico', descripcion: 'Reverso tradicional', imagen_preview: '/reversos/clasico.png', precio_monedas: 0, nivel_requerido: 1 },
     { id: 'reverso_azul', tipo: 'reverso_cartas', nombre: 'Azul Elegante', descripcion: 'Diseño azul con patrones', imagen_preview: '/reversos/azul.png', precio_monedas: 300, nivel_requerido: 3 },
     { id: 'reverso_rojo', tipo: 'reverso_cartas', nombre: 'Rojo Fuego', descripcion: 'Diseño rojo intenso', imagen_preview: '/reversos/rojo.png', precio_monedas: 300, nivel_requerido: 3 },
     { id: 'reverso_dorado', tipo: 'reverso_cartas', nombre: 'Dorado Real', descripcion: 'Reverso dorado premium', imagen_preview: '/reversos/dorado.png', precio_monedas: 1000, nivel_requerido: 15, es_premium: 1 },
+    { id: 'reverso_verde', tipo: 'reverso_cartas', nombre: 'Verde Bosque', descripcion: 'Reverso verde oscuro natural', imagen_preview: '/reversos/verde.png', precio_monedas: 300, nivel_requerido: 6 },
+    { id: 'reverso_purpura', tipo: 'reverso_cartas', nombre: 'Púrpura', descripcion: 'Diseño violeta misterioso', imagen_preview: '/reversos/purpura.png', precio_monedas: 500, nivel_requerido: 10 },
+    { id: 'reverso_negro', tipo: 'reverso_cartas', nombre: 'Obsidiana', descripcion: 'Negro profundo elegante', imagen_preview: '/reversos/negro.png', precio_monedas: 1000, nivel_requerido: 20, es_premium: 1 },
+    { id: 'reverso_arcoiris', tipo: 'reverso_cartas', nombre: 'Arcoíris', descripcion: 'Gradiente multicolor vibrante', imagen_preview: '/reversos/arcoiris.png', precio_monedas: 2500, nivel_requerido: 30, es_premium: 1 },
 
     // Marcos de avatar
     { id: 'marco_ninguno', tipo: 'marco_avatar', nombre: 'Sin Marco', descripcion: 'Avatar sin marco', imagen_preview: '/marcos/ninguno.png', precio_monedas: 0, nivel_requerido: 1 },
@@ -809,6 +817,19 @@ async function inicializarCosmeticos() {
     { id: 'marco_plata', tipo: 'marco_avatar', nombre: 'Plata', descripcion: 'Marco plateado', imagen_preview: '/marcos/plata.png', precio_monedas: 500, nivel_requerido: 10 },
     { id: 'marco_oro', tipo: 'marco_avatar', nombre: 'Oro', descripcion: 'Marco dorado', imagen_preview: '/marcos/oro.png', precio_monedas: 1000, nivel_requerido: 20 },
     { id: 'marco_diamante', tipo: 'marco_avatar', nombre: 'Diamante', descripcion: 'Marco de diamante premium', imagen_preview: '/marcos/diamante.png', precio_monedas: 2500, nivel_requerido: 30, es_premium: 1 },
+
+    // Fondos de perfil
+    { id: 'fondo_clasico', tipo: 'fondo_perfil', nombre: 'Clásico', descripcion: 'Fondo oscuro por defecto', imagen_preview: '/fondos/clasico.png', precio_monedas: 0, nivel_requerido: 1 },
+    { id: 'fondo_celeste', tipo: 'fondo_perfil', nombre: 'Celeste', descripcion: 'Gradiente celeste suave', imagen_preview: '/fondos/celeste.png', precio_monedas: 300, nivel_requerido: 5 },
+    { id: 'fondo_atardecer', tipo: 'fondo_perfil', nombre: 'Atardecer', descripcion: 'Tonos cálidos de atardecer', imagen_preview: '/fondos/atardecer.png', precio_monedas: 500, nivel_requerido: 10 },
+    { id: 'fondo_galaxia', tipo: 'fondo_perfil', nombre: 'Galaxia', descripcion: 'Fondo galáctico premium', imagen_preview: '/fondos/galaxia.png', precio_monedas: 1500, nivel_requerido: 20, es_premium: 1 },
+    { id: 'fondo_fuego', tipo: 'fondo_perfil', nombre: 'Fuego', descripcion: 'Llamas ardientes premium', imagen_preview: '/fondos/fuego.png', precio_monedas: 2000, nivel_requerido: 25, es_premium: 1 },
+
+    // Packs de sonidos
+    { id: 'sonido_clasico', tipo: 'pack_sonido', nombre: 'Clásico', descripcion: 'Sonidos por defecto del juego', imagen_preview: '/sonidos/clasico.png', precio_monedas: 0, nivel_requerido: 1 },
+    { id: 'sonido_casino', tipo: 'pack_sonido', nombre: 'Casino', descripcion: 'Sonidos estilo casino', imagen_preview: '/sonidos/casino.png', precio_monedas: 400, nivel_requerido: 8 },
+    { id: 'sonido_campo', tipo: 'pack_sonido', nombre: 'Campo', descripcion: 'Ambiente rural uruguayo', imagen_preview: '/sonidos/campo.png', precio_monedas: 400, nivel_requerido: 8 },
+    { id: 'sonido_fiesta', tipo: 'pack_sonido', nombre: 'Fiesta', descripcion: 'Sonidos festivos premium', imagen_preview: '/sonidos/fiesta.png', precio_monedas: 1000, nivel_requerido: 15, es_premium: 1 },
   ];
 
   for (const c of cosmeticos) {
@@ -829,6 +850,15 @@ async function obtenerTodosLosCosmeticos() {
 }
 
 async function obtenerCosmeticosUsuario(userId) {
+  // Auto-desbloquear cosméticos gratuitos que el usuario no tiene aún
+  await db.execute({
+    sql: `INSERT OR IGNORE INTO usuario_cosmeticos (usuario_id, cosmetico_id, equipado)
+      SELECT ?, c.id, 0 FROM cosmeticos c
+      WHERE c.precio_monedas = 0
+      AND NOT EXISTS (SELECT 1 FROM usuario_cosmeticos uc WHERE uc.usuario_id = ? AND uc.cosmetico_id = c.id)`,
+    args: [userId, userId],
+  });
+
   const result = await db.execute({
     sql: `SELECT c.*, uc.equipado, uc.obtenido_en,
       CASE WHEN uc.usuario_id IS NOT NULL THEN 1 ELSE 0 END as desbloqueado

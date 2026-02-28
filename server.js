@@ -3683,18 +3683,22 @@ function findRoomBySocket(socketId) {
 function broadcastLobby(io) {
   const partidas = Array.from(lobbyRooms.values())
     .filter(r => r.estado !== 'terminado')
-    .map(room => ({
-      mesaId: room.mesaId,
-      jugadores: room.jugadores.length,
-      maxJugadores: room.maxJugadores,
-      tamañoSala: room.tamañoSala,
-      estado: room.estado,
-      creadorNombre: room.creadorNombre || null, // Nombre del creador
-      jugadoresNombres: room.jugadores.map(j => j.nombre), // Lista de nombres para reconexión
-      modoAlternado: room.modoAlternado, // Pico a Pico
-      modoAyuda: room.modoAyuda, // Modo ayuda para principiantes
-      esRankeada: room.esRankeada || false,
-    }));
+    .map(room => {
+      const creador = room.jugadores[0];
+      return {
+        mesaId: room.mesaId,
+        jugadores: room.jugadores.length,
+        maxJugadores: room.maxJugadores,
+        tamañoSala: room.tamañoSala,
+        estado: room.estado,
+        creadorNombre: room.creadorNombre || null,
+        creadorPremium: !!(creador?.es_premium),
+        jugadoresNombres: room.jugadores.map(j => j.nombre),
+        modoAlternado: room.modoAlternado,
+        modoAyuda: room.modoAyuda,
+        esRankeada: room.esRankeada || false,
+      };
+    });
   io.to('lobby').emit('partidas-disponibles', partidas);
 }
 
@@ -4406,6 +4410,10 @@ app.prepare().then(async () => {
       'azul': 'mesa_noche',
       'rojo': 'mesa_rojo',
       'dorado': 'mesa_dorado',
+      'cuero': 'mesa_cuero',
+      'marmol': 'mesa_marmol',
+      'neon': 'mesa_neon',
+      'medianoche': 'mesa_medianoche',
     };
     // Mapeo inverso: cosmético ID → nombre de tema para sincronizar usuarios table
     const reverseMapeoTemas = Object.fromEntries(Object.entries(mapeoTemas).map(([k, v]) => [v, k]));
@@ -4414,12 +4422,20 @@ app.prepare().then(async () => {
       'reverso_azul': 'azul',
       'reverso_rojo': 'rojo',
       'reverso_dorado': 'dorado',
+      'reverso_verde': 'verde',
+      'reverso_purpura': 'purpura',
+      'reverso_negro': 'negro',
+      'reverso_arcoiris': 'arcoiris',
     };
     const mapeoReversos = {
       'clasico': 'reverso_clasico',
       'azul': 'reverso_azul',
       'rojo': 'reverso_rojo',
       'dorado': 'reverso_dorado',
+      'verde': 'reverso_verde',
+      'purpura': 'reverso_purpura',
+      'negro': 'reverso_negro',
+      'arcoiris': 'reverso_arcoiris',
     };
 
     socket.on('actualizar-personalizacion', async (data, callback) => {
@@ -4429,8 +4445,8 @@ app.prepare().then(async () => {
         console.log(`[SERVER] Usuario:`, usuario ? { id: usuario.id, apodo: usuario.apodo, es_premium: usuario.es_premium } : 'NO ENCONTRADO');
         if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
         if (!usuario.es_premium) { callback({ success: false, error: 'Función premium' }); return; }
-        const temasValidos = ['clasico', 'azul', 'rojo', 'dorado'];
-        const reversosValidos = ['clasico', 'azul', 'rojo', 'dorado'];
+        const temasValidos = ['clasico', 'azul', 'rojo', 'dorado', 'cuero', 'marmol', 'neon', 'medianoche'];
+        const reversosValidos = ['clasico', 'azul', 'rojo', 'dorado', 'verde', 'purpura', 'negro', 'arcoiris'];
         const temaMesa = temasValidos.includes(data.temaMesa) ? data.temaMesa : 'clasico';
         const reversoCartas = reversosValidos.includes(data.reversoCartas) ? data.reversoCartas : 'clasico';
         await actualizarPersonalizacion(usuario.id, temaMesa, reversoCartas);
@@ -4810,6 +4826,7 @@ app.prepare().then(async () => {
           tamañoSala: room.tamañoSala,
           estado: room.estado,
           creadorNombre: room.creadorNombre,
+          creadorPremium: !!usuarioCreador?.es_premium,
           jugadoresNombres: room.jugadores.map(j => j.nombre),
           modoAlternado: room.modoAlternado,
           modoAyuda: room.modoAyuda,
@@ -5408,11 +5425,25 @@ app.prepare().then(async () => {
             if (jugador.userId && !jugador.isBot) {
               const equipados = await obtenerCosmeticosEquipados(jugador.userId);
               console.log(`[DB] Equipados for ${jugador.nombre} (userId=${jugador.userId}):`, JSON.stringify(equipados));
-              if (equipados.length > 0) {
-                mesa.cosmeticosJugadores[jugador.socketId] = {};
-                for (const c of equipados) {
-                  mesa.cosmeticosJugadores[jugador.socketId][c.tipo] = c.id;
-                  console.log(`[DB] Assigned ${c.tipo}=${c.id} for ${jugador.nombre}`);
+              mesa.cosmeticosJugadores[jugador.socketId] = {};
+              for (const c of equipados) {
+                mesa.cosmeticosJugadores[jugador.socketId][c.tipo] = c.id;
+                console.log(`[DB] Assigned ${c.tipo}=${c.id} for ${jugador.nombre}`);
+              }
+              // Fallback: si no hay tema/reverso equipado como cosmético, usar columnas de usuarios
+              const usuario = socketUsuarios.get(jugador.socketId);
+              if (!mesa.cosmeticosJugadores[jugador.socketId].tema_mesa && usuario?.tema_mesa) {
+                const temaCosmId = mapeoTemas[usuario.tema_mesa];
+                if (temaCosmId) {
+                  mesa.cosmeticosJugadores[jugador.socketId].tema_mesa = temaCosmId;
+                  console.log(`[DB] Fallback tema from user profile: ${temaCosmId} for ${jugador.nombre}`);
+                }
+              }
+              if (!mesa.cosmeticosJugadores[jugador.socketId].reverso_cartas && usuario?.reverso_cartas) {
+                const reversoCosmId = mapeoReversos[usuario.reverso_cartas];
+                if (reversoCosmId) {
+                  mesa.cosmeticosJugadores[jugador.socketId].reverso_cartas = reversoCosmId;
+                  console.log(`[DB] Fallback reverso from user profile: ${reversoCosmId} for ${jugador.nombre}`);
                 }
               }
             }
