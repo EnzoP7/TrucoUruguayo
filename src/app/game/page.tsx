@@ -963,16 +963,37 @@ function GamePage() {
   const [invitandoAmigo, setInvitandoAmigo] = useState<number | null>(null);
   const [mostrarAmigos, setMostrarAmigos] = useState(false);
 
+  // Mapeo de nombre corto a ID de cosmético para fallback
+  const MAPEO_TEMAS: Record<string, string> = {
+    clasico: "mesa_clasico", azul: "mesa_noche", rojo: "mesa_rojo", dorado: "mesa_dorado",
+    cuero: "mesa_cuero", marmol: "mesa_marmol", neon: "mesa_neon", medianoche: "mesa_medianoche",
+  };
+
   // Obtener tema de mesa activo (solo del jugador actual - cada premium ve su propio tema)
   const getTemaActivo = useCallback((): {
     colors: [string, string, string];
     accent: string;
   } | null => {
-    if (!mesa?.cosmeticosJugadores || !socketId) return null;
-    const misCosmetics = mesa.cosmeticosJugadores[socketId];
-    if (misCosmetics?.tema_mesa && TEMAS_MESA[misCosmetics.tema_mesa]) {
-      return TEMAS_MESA[misCosmetics.tema_mesa];
+    // 1. Intentar desde cosméticos del server
+    if (mesa?.cosmeticosJugadores && socketId) {
+      const misCosmetics = mesa.cosmeticosJugadores[socketId];
+      if (misCosmetics?.tema_mesa && TEMAS_MESA[misCosmetics.tema_mesa]) {
+        return TEMAS_MESA[misCosmetics.tema_mesa];
+      }
     }
+    // 2. Fallback: leer de sessionStorage
+    try {
+      const saved = sessionStorage.getItem("truco_usuario");
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u.tema_mesa && u.tema_mesa !== "clasico") {
+          const cosmeticoId = MAPEO_TEMAS[u.tema_mesa];
+          if (cosmeticoId && TEMAS_MESA[cosmeticoId]) {
+            return TEMAS_MESA[cosmeticoId];
+          }
+        }
+      }
+    } catch { /* ignore */ }
     return null;
   }, [mesa?.cosmeticosJugadores, socketId]);
 
@@ -3487,14 +3508,15 @@ function GamePage() {
         temaActivo
           ? {
               background: `linear-gradient(to bottom right, ${temaActivo.colors[0]}, ${temaActivo.colors[1]}, ${temaActivo.colors[2]})`,
-              backgroundImage: "none",
             }
           : undefined
       }
     >
-      {/* Textura de fieltro para temas premium */}
+      {/* Textura sutil para temas premium */}
       {temaActivo && (
-        <div className="fixed inset-0 pointer-events-none opacity-20 bg-[url('/Images/felt-texture.png')] bg-repeat" />
+        <div className="fixed inset-0 pointer-events-none opacity-[0.03]" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+        }} />
       )}
 
       {/* Iluminación de pulpería */}
