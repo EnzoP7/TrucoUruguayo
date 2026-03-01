@@ -328,23 +328,6 @@ export default function PerfilPage() {
     }
   };
 
-  const handleTogglePremium = async () => {
-    try {
-      await socketService.togglePremium();
-      const newVal = !esPremium;
-      setEsPremium(newVal);
-      // Update sessionStorage
-      const saved = sessionStorage.getItem('truco_usuario');
-      if (saved) {
-        const u = JSON.parse(saved);
-        u.es_premium = newVal;
-        sessionStorage.setItem('truco_usuario', JSON.stringify(u));
-      }
-    } catch (err) {
-      console.error('Error toggling premium:', err);
-    }
-  };
-
   const handleComprarPremium = async () => {
     const userId = getUserId();
     if (!userId) return showAlert('warning', 'Sesión requerida', 'Debes estar logueado para comprar premium');
@@ -626,17 +609,6 @@ export default function PerfilPage() {
               {/* Premium */}
               <div id="premium-section" className="pt-3 border-t border-gold-800/20">
                 <div className="flex flex-col gap-2">
-                  <button
-                    onClick={handleTogglePremium}
-                    className={`w-full px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      esPremium
-                        ? 'bg-yellow-600/30 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-600/40'
-                        : 'bg-gray-600/30 text-gray-300 border border-gray-500/20 hover:bg-gray-600/40'
-                    }`}
-                  >
-                    {esPremium ? 'Desactivar Premium (dev)' : 'Activar Premium (dev)'}
-                  </button>
-
                   {!esPremium ? (
                     <div className="w-full">
                       <button

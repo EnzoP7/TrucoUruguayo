@@ -1113,14 +1113,15 @@ async function agregarMonedas(userId, cantidad, motivo) {
 }
 
 async function gastarMonedas(userId, cantidad, motivo) {
-  const balanceActual = await obtenerMonedas(userId);
-  if (balanceActual < cantidad) {
+  // Operación atómica: UPDATE solo si hay balance suficiente (previene race conditions)
+  const result = await db.execute({
+    sql: 'UPDATE usuarios SET monedas = monedas - ? WHERE id = ? AND monedas >= ?',
+    args: [cantidad, userId, cantidad],
+  });
+  if (result.rowsAffected === 0) {
+    const balanceActual = await obtenerMonedas(userId);
     return { error: `No tenés suficientes monedas (tenés ${balanceActual}, necesitás ${cantidad})` };
   }
-  await db.execute({
-    sql: 'UPDATE usuarios SET monedas = monedas - ? WHERE id = ?',
-    args: [cantidad, userId],
-  });
   const nuevoBalance = await obtenerMonedas(userId);
   await db.execute({
     sql: 'INSERT INTO historial_monedas (usuario_id, cantidad, motivo, balance_despues) VALUES (?, ?, ?, ?)',

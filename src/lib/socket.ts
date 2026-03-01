@@ -660,7 +660,7 @@ class SocketService {
     });
   }
 
-  async obtenerEstadoVideos(): Promise<{ success: boolean; videosVistos?: number; videosRestantes?: number; cooldownRestante?: number }> {
+  async obtenerEstadoVideos(): Promise<{ success: boolean; videosVistos?: number; videosRestantes?: number; cooldownRestante?: number; recompensaPorVideo?: number }> {
     if (!this.socket) return { success: false };
     return new Promise((resolve) => {
       this.socket!.emit('obtener-estado-videos', (result) => resolve(result));

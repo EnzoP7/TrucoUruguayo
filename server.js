@@ -4252,20 +4252,27 @@ app.prepare().then(async () => {
   const MAX_VIDEOS_DIARIOS = 3;
   const VIDEO_COOLDOWN_MS = 30000; // 30 segundos entre videos
   const RECOMPENSA_VIDEO = 20;
-  const videoAdTracking = new Map(); // socketId -> { count, lastVideoTime, resetDate }
+  const videoAdTracking = new Map(); // usERId -> { count, lastVideoTime, resetDate }
 
-  function getVideoTracking(socketId) {
+  function getVideoTracking(userId) {
+    const key = `user_${userId}`;
     const hoy = new Date().toISOString().split('T')[0];
-    let tracking = videoAdTracking.get(socketId);
+    let tracking = videoAdTracking.get(key);
     if (!tracking || tracking.resetDate !== hoy) {
       tracking = { count: 0, lastVideoTime: 0, resetDate: hoy };
-      videoAdTracking.set(socketId, tracking);
+      videoAdTracking.set(key, tracking);
     }
     return tracking;
   }
 
-  function cleanupVideoTracking(socketId) {
-    videoAdTracking.delete(socketId);
+  // Cleanup solo elimina trackings viejos (ya no por socketId)
+  function cleanupOldVideoTracking() {
+    const hoy = new Date().toISOString().split('T')[0];
+    for (const [key, tracking] of videoAdTracking) {
+      if (tracking.resetDate !== hoy) {
+        videoAdTracking.delete(key);
+      }
+    }
   }
 
   io.on('connection', (socket) => {
@@ -4483,7 +4490,7 @@ app.prepare().then(async () => {
         if (!usuario?.id) return callback({ success: false, error: 'No autenticado' });
         if (usuario.es_premium) return callback({ success: false, error: 'Los usuarios premium no necesitan ver anuncios' });
 
-        const tracking = getVideoTracking(socket.id);
+        const tracking = getVideoTracking(usuario.id);
 
         // Verificar limite diario
         if (tracking.count >= MAX_VIDEOS_DIARIOS) {
@@ -4523,7 +4530,7 @@ app.prepare().then(async () => {
         const usuario = socketUsuarios.get(socket.id);
         if (!usuario?.id) return callback({ success: false, error: 'No autenticado' });
 
-        const tracking = getVideoTracking(socket.id);
+        const tracking = getVideoTracking(usuario.id);
         const ahora = Date.now();
         const tiempoDesdeUltimo = ahora - tracking.lastVideoTime;
         const cooldownRestante = tracking.lastVideoTime > 0 && tiempoDesdeUltimo < VIDEO_COOLDOWN_MS
@@ -4535,6 +4542,7 @@ app.prepare().then(async () => {
           videosVistos: tracking.count,
           videosRestantes: MAX_VIDEOS_DIARIOS - tracking.count,
           cooldownRestante,
+          recompensaPorVideo: RECOMPENSA_VIDEO,
         });
       } catch (err) {
         console.error('[RewardedAd] Error obtener-estado-videos:', err);
@@ -4563,19 +4571,7 @@ app.prepare().then(async () => {
     });
 
     // === PREMIUM ===
-    socket.on('toggle-premium', async (callback) => {
-      try {
-        const usuario = socketUsuarios.get(socket.id);
-        if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
-        const newStatus = !usuario.es_premium;
-        await setPremium(usuario.id, newStatus);
-        usuario.es_premium = newStatus;
-        callback({ success: true, es_premium: newStatus });
-      } catch (err) {
-        console.error('[DB] Error toggle premium:', err);
-        callback({ success: false, error: 'Error interno' });
-      }
-    });
+    // toggle-premium ELIMINADO por seguridad - premium solo via MercadoPago webhook
 
     socket.on('obtener-estado-premium', async (callback) => {
       try {
@@ -7798,7 +7794,7 @@ app.prepare().then(async () => {
     socket.on('disconnect', () => {
       console.log(`[Socket.IO] Disconnected: ${socket.id}`);
       cleanupRateLimiter(socket.id);
-      cleanupVideoTracking(socket.id);
+      cleanupOldVideoTracking();
       socketUsuarios.delete(socket.id);
       socket.leave('lobby');
 

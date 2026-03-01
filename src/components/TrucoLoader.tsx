@@ -12,17 +12,17 @@ export default function TrucoLoader({ text = 'Cargando...', size = 'md', fullScr
   const sizeClasses = {
     sm: {
       container: 'gap-3',
-      logo: 'w-24 h-24',
+      logo: 'w-36 h-36',
       text: 'text-sm',
     },
     md: {
       container: 'gap-4',
-      logo: 'w-36 h-36',
+      logo: 'w-52 h-52',
       text: 'text-base',
     },
     lg: {
       container: 'gap-6',
-      logo: 'w-44 h-44',
+      logo: 'w-64 h-64',
       text: 'text-lg',
     },
   };
@@ -48,8 +48,8 @@ export default function TrucoLoader({ text = 'Cargando...', size = 'md', fullScr
           <Image
             src="/Images/LogoFinalTrucouruguayo.png"
             alt="Cargando Truco Uruguayo"
-            width={128}
-            height={128}
+            width={256}
+            height={256}
             className={`${s.logo} drop-shadow-[0_0_30px_rgba(252,209,22,0.4)]`}
             priority
           />

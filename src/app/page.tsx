@@ -277,10 +277,10 @@ export default function HomePage() {
             <li><Link href="/tutorial">Tutorial de Truco Uruguayo</Link></li>
             <li><Link href="/practica">Practicar contra la Computadora</Link></li>
             <li><Link href="/ranking">Ranking de Jugadores</Link></li>
-            <li><Link href="/reglas">Reglas Oficiales del Truco</Link></li>
+            <li><Link href="/tutorial">Reglas Oficiales del Truco</Link></li>
             <li><Link href="/perfil">Mi Perfil de Jugador</Link></li>
-            <li><Link href="/estadisticas">Estadísticas de Partidas</Link></li>
-            <li><Link href="/torneos">Torneos de Truco</Link></li>
+            <li><Link href="/perfil">Estadísticas de Partidas</Link></li>
+            <li><Link href="/lobby">Torneos de Truco</Link></li>
           </ul>
         </nav>
 

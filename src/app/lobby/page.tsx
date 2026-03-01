@@ -8,7 +8,7 @@ import { useSearchParams } from 'next/navigation';
 import socketService from '@/lib/socket';
 import audioManager from '@/lib/audioManager';
 import { AdBanner, RewardedAd } from '@/components/ads';
-import { useShowAds } from '@/hooks/useUserPremium';
+import { useShowAds, useUserPremium } from '@/hooks/useUserPremium';
 import FeedbackModal from '@/components/FeedbackModal';
 import TrucoLoader from '@/components/TrucoLoader';
 import AlertModal, { useAlertModal } from '@/components/AlertModal';
@@ -91,6 +91,7 @@ function LobbyPageContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const { showAds } = useShowAds();
+  const { isPremium, premiumExpiry } = useUserPremium();
   const { alertState, showAlert, showConfirm, closeAlert } = useAlertModal();
 
   const [nombre, setNombre] = useState('');
@@ -108,6 +109,7 @@ function LobbyPageContent() {
   const [mostrarRewardedAd, setMostrarRewardedAd] = useState(false);
   const [videosRestantes, setVideosRestantes] = useState<number | null>(null);
   const [videoCooldown, setVideoCooldown] = useState(0);
+  const [recompensaPorVideo, setRecompensaPorVideo] = useState(20);
   const [cargandoPremium, setCargandoPremium] = useState(false);
 
   // Auth state
@@ -203,6 +205,9 @@ function LobbyPageContent() {
                 const estadoVideos = await socketService.obtenerEstadoVideos();
                 if (estadoVideos.success) {
                   setVideosRestantes(estadoVideos.videosRestantes ?? 0);
+                  if (estadoVideos.recompensaPorVideo) {
+                    setRecompensaPorVideo(estadoVideos.recompensaPorVideo);
+                  }
                   if (estadoVideos.cooldownRestante && estadoVideos.cooldownRestante > 0) {
                     setVideoCooldown(estadoVideos.cooldownRestante);
                   }
@@ -732,6 +737,76 @@ function LobbyPageContent() {
             </div>
           </button>
         )}
+
+        {/* Aviso Premium por expirar */}
+        {usuario && isPremium && premiumExpiry && (() => {
+          const diasRestantes = Math.ceil((premiumExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          if (diasRestantes <= 3 && diasRestantes > 0) {
+            return (
+              <div className="mb-6 animate-slide-up rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-900/20 via-amber-800/10 to-amber-900/20 p-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">&#x26A0;&#xFE0F;</span>
+                  <div>
+                    <p className="text-amber-300 font-semibold text-sm">Tu Premium expira en {diasRestantes} {diasRestantes === 1 ? 'día' : 'días'}</p>
+                    <p className="text-white/50 text-xs mt-0.5">Renová para seguir disfrutando sin anuncios y beneficios exclusivos</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (cargandoPremium) return;
+                      setCargandoPremium(true);
+                      try {
+                        const res = await fetch('/api/payments/premium', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ userId: usuario.id }),
+                        });
+                        const data = await res.json();
+                        if (data.init_point) window.location.href = data.init_point;
+                      } catch { showAlert('error', 'Error', 'Error al conectar con MercadoPago'); }
+                      finally { setCargandoPremium(false); }
+                    }}
+                    className="ml-auto shrink-0 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-all"
+                  >
+                    Renovar
+                  </button>
+                </div>
+              </div>
+            );
+          }
+          if (diasRestantes <= 0) {
+            return (
+              <div className="mb-6 animate-slide-up rounded-2xl border border-red-500/30 bg-gradient-to-r from-red-900/20 via-red-800/10 to-red-900/20 p-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">&#x274C;</span>
+                  <div>
+                    <p className="text-red-300 font-semibold text-sm">Tu Premium ha expirado</p>
+                    <p className="text-white/50 text-xs mt-0.5">Renová ahora para recuperar tus beneficios</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (cargandoPremium) return;
+                      setCargandoPremium(true);
+                      try {
+                        const res = await fetch('/api/payments/premium', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ userId: usuario.id }),
+                        });
+                        const data = await res.json();
+                        if (data.init_point) window.location.href = data.init_point;
+                      } catch { showAlert('error', 'Error', 'Error al conectar con MercadoPago'); }
+                      finally { setCargandoPremium(false); }
+                    }}
+                    className="ml-auto shrink-0 px-3 py-1.5 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold hover:bg-red-500/30 transition-all"
+                  >
+                    Renovar
+                  </button>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Tus Partidas - solo usuarios logueados */}
         {usuario && misPartidas.length > 0 && (
@@ -1379,7 +1454,7 @@ function LobbyPageContent() {
       {/* Modal Rewarded Ad */}
       {mostrarRewardedAd && (
         <RewardedAd
-          rewardAmount={20}
+          rewardAmount={recompensaPorVideo}
           onRewardEarned={async () => {
             const result = await socketService.reclamarRecompensaVideo();
             if (result.success) {

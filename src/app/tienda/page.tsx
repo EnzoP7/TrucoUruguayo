@@ -46,6 +46,7 @@ export default function TiendaPage() {
   const [cargandoPago, setCargandoPago] = useState(false);
   const [videosRestantes, setVideosRestantes] = useState<number | null>(null);
   const [videoCooldown, setVideoCooldown] = useState(0);
+  const [recompensaPorVideo, setRecompensaPorVideo] = useState(20);
   const [mostrarRewardedAd, setMostrarRewardedAd] = useState(false);
   const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
 
@@ -97,6 +98,9 @@ export default function TiendaPage() {
         const videosResult = await socketService.obtenerEstadoVideos();
         if (videosResult.success) {
           setVideosRestantes(videosResult.videosRestantes ?? 0);
+          if (videosResult.recompensaPorVideo) {
+            setRecompensaPorVideo(videosResult.recompensaPorVideo);
+          }
           if (videosResult.cooldownRestante && videosResult.cooldownRestante > 0) {
             setVideoCooldown(videosResult.cooldownRestante);
           }
@@ -263,7 +267,7 @@ export default function TiendaPage() {
                 }`}
               >
                 <span>&#x1F4FA;</span>
-                {videoCooldown > 0 ? <span>{videoCooldown}s</span> : <span>+20</span>}
+                {videoCooldown > 0 ? <span>{videoCooldown}s</span> : <span>+{recompensaPorVideo}</span>}
               </button>
             )}
             {!esPremium && videosRestantes === 0 && (
@@ -620,7 +624,7 @@ export default function TiendaPage() {
       {/* Rewarded Ad Modal */}
       {mostrarRewardedAd && (
         <RewardedAd
-          rewardAmount={20}
+          rewardAmount={recompensaPorVideo}
           onRewardEarned={async () => {
             const result = await socketService.reclamarRecompensaVideo();
             if (result.success) {

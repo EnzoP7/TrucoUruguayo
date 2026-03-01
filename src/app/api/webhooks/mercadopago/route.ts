@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { MercadoPagoConfig, Payment } from 'mercadopago'
 import { createClient } from '@libsql/client'
+import crypto from 'crypto'
 
 const db = createClient({
   url: process.env.TURSO_DATABASE_URL!,
@@ -69,6 +70,30 @@ async function procesarPagoMonedasDB(userId: number, paymentId: string, packId: 
 
 export async function POST(request: Request) {
   try {
+    // Verificar firma de MercadoPago (si el secret está configurado)
+    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET
+    if (webhookSecret) {
+      const xSignature = request.headers.get('x-signature')
+      const xRequestId = request.headers.get('x-request-id')
+      if (xSignature && xRequestId) {
+        // Extraer ts y v1 del header x-signature
+        const parts = xSignature.split(',')
+        const tsValue = parts.find(p => p.trim().startsWith('ts='))?.split('=')[1]
+        const v1Value = parts.find(p => p.trim().startsWith('v1='))?.split('=')[1]
+        if (tsValue && v1Value) {
+          const url = new URL(request.url)
+          const dataId = url.searchParams.get('data.id') || ''
+          // Generar HMAC-SHA256 según docs de MercadoPago
+          const manifest = `id:${dataId};request-id:${xRequestId};ts:${tsValue};`
+          const hmac = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex')
+          if (hmac !== v1Value) {
+            console.warn('[Webhook MP] Firma inválida - posible intento de falsificación')
+            return NextResponse.json({ error: 'Invalid signature' }, { status: 403 })
+          }
+        }
+      }
+    }
+
     const body = await request.json()
 
     // MercadoPago envia notificaciones con type y data.id
@@ -119,6 +144,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ received: true }, { status: 200 })
       }
 
+      // Verificar que el usuario existe
+      const userCheck = await db.execute({ sql: 'SELECT id FROM usuarios WHERE id = ?', args: [userId] })
+      if (userCheck.rows.length === 0) {
+        console.warn(`[Webhook MP] userId ${userId} no existe - posible manipulación`)
+        return NextResponse.json({ received: true }, { status: 200 })
+      }
+
       // Verificar duplicado
       const existing = await db.execute({
         sql: 'SELECT id FROM pagos_premium WHERE payment_id = ?',
@@ -142,6 +174,13 @@ export async function POST(request: Request) {
 
       if (isNaN(userId) || !COIN_PACKS[packId]) {
         console.log(`[Webhook MP] Referencia monedas invalida: ${externalRef}`)
+        return NextResponse.json({ received: true }, { status: 200 })
+      }
+
+      // Verificar que el usuario existe
+      const userCheckCoins = await db.execute({ sql: 'SELECT id FROM usuarios WHERE id = ?', args: [userId] })
+      if (userCheckCoins.rows.length === 0) {
+        console.warn(`[Webhook MP] userId ${userId} no existe para monedas - posible manipulación`)
         return NextResponse.json({ received: true }, { status: 200 })
       }
 
