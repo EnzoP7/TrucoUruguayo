@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AdBanner } from '@/components/ads';
 
 // Tipos para el tutorial
 interface Carta {
@@ -822,88 +821,78 @@ export default function TutorialPage() {
   // Pantalla de seleccion de leccion
   if (leccionActual === null) {
     return (
-      <div className="min-h-screen bg-table-wood p-4 sm:p-6 lg:p-8">
+      <div className="h-screen bg-table-wood overflow-hidden flex flex-col">
         <div className="fixed inset-0 pointer-events-none">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-radial from-celeste-500/8 to-transparent rounded-full blur-3xl" />
         </div>
 
-        <div className="relative z-10 max-w-4xl mx-auto">
-          <header className="text-center mb-10">
-            <Link href="/lobby" className="inline-block group">
-              <h1 className="font-[var(--font-cinzel)] text-4xl sm:text-5xl lg:text-6xl font-bold text-gold-400 group-hover:text-gold-300 transition-colors">
+        <div className="relative z-10 flex flex-col flex-1 max-w-5xl mx-auto w-full px-4 py-4 sm:py-5">
+          {/* Header compacto */}
+          <div className="flex items-center justify-between mb-3">
+            <Link href="/lobby" className="inline-flex items-center gap-2 text-gold-400/60 hover:text-gold-300 text-sm transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Lobby
+            </Link>
+            <div className="text-center">
+              <h1 className="font-[var(--font-cinzel)] text-2xl sm:text-3xl font-bold text-gold-400">
                 Tutorial
               </h1>
+              <p className="text-celeste-400/70 text-[10px] sm:text-xs tracking-widest uppercase">Aprende Truco Uruguayo</p>
+            </div>
+            <Link
+              href="/practica"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-celeste-600 to-celeste-500 text-white hover:from-celeste-500 hover:to-celeste-400 transition-all shadow-lg shadow-celeste-600/20"
+            >
+              Practicar
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
             </Link>
-            <div className="flex items-center justify-center gap-3 mt-2">
-              <div className="h-px w-8 bg-celeste-500/40" />
-              <p className="text-celeste-400/70 text-sm tracking-widest uppercase">Aprende Truco Uruguayo</p>
-              <div className="h-px w-8 bg-celeste-500/40" />
-            </div>
-          </header>
+          </div>
 
-          <Link href="/lobby" className="inline-flex items-center gap-2 text-gold-400/60 hover:text-gold-300 text-sm mb-6 transition-colors">
-            ← Volver al lobby
-          </Link>
-
-          {/* Progreso */}
-          <div className="glass rounded-xl p-4 mb-6 border border-gold-800/20">
-            <div className="flex items-center justify-between">
-              <span className="text-gold-400/70 text-sm">Tu progreso</span>
-              <span className="text-gold-300 font-bold">{leccionesCompletadas.length} / {LECCIONES.length}</span>
-            </div>
-            <div className="mt-2 h-2 bg-gold-900/30 rounded-full overflow-hidden">
+          {/* Progreso inline */}
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-gold-400/70 text-xs shrink-0">Progreso</span>
+            <div className="flex-1 h-2 bg-gold-900/30 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500"
                 style={{ width: `${(leccionesCompletadas.length / LECCIONES.length) * 100}%` }}
               />
             </div>
+            <span className="text-gold-300 font-bold text-xs shrink-0">{leccionesCompletadas.length}/{LECCIONES.length}</span>
           </div>
 
-          {/* Lista de lecciones */}
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Lista de lecciones - ocupa el espacio restante */}
+          <div className="flex-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 auto-rows-min content-start">
             {LECCIONES.map((l, idx) => {
               const completada = leccionesCompletadas.includes(l.id);
               return (
                 <button
                   key={l.id}
                   onClick={() => iniciarLeccion(idx)}
-                  className={`glass rounded-2xl p-5 text-left transition-all duration-300 border ${
+                  className={`glass rounded-xl p-3 sm:p-4 text-left transition-all duration-300 border ${
                     completada
                       ? 'border-green-500/30 bg-green-900/10 hover:border-green-500/50'
                       : 'border-gold-800/20 hover:border-gold-600/40 hover:bg-white/5'
                   }`}
                 >
-                  <div className="flex items-start gap-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-bold ${
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold shrink-0 ${
                       completada ? 'bg-green-600/30 text-green-400' : 'bg-gold-600/20 text-gold-400'
                     }`}>
                       {completada ? '✓' : l.icono}
                     </div>
-                    <div className="flex-1">
-                      <h3 className="text-white font-bold text-lg mb-1">{l.titulo}</h3>
-                      <p className="text-gold-500/60 text-sm">{l.descripcion}</p>
-                      <div className="mt-2 text-xs text-gold-500/40">
-                        {l.pasos.length} pasos
-                      </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-white font-bold text-sm sm:text-base truncate">{l.titulo}</h3>
+                      <p className="text-gold-500/60 text-xs truncate">{l.descripcion}</p>
                     </div>
+                    <span className="text-gold-500/30 text-[10px] shrink-0">{l.pasos.length}p</span>
                   </div>
                 </button>
               );
             })}
-          </div>
-
-          {/* Boton para jugar con bot */}
-          <div className="mt-8 text-center">
-            <Link
-              href="/practica"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-celeste-600 to-celeste-500 text-white hover:from-celeste-500 hover:to-celeste-400 transition-all shadow-lg shadow-celeste-600/20"
-            >
-              Practicar contra Bot
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </Link>
-            <p className="text-gold-500/40 text-xs mt-2">Inicia una partida rapida contra un bot (no afecta estadisticas)</p>
           </div>
         </div>
       </div>
@@ -912,7 +901,7 @@ export default function TutorialPage() {
 
   // Pantalla de leccion
   return (
-    <div className="min-h-screen bg-table-wood p-4 sm:p-6">
+    <div className="h-screen bg-table-wood overflow-hidden flex flex-col">
       {/* CSS para animaciones de cartas */}
       <style jsx global>{`
         @keyframes cartaJugada {
@@ -935,9 +924,9 @@ export default function TutorialPage() {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-radial from-celeste-500/8 to-transparent rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+      <div className="relative z-10 flex flex-col flex-1 max-w-4xl mx-auto w-full px-4 py-3 sm:py-4 overflow-hidden">
+        {/* Header compacto */}
+        <div className="flex items-center justify-between mb-2 shrink-0">
           <button
             onClick={() => {
               setLeccionActual(null);
@@ -946,206 +935,181 @@ export default function TutorialPage() {
               setCartasRivalUsadas([]);
               setCartasEnMesa({ jugador: null, rival: null });
             }}
-            className="text-gold-400/60 hover:text-gold-300 text-sm transition-colors flex items-center gap-2"
+            className="text-gold-400/60 hover:text-gold-300 text-sm transition-colors flex items-center gap-1.5"
           >
-            ← Volver
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Volver
           </button>
-          <div className="text-gold-500/60 text-sm">
-            Paso {pasoActual + 1} / {leccion?.pasos.length}
-          </div>
-        </div>
-
-        {/* Titulo de la leccion */}
-        <div className="text-center mb-6">
-          <h2 className="font-[var(--font-cinzel)] text-2xl sm:text-3xl font-bold text-gold-400">
+          <h2 className="font-[var(--font-cinzel)] text-lg sm:text-xl font-bold text-gold-400 truncate mx-3">
             {leccion?.titulo}
           </h2>
-          <div className="h-1 w-32 mx-auto mt-2 bg-gradient-to-r from-transparent via-gold-500/50 to-transparent rounded-full" />
-        </div>
-
-        {/* Area de juego (si hay cartas y no se debe limpiar la mesa) */}
-        {leccion?.cartasJugador && leccion?.muestra && !paso?.limpiarMesa && (
-          <div className="glass rounded-2xl p-6 mb-6 border border-gold-800/20">
-            {/* Muestra */}
-            <div className="flex justify-center mb-4">
-              <div className="text-center">
-                <p className="text-gold-500/60 text-xs mb-2">MUESTRA</p>
-                <CartaTutorial carta={leccion.muestra} pequena />
-              </div>
-            </div>
-
-            {/* Cartas del rival */}
-            {leccion.cartasRival && (
-              <div className="flex justify-center gap-3 mb-4">
-                <div className="text-center">
-                  <p className="text-red-400/60 text-xs mb-2">RIVAL</p>
-                  <div className="flex gap-2">
-                    {leccion.cartasRival.map((c, i) => {
-                      const yaUsada = cartasRivalUsadas.includes(i);
-                      const animando = cartaRivalAnimando === i;
-
-                      if (yaUsada && !animando) return <div key={i} className="w-14 h-20" />; // Espacio vacio
-
-                      return paso?.mostrarCartasRival ? (
-                        <CartaTutorial
-                          key={i}
-                          carta={c}
-                          pequena
-                          resaltada={paso?.cartaRivalJuega === i}
-                          animarSalida={animando}
-                        />
-                      ) : (
-                        <CartaOculta key={i} pequena animarSalida={animando} />
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Mesa central - cartas jugadas */}
-            <div className="flex justify-center items-center gap-8 h-24 mb-4">
-              {/* Carta del rival en mesa */}
-              <div className="w-14 h-20 flex items-center justify-center">
-                {cartasEnMesa.rival && (
-                  <div className="animate-[cartaAparece_0.3s_ease-out]">
-                    <CartaTutorial carta={cartasEnMesa.rival} pequena />
-                  </div>
-                )}
-              </div>
-
-              {/* VS */}
-              {(cartasEnMesa.jugador || cartasEnMesa.rival) && (
-                <span className="text-gold-500/50 text-sm font-bold">VS</span>
-              )}
-
-              {/* Carta del jugador en mesa */}
-              <div className="w-14 h-20 flex items-center justify-center">
-                {cartasEnMesa.jugador && (
-                  <div className="animate-[cartaAparece_0.3s_ease-out]">
-                    <CartaTutorial carta={cartasEnMesa.jugador} pequena />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Tus cartas */}
-            <div className="text-center">
-              <p className="text-celeste-400/60 text-xs mb-2">TUS CARTAS</p>
-              <div className="flex justify-center gap-4">
-                {leccion.cartasJugador.map((carta, idx) => {
-                  const yaUsada = cartasUsadas.includes(idx);
-                  const animando = cartaAnimando === idx;
-
-                  if (yaUsada && !animando) return <div key={idx} className="w-20 h-28 sm:w-24 sm:h-36" />; // Espacio vacio
-
-                  return (
-                    <CartaTutorial
-                      key={idx}
-                      carta={carta}
-                      resaltada={paso?.cartasResaltadas?.includes(idx)}
-                      seleccionable={
-                        paso?.accion === 'seleccionar-carta' &&
-                        !cartasUsadas.includes(idx) &&
-                        !mostrarExplicacion &&
-                        cartaAnimando === null
-                      }
-                      onClick={() => handleSeleccionarCarta(idx)}
-                      animarSalida={animando}
-                    />
-                  );
-                })}
-              </div>
-            </div>
+          <div className="text-gold-500/60 text-xs shrink-0">
+            {pasoActual + 1}/{leccion?.pasos.length}
           </div>
-        )}
-
-        {/* Contenido del paso */}
-        <div className="glass rounded-2xl p-6 border border-gold-800/20">
-          <h3 className="text-celeste-400 font-bold text-xl mb-3">{paso?.titulo}</h3>
-          <p className="text-gold-300/80 whitespace-pre-line mb-4">{paso?.descripcion}</p>
-
-          {/* Cartas ilustrativas */}
-          {paso?.cartasIlustrativas && paso.cartasIlustrativas.length > 0 && (
-            <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6 p-4 bg-black/20 rounded-xl">
-              {paso.cartasIlustrativas.map((carta, idx) => (
-                <CartaIlustrativaComponent key={idx} carta={carta} />
-              ))}
-            </div>
-          )}
-
-          {/* Explicacion (si acerto) */}
-          {mostrarExplicacion && paso?.explicacion && (
-            <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-4 mb-6 animate-slide-up">
-              <div className="flex items-start gap-3">
-                <span className="text-2xl">✓</span>
-                <p className="text-green-300">{paso.explicacion}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Mensaje de error */}
-          {mensajeError && (
-            <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-4 mb-4 animate-slide-up">
-              <div className="flex items-start gap-3">
-                <span className="text-2xl">⚠️</span>
-                <p className="text-red-300">{mensajeError}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Opciones de cantar */}
-          {paso?.accion === 'cantar' && paso.opcionesCantar && !mostrarExplicacion && (
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              {paso.opcionesCantar.map(opcion => (
-                <button
-                  key={opcion}
-                  onClick={() => handleCantar(opcion)}
-                  className="px-4 py-3 rounded-xl font-bold bg-gold-600/20 text-gold-300 hover:bg-gold-600/30 border border-gold-500/30 transition-all hover:scale-105"
-                >
-                  {opcion}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Botones de navegacion */}
-          {(paso?.accion === 'siguiente' || mostrarExplicacion) && (
-            <div className="flex gap-3">
-              {/* Boton Atras - solo si no es el primer paso */}
-              {pasoActual > 0 && (
-                <button
-                  onClick={handleAtras}
-                  className="px-6 py-4 rounded-xl font-bold bg-gold-900/30 text-gold-400 hover:bg-gold-900/50 border border-gold-700/30 hover:border-gold-600/50 transition-all"
-                >
-                  ← Atras
-                </button>
-              )}
-              {/* Boton Siguiente */}
-              <button
-                onClick={handleSiguiente}
-                className="flex-1 py-4 rounded-xl font-bold bg-gradient-to-r from-celeste-600 to-celeste-500 text-white hover:from-celeste-500 hover:to-celeste-400 transition-all shadow-lg shadow-celeste-600/20"
-              >
-                {pasoActual < (leccion?.pasos.length || 0) - 1 ? 'Siguiente →' : 'Finalizar Leccion'}
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Barra de progreso */}
-        <div className="mt-6 h-2 bg-gold-900/30 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-gold-900/30 rounded-full overflow-hidden mb-3 shrink-0">
           <div
             className="h-full bg-gradient-to-r from-celeste-500 to-celeste-400 transition-all duration-500"
             style={{ width: `${((pasoActual + 1) / (leccion?.pasos.length || 1)) * 100}%` }}
           />
         </div>
 
-        {/* Publicidad */}
-        <div className="flex justify-center mt-6">
-          <AdBanner
-            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
-            size="banner"
-          />
+        {/* Contenido principal - flex-1 con scroll si es necesario */}
+        <div className="flex-1 flex flex-col gap-3 min-h-0 overflow-y-auto">
+          {/* Area de juego (si hay cartas y no se debe limpiar la mesa) */}
+          {leccion?.cartasJugador && leccion?.muestra && !paso?.limpiarMesa && (
+            <div className="glass rounded-xl p-4 border border-gold-800/20 shrink-0">
+              <div className="flex items-start justify-center gap-6">
+                {/* Muestra */}
+                <div className="text-center">
+                  <p className="text-gold-500/60 text-[10px] mb-1">MUESTRA</p>
+                  <CartaTutorial carta={leccion.muestra} pequena />
+                </div>
+
+                {/* Cartas del rival */}
+                {leccion.cartasRival && (
+                  <div className="text-center">
+                    <p className="text-red-400/60 text-[10px] mb-1">RIVAL</p>
+                    <div className="flex gap-1.5">
+                      {leccion.cartasRival.map((c, i) => {
+                        const yaUsada = cartasRivalUsadas.includes(i);
+                        const animando = cartaRivalAnimando === i;
+                        if (yaUsada && !animando) return <div key={i} className="w-12 h-18" />;
+                        return paso?.mostrarCartasRival ? (
+                          <CartaTutorial key={i} carta={c} pequena resaltada={paso?.cartaRivalJuega === i} animarSalida={animando} />
+                        ) : (
+                          <CartaOculta key={i} pequena animarSalida={animando} />
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Mesa central */}
+                {(cartasEnMesa.jugador || cartasEnMesa.rival) && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-18 flex items-center justify-center">
+                      {cartasEnMesa.rival && (
+                        <div className="animate-[cartaAparece_0.3s_ease-out]">
+                          <CartaTutorial carta={cartasEnMesa.rival} pequena />
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-gold-500/50 text-xs font-bold">VS</span>
+                    <div className="w-12 h-18 flex items-center justify-center">
+                      {cartasEnMesa.jugador && (
+                        <div className="animate-[cartaAparece_0.3s_ease-out]">
+                          <CartaTutorial carta={cartasEnMesa.jugador} pequena />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tus cartas */}
+                <div className="text-center">
+                  <p className="text-celeste-400/60 text-[10px] mb-1">TUS CARTAS</p>
+                  <div className="flex gap-2">
+                    {leccion.cartasJugador.map((carta, idx) => {
+                      const yaUsada = cartasUsadas.includes(idx);
+                      const animando = cartaAnimando === idx;
+                      if (yaUsada && !animando) return <div key={idx} className="w-12 h-18" />;
+                      return (
+                        <CartaTutorial
+                          key={idx}
+                          carta={carta}
+                          pequena
+                          resaltada={paso?.cartasResaltadas?.includes(idx)}
+                          seleccionable={
+                            paso?.accion === 'seleccionar-carta' &&
+                            !cartasUsadas.includes(idx) &&
+                            !mostrarExplicacion &&
+                            cartaAnimando === null
+                          }
+                          onClick={() => handleSeleccionarCarta(idx)}
+                          animarSalida={animando}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Contenido del paso */}
+          <div className="glass rounded-xl p-4 sm:p-5 border border-gold-800/20 flex-1 flex flex-col min-h-0">
+            <h3 className="text-celeste-400 font-bold text-base sm:text-lg mb-2 shrink-0">{paso?.titulo}</h3>
+            <p className="text-gold-300/80 whitespace-pre-line text-sm mb-3 flex-1 overflow-y-auto min-h-0">{paso?.descripcion}</p>
+
+            {/* Cartas ilustrativas */}
+            {paso?.cartasIlustrativas && paso.cartasIlustrativas.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-3 p-3 bg-black/20 rounded-lg shrink-0">
+                {paso.cartasIlustrativas.map((carta, idx) => (
+                  <CartaIlustrativaComponent key={idx} carta={carta} />
+                ))}
+              </div>
+            )}
+
+            {/* Explicacion (si acerto) */}
+            {mostrarExplicacion && paso?.explicacion && (
+              <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3 mb-3 animate-slide-up shrink-0">
+                <div className="flex items-start gap-2">
+                  <span className="text-lg">✓</span>
+                  <p className="text-green-300 text-sm">{paso.explicacion}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Mensaje de error */}
+            {mensajeError && (
+              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mb-3 animate-slide-up shrink-0">
+                <div className="flex items-start gap-2">
+                  <span className="text-lg">⚠️</span>
+                  <p className="text-red-300 text-sm">{mensajeError}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Opciones de cantar */}
+            {paso?.accion === 'cantar' && paso.opcionesCantar && !mostrarExplicacion && (
+              <div className="grid grid-cols-2 gap-2 mb-3 shrink-0">
+                {paso.opcionesCantar.map(opcion => (
+                  <button
+                    key={opcion}
+                    onClick={() => handleCantar(opcion)}
+                    className="px-3 py-2.5 rounded-lg font-bold text-sm bg-gold-600/20 text-gold-300 hover:bg-gold-600/30 border border-gold-500/30 transition-all hover:scale-105"
+                  >
+                    {opcion}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Botones de navegacion */}
+            {(paso?.accion === 'siguiente' || mostrarExplicacion) && (
+              <div className="flex gap-2 shrink-0 mt-auto pt-2">
+                {pasoActual > 0 && (
+                  <button
+                    onClick={handleAtras}
+                    className="px-4 py-3 rounded-lg font-bold text-sm bg-gold-900/30 text-gold-400 hover:bg-gold-900/50 border border-gold-700/30 hover:border-gold-600/50 transition-all"
+                  >
+                    ← Atras
+                  </button>
+                )}
+                <button
+                  onClick={handleSiguiente}
+                  className="flex-1 py-3 rounded-lg font-bold text-sm bg-gradient-to-r from-celeste-600 to-celeste-500 text-white hover:from-celeste-500 hover:to-celeste-400 transition-all shadow-lg shadow-celeste-600/20"
+                >
+                  {pasoActual < (leccion?.pasos.length || 0) - 1 ? 'Siguiente →' : 'Finalizar Leccion'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

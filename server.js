@@ -3,7 +3,7 @@ const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
 const { Server: SocketIOServer } = require('socket.io');
-const { initDB, guardarPartida, obtenerEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples, actualizarPersonalizacion, obtenerPersonalizacion, inicializarLogros, inicializarCosmeticos, obtenerEstadisticasDetalladas, actualizarEstadisticasDetalladas, verificarYDesbloquearLogros, obtenerLogrosUsuario, obtenerCosmeticosUsuario, comprarCosmetico, equiparCosmetico, obtenerCosmeticosEquipados, obtenerMonedas, agregarMonedas, gastarMonedas, obtenerRecompensaDiaria, reclamarRecompensaDiaria, verificarExpiracionPremium, obtenerEstadoPremium } = require('./db');
+const { initDB, guardarPartida, obtenerEstadisticas, actualizarEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples, actualizarPersonalizacion, obtenerPersonalizacion, inicializarLogros, inicializarCosmeticos, obtenerEstadisticasDetalladas, actualizarEstadisticasDetalladas, verificarYDesbloquearLogros, obtenerLogrosUsuario, obtenerCosmeticosUsuario, comprarCosmetico, equiparCosmetico, obtenerCosmeticosEquipados, obtenerMonedas, agregarMonedas, gastarMonedas, obtenerRecompensaDiaria, reclamarRecompensaDiaria, verificarExpiracionPremium, obtenerEstadoPremium } = require('./db');
 const { registrar, login, loginConGoogle, vincularCuentaGoogle, agregarPassword } = require('./auth');
 const TrucoBot = require('./src/truco/bot/TrucoBot');
 
@@ -4070,6 +4070,12 @@ app.prepare().then(async () => {
           try {
             await actualizarEstadisticasDetalladas(j.userId, statsActualizacion);
 
+            // Actualizar ELO solo en partidas rankeadas (sin bots)
+            const tieneBotsEnPartidaElo = room.jugadores.some(rj => rj.isBot);
+            if (room.esRankeada && !tieneBotsEnPartidaElo) {
+              await actualizarEstadisticas(j.userId, gano);
+            }
+
             // Verificar y desbloquear logros
             const estadisticasBasicas = await obtenerEstadisticas(j.userId);
             const logrosDesbloqueados = await verificarYDesbloquearLogros(j.userId, statsActualizacion, estadisticasBasicas);
@@ -4243,9 +4249,9 @@ app.prepare().then(async () => {
   }
 
   // === REWARDED ADS TRACKING ===
-  const MAX_VIDEOS_DIARIOS = 5;
+  const MAX_VIDEOS_DIARIOS = 3;
   const VIDEO_COOLDOWN_MS = 30000; // 30 segundos entre videos
-  const RECOMPENSA_VIDEO = 75;
+  const RECOMPENSA_VIDEO = 20;
   const videoAdTracking = new Map(); // socketId -> { count, lastVideoTime, resetDate }
 
   function getVideoTracking(socketId) {
@@ -4975,7 +4981,7 @@ app.prepare().then(async () => {
           if (!usuarioCreador?.id) {
             return callback(false, 'Necesitás una cuenta para jugar partidas rankeadas');
           }
-          const gasto = await gastarMonedas(usuarioCreador.id, 10, 'entrada_rankeada');
+          const gasto = await gastarMonedas(usuarioCreador.id, 25, 'entrada_rankeada');
           if (gasto.error) {
             return callback(false, gasto.error);
           }
@@ -5067,8 +5073,8 @@ app.prepare().then(async () => {
         if (room.esRankeada) {
           for (const p of room.jugadores) {
             if (p.userId) {
-              const nuevoBalance = await agregarMonedas(p.userId, 10, 'devolucion_rankeada_cancelada');
-              io.to(p.socketId).emit('monedas-ganadas', { cantidad: 10, balance: nuevoBalance, motivo: 'devolucion_rankeada_cancelada' });
+              const nuevoBalance = await agregarMonedas(p.userId, 25, 'devolucion_rankeada_cancelada');
+              io.to(p.socketId).emit('monedas-ganadas', { cantidad: 25, balance: nuevoBalance, motivo: 'devolucion_rankeada_cancelada' });
             }
           }
         }
@@ -5172,7 +5178,7 @@ app.prepare().then(async () => {
             callback(false, 'Necesitás una cuenta para jugar partidas rankeadas');
             return;
           }
-          const gasto = await gastarMonedas(usuarioAuth.id, 10, 'entrada_rankeada');
+          const gasto = await gastarMonedas(usuarioAuth.id, 25, 'entrada_rankeada');
           if (gasto.error) {
             callback(false, gasto.error);
             return;

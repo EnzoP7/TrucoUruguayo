@@ -23,7 +23,7 @@ async function initDB() {
         partidas_perdidas INTEGER DEFAULT 0,
         racha_actual INTEGER DEFAULT 0,
         mejor_racha INTEGER DEFAULT 0,
-        elo INTEGER DEFAULT 1000
+        elo INTEGER DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS partidas (
@@ -176,6 +176,9 @@ async function initDB() {
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN premium_inicio TEXT DEFAULT NULL'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN premium_expira TEXT DEFAULT NULL'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN mercadopago_payment_id TEXT DEFAULT NULL'); } catch { /* ya existe */ }
+
+    // Reset ELO a 0 para todos los usuarios existentes (migración: ELO ahora arranca en 0 y solo sube con rankeadas)
+    await db.execute('UPDATE estadisticas SET elo = 0');
     // Google Auth columns (sin UNIQUE porque SQLite no lo soporta en ALTER TABLE)
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN email TEXT'); } catch { /* ya existe */ }
     try { await db.execute('ALTER TABLE usuarios ADD COLUMN google_id TEXT'); } catch { /* ya existe */ }
@@ -200,6 +203,8 @@ async function crearUsuario(apodo, passwordHash) {
     sql: 'INSERT INTO estadisticas (usuario_id) VALUES (?)',
     args: [userId],
   });
+  // Bonus de bienvenida: 50 monedas
+  await agregarMonedas(userId, 50, 'bonus_bienvenida');
   return userId;
 }
 
@@ -254,6 +259,9 @@ async function crearUsuarioGoogle(googleId, email, nombre, avatarUrl) {
     args: [userId],
   });
 
+  // Bonus de bienvenida: 50 monedas
+  await agregarMonedas(userId, 50, 'bonus_bienvenida');
+
   return { userId, apodo };
 }
 
@@ -293,6 +301,26 @@ async function activarPremium(userId, paymentId, dias = 30, monto = 0, moneda = 
     sql: `INSERT INTO pagos_premium (usuario_id, payment_id, status, monto, moneda, premium_inicio, premium_expira) VALUES (?, ?, 'approved', ?, ?, ?, ?)`,
     args: [userId, paymentId, monto, moneda, premiumInicio, premiumExpira],
   });
+
+  // Bonus de bienvenida premium: +100 monedas
+  await agregarMonedas(userId, 100, 'bonus_premium');
+
+  // Desbloquear todos los cosméticos premium automáticamente (sin cobrar monedas)
+  const cosmeticosPremium = await db.execute({
+    sql: `SELECT id, tipo FROM cosmeticos WHERE es_premium = 1`,
+  });
+  for (const c of cosmeticosPremium.rows) {
+    const yaLo = await db.execute({
+      sql: 'SELECT 1 FROM usuario_cosmeticos WHERE usuario_id = ? AND cosmetico_id = ?',
+      args: [userId, c.id],
+    });
+    if (yaLo.rows.length === 0) {
+      await db.execute({
+        sql: 'INSERT INTO usuario_cosmeticos (usuario_id, cosmetico_id, equipado) VALUES (?, ?, 0)',
+        args: [userId, c.id],
+      });
+    }
+  }
 
   return { success: true, premium_inicio: premiumInicio, premium_expira: premiumExpira };
 }
@@ -1129,7 +1157,7 @@ async function procesarPagoMonedas(userId, paymentId, packId, monto, moneda) {
   return { success: true, monedas: pack.monedas, balance: nuevoBalance };
 }
 
-const RECOMPENSA_DIARIA = [15, 20, 25, 30, 35, 40, 50]; // día 1-7
+const RECOMPENSA_DIARIA = [10, 12, 15, 18, 20, 25, 30]; // día 1-7
 
 async function obtenerRecompensaDiaria(userId) {
   const result = await db.execute({

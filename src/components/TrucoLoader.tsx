@@ -12,20 +12,17 @@ export default function TrucoLoader({ text = 'Cargando...', size = 'md', fullScr
   const sizeClasses = {
     sm: {
       container: 'gap-3',
-      sun: 'w-12 h-12',
-      card: 'w-10 h-14',
+      logo: 'w-24 h-24',
       text: 'text-sm',
     },
     md: {
       container: 'gap-4',
-      sun: 'w-16 h-16',
-      card: 'w-14 h-20',
+      logo: 'w-36 h-36',
       text: 'text-base',
     },
     lg: {
       container: 'gap-6',
-      sun: 'w-24 h-24',
-      card: 'w-16 h-24',
+      logo: 'w-44 h-44',
       text: 'text-lg',
     },
   };
@@ -46,35 +43,24 @@ export default function TrucoLoader({ text = 'Cargando...', size = 'md', fullScr
       )}
 
       <div className={`relative flex flex-col items-center ${s.container} z-10`}>
-        {/* Contenedor de cartas y sol */}
-        <div className="relative flex items-center justify-center h-32">
-          {/* Carta izquierda */}
-          <div
-            className={`${s.card} card-back rounded-lg shadow-xl animate-card-left absolute`}
-            style={{ transformOrigin: 'center bottom' }}
+        {/* Logo oficial con animacion de pulso */}
+        <div className="relative animate-logo-pulse">
+          <Image
+            src="/Images/LogoFinalTrucouruguayo.png"
+            alt="Cargando Truco Uruguayo"
+            width={128}
+            height={128}
+            className={`${s.logo} drop-shadow-[0_0_30px_rgba(252,209,22,0.4)]`}
+            priority
           />
-
-          {/* Sol de Mayo central */}
-          <div className="relative z-10 animate-sun-pulse">
-            <Image
-              src="/Images/SolDeMayo.png"
-              alt="Cargando Truco Uruguayo"
-              width={96}
-              height={96}
-              className={`${s.sun} drop-shadow-[0_0_30px_rgba(252,209,22,0.6)]`}
-              priority
-            />
+          {/* Brillo giratorio detras del logo */}
+          <div className="absolute inset-0 -z-10 animate-spin-slow">
+            <div className="absolute inset-[-8px] rounded-full bg-gradient-conic from-gold-400/20 via-transparent to-gold-400/20 blur-md" />
           </div>
-
-          {/* Carta derecha */}
-          <div
-            className={`${s.card} card-back rounded-lg shadow-xl animate-card-right absolute`}
-            style={{ transformOrigin: 'center bottom' }}
-          />
         </div>
 
         {/* Texto de carga */}
-        <p className={`${s.text} text-gold-400 font-medium tracking-wider animate-pulse mt-6`}>
+        <p className={`${s.text} text-gold-400 font-medium tracking-wider animate-pulse mt-4`}>
           {text}
         </p>
 
@@ -85,6 +71,24 @@ export default function TrucoLoader({ text = 'Cargando...', size = 'md', fullScr
           <span className="w-2 h-2 bg-celeste-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
         </div>
       </div>
+
+      {/* Estilos de animacion */}
+      <style jsx>{`
+        @keyframes logo-pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.05); opacity: 0.9; }
+        }
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-logo-pulse {
+          animation: logo-pulse 2s ease-in-out infinite;
+        }
+        .animate-spin-slow {
+          animation: spin-slow 8s linear infinite;
+        }
+      `}</style>
     </div>
   );
 }

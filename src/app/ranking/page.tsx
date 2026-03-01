@@ -139,11 +139,11 @@ export default function RankingPage() {
   };
 
   const getRankTier = (elo: number) => {
-    if (elo >= 2000) return { name: 'Leyenda', color: 'from-yellow-400 to-amber-600', textColor: 'text-yellow-400' };
-    if (elo >= 1700) return { name: 'Diamante', color: 'from-cyan-400 to-blue-600', textColor: 'text-cyan-400' };
-    if (elo >= 1500) return { name: 'Platino', color: 'from-slate-300 to-slate-500', textColor: 'text-slate-300' };
-    if (elo >= 1300) return { name: 'Oro', color: 'from-yellow-500 to-yellow-700', textColor: 'text-yellow-500' };
-    if (elo >= 1100) return { name: 'Plata', color: 'from-gray-300 to-gray-500', textColor: 'text-gray-300' };
+    if (elo >= 1200) return { name: 'Leyenda', color: 'from-yellow-400 to-amber-600', textColor: 'text-yellow-400' };
+    if (elo >= 900) return { name: 'Diamante', color: 'from-cyan-400 to-blue-600', textColor: 'text-cyan-400' };
+    if (elo >= 600) return { name: 'Platino', color: 'from-slate-300 to-slate-500', textColor: 'text-slate-300' };
+    if (elo >= 350) return { name: 'Oro', color: 'from-yellow-500 to-yellow-700', textColor: 'text-yellow-500' };
+    if (elo >= 150) return { name: 'Plata', color: 'from-gray-300 to-gray-500', textColor: 'text-gray-300' };
     return { name: 'Bronce', color: 'from-amber-700 to-amber-900', textColor: 'text-amber-600' };
   };
 
@@ -496,12 +496,12 @@ export default function RankingPage() {
               <h3 className="text-gold-400/70 text-xs font-semibold uppercase tracking-wider mb-3 text-center">Rangos por ELO</h3>
               <div className="flex flex-wrap justify-center gap-3">
                 {[
-                  { name: 'Bronce', color: 'from-amber-700 to-amber-900', elo: '< 1100' },
-                  { name: 'Plata', color: 'from-gray-300 to-gray-500', elo: '1100+' },
-                  { name: 'Oro', color: 'from-yellow-500 to-yellow-700', elo: '1300+' },
-                  { name: 'Platino', color: 'from-slate-300 to-slate-500', elo: '1500+' },
-                  { name: 'Diamante', color: 'from-cyan-400 to-blue-600', elo: '1700+' },
-                  { name: 'Leyenda', color: 'from-yellow-400 to-amber-600', elo: '2000+' },
+                  { name: 'Bronce', color: 'from-amber-700 to-amber-900', elo: '0-149' },
+                  { name: 'Plata', color: 'from-gray-300 to-gray-500', elo: '150+' },
+                  { name: 'Oro', color: 'from-yellow-500 to-yellow-700', elo: '350+' },
+                  { name: 'Platino', color: 'from-slate-300 to-slate-500', elo: '600+' },
+                  { name: 'Diamante', color: 'from-cyan-400 to-blue-600', elo: '900+' },
+                  { name: 'Leyenda', color: 'from-yellow-400 to-amber-600', elo: '1200+' },
                 ].map((tier) => (
                   <div key={tier.name} className="flex items-center gap-2">
                     <div className={`w-3 h-3 rounded-full bg-gradient-to-br ${tier.color}`} />

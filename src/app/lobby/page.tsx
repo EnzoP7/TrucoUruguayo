@@ -108,6 +108,7 @@ function LobbyPageContent() {
   const [mostrarRewardedAd, setMostrarRewardedAd] = useState(false);
   const [videosRestantes, setVideosRestantes] = useState<number | null>(null);
   const [videoCooldown, setVideoCooldown] = useState(0);
+  const [cargandoPremium, setCargandoPremium] = useState(false);
 
   // Auth state
   const [usuario, setUsuario] = useState<Usuario | null>(null);
@@ -625,7 +626,7 @@ function LobbyPageContent() {
                     <span>&#x1F4FA;</span>
                     {videoCooldown > 0
                       ? <span>{videoCooldown}s</span>
-                      : <span>+{75} monedas</span>
+                      : <span>+{20} monedas</span>
                     }
                   </button>
                 )}
@@ -636,6 +637,9 @@ function LobbyPageContent() {
                 </Link>
                 <Link href="/perfil" className="px-3 py-1.5 rounded-lg text-xs text-celeste-400/70 hover:text-celeste-300 hover:bg-celeste-500/10 transition-all">
                   Mi Perfil
+                </Link>
+                <Link href="/tienda" className="px-3 py-1.5 rounded-lg text-xs text-gold-400/70 hover:text-gold-300 hover:bg-gold-500/10 transition-all">
+                  Tienda
                 </Link>
                 <Link href="/ranking" className="px-3 py-1.5 rounded-lg text-xs text-celeste-400/70 hover:text-celeste-300 hover:bg-celeste-500/10 transition-all">
                   Ranking
@@ -669,6 +673,64 @@ function LobbyPageContent() {
               </Link>
             </div>
           </div>
+        )}
+
+        {/* Banner Premium CTA - solo para no-premium */}
+        {usuario && showAds && (
+          <button
+            onClick={async () => {
+              if (cargandoPremium) return;
+              setCargandoPremium(true);
+              try {
+                const res = await fetch('/api/payments/premium', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: usuario.id }),
+                });
+                const data = await res.json();
+                if (data.error) {
+                  showAlert('error', 'Error de pago', data.error);
+                  return;
+                }
+                if (data.init_point) {
+                  window.location.href = data.init_point;
+                }
+              } catch (err) {
+                console.error('Error creando pago:', err);
+                showAlert('error', 'Error de conexión', 'Error al conectar con MercadoPago. Intenta de nuevo.');
+              } finally {
+                setCargandoPremium(false);
+              }
+            }}
+            disabled={cargandoPremium}
+            className="group block w-full mb-6 animate-slide-up text-left disabled:opacity-70"
+          >
+            <div className="relative overflow-hidden rounded-2xl border border-gold-500/30 bg-gradient-to-r from-gold-900/20 via-gold-800/10 to-gold-900/20 p-4 sm:p-5 transition-all hover:border-gold-400/50 hover:shadow-lg hover:shadow-gold-500/10">
+              {/* Brillo decorativo */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-radial from-gold-400/10 to-transparent rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-radial from-celeste-400/5 to-transparent rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none" />
+
+              <div className="relative flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <div className="shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-gold-400/20 to-gold-600/20 border border-gold-500/30 flex items-center justify-center text-xl sm:text-2xl">
+                    &#x1F451;
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-gold-300 text-sm sm:text-base">Pase Premium</span>
+                      <span className="px-2 py-0.5 rounded-full bg-gold-500/20 text-gold-400 text-[10px] sm:text-xs font-semibold border border-gold-500/30">$1 USD</span>
+                    </div>
+                    <p className="text-white/50 text-[11px] sm:text-xs mt-0.5 leading-tight">
+                      Sin anuncios · Cosmeticos premium gratis · Audios custom · Bonus x1.5
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-gold-500/20 to-gold-600/20 border border-gold-500/30 text-gold-300 text-xs sm:text-sm font-semibold group-hover:from-gold-500/30 group-hover:to-gold-600/30 transition-all whitespace-nowrap">
+                  {cargandoPremium ? 'Redirigiendo...' : 'Obtener'}
+                </div>
+              </div>
+            </div>
+          </button>
         )}
 
         {/* Tus Partidas - solo usuarios logueados */}
@@ -880,7 +942,7 @@ function LobbyPageContent() {
                     Partida Rankeada
                   </span>
                   <span className="text-white/60 text-xs">
-                    Entrada: 10 monedas por jugador. Recompensa mayor al ganar.
+                    Entrada: 25 monedas por jugador. Recompensa mayor al ganar.
                   </span>
                 </div>
               </label>
@@ -890,7 +952,7 @@ function LobbyPageContent() {
           {/* Botón crear */}
           <button
             onClick={handleCrearPartida}
-            disabled={loading || !nombre.trim() || (esRankeada && (monedas ?? 0) < 10)}
+            disabled={loading || !nombre.trim() || (esRankeada && (monedas ?? 0) < 25)}
             className={`w-full text-white text-lg py-4 px-6 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg font-bold ${
               esRankeada
                 ? 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 shadow-gold-500/30'
@@ -907,7 +969,7 @@ function LobbyPageContent() {
               </span>
             ) : (
               <span className="flex items-center justify-center gap-2">
-                {esRankeada ? `Crear Rankeada ${tamañoSala} (10 monedas)` : `Crear Partida ${tamañoSala}`}
+                {esRankeada ? `Crear Rankeada ${tamañoSala} (25 monedas)` : `Crear Partida ${tamañoSala}`}
                 <ArrowIcon className="w-5 h-5" />
               </span>
             )}
@@ -1317,7 +1379,7 @@ function LobbyPageContent() {
       {/* Modal Rewarded Ad */}
       {mostrarRewardedAd && (
         <RewardedAd
-          rewardAmount={75}
+          rewardAmount={20}
           onRewardEarned={async () => {
             const result = await socketService.reclamarRecompensaVideo();
             if (result.success) {
