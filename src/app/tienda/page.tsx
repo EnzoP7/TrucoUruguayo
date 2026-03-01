@@ -3,9 +3,26 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import socketService from '@/lib/socket';
+import { TEMAS_MESA, REVERSOS_CARTAS, MARCOS_AVATAR } from '@/app/game/constants';
+import audioManager from '@/lib/audioManager';
 import { RewardedAd } from '@/components/ads';
 import AlertModal, { useAlertModal } from '@/components/AlertModal';
 import TrucoLoader from '@/components/TrucoLoader';
+
+const FONDOS_PERFIL_PREVIEW: Record<string, string> = {
+  fondo_clasico: 'from-gray-900 to-gray-800',
+  fondo_celeste: 'from-sky-900 via-cyan-900 to-blue-900',
+  fondo_atardecer: 'from-orange-900 via-rose-900 to-amber-900',
+  fondo_galaxia: 'from-purple-900 via-indigo-900 to-violet-900',
+  fondo_fuego: 'from-red-900 via-orange-900 to-yellow-900',
+};
+
+const SONIDO_DEMO: Record<string, string> = {
+  sonido_clasico: 'card-play',
+  sonido_casino: 'shuffle',
+  sonido_campo: 'flor',
+  sonido_fiesta: 'game-won',
+};
 
 interface Cosmetico {
   id: string;
@@ -36,6 +53,7 @@ export default function TiendaPage() {
   const [videosRestantes, setVideosRestantes] = useState<number | null>(null);
   const [videoCooldown, setVideoCooldown] = useState(0);
   const [mostrarRewardedAd, setMostrarRewardedAd] = useState(false);
+  const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
 
   const getUserId = (): number | null => {
     const saved = sessionStorage.getItem('truco_usuario');
@@ -398,28 +416,134 @@ export default function TiendaPage() {
                           }`}
                         >
                           {/* Preview */}
-                          <div className={`h-20 flex items-center justify-center relative ${
-                            tipo === 'tema_mesa' ? 'bg-gradient-to-br from-emerald-800 to-emerald-900' :
-                            tipo === 'reverso_cartas' ? 'bg-gradient-to-br from-blue-800 to-blue-900' :
-                            tipo === 'fondo_perfil' ? 'bg-gradient-to-br from-rose-800 to-orange-900' :
-                            tipo === 'pack_sonido' ? 'bg-gradient-to-br from-teal-800 to-cyan-900' :
-                            'bg-gradient-to-br from-purple-800 to-purple-900'
-                          }`}>
-                            <span className="text-3xl">{
-                              tipo === 'tema_mesa' ? '🎨' :
-                              tipo === 'reverso_cartas' ? '🃏' :
-                              tipo === 'fondo_perfil' ? '🌄' :
-                              tipo === 'pack_sonido' ? '🔊' : '🖼️'
-                            }</span>
+                          <div className="h-24 relative overflow-hidden">
+                            {/* tema_mesa: mini mesa con gradiente real + fieltro + cartas */}
+                            {tipo === 'tema_mesa' && (() => {
+                              const tema = TEMAS_MESA[cosmetico.id];
+                              if (!tema) return <div className="absolute inset-0 bg-emerald-900" />;
+                              return (
+                                <div className="absolute inset-0" style={{
+                                  background: `linear-gradient(135deg, ${tema.colors[0]} 0%, ${tema.colors[1]} 50%, ${tema.colors[2]} 100%)`
+                                }}>
+                                  <div className="absolute inset-3 rounded-xl opacity-50" style={{ backgroundColor: tema.felt }} />
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="flex items-end" style={{ gap: '3px' }}>
+                                      {[-15, 0, 15].map((rot, i) => (
+                                        <div key={i} className="w-5 h-7 rounded-[3px] bg-white/20 border border-white/15"
+                                             style={{ transform: `rotate(${rot}deg) translateY(${Math.abs(rot) / 5}px)` }} />
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div className="absolute bottom-1 left-0 right-0 flex justify-center">
+                                    <div className="w-10 h-[3px] rounded-full" style={{ backgroundColor: tema.accent, opacity: 0.5 }} />
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* reverso_cartas: cartas con el reverso real */}
+                            {tipo === 'reverso_cartas' && (() => {
+                              const reverso = REVERSOS_CARTAS[cosmetico.id];
+                              if (!reverso) return <div className="absolute inset-0 bg-blue-900" />;
+                              return (
+                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                  <div className="flex items-center" style={{ gap: '3px' }}>
+                                    {[-12, 0, 12].map((rot, i) => (
+                                      <div key={i} className="w-9 h-[52px] rounded-md shadow-lg"
+                                           style={{
+                                             background: `linear-gradient(135deg, ${reverso.colors[0]} 0%, ${reverso.colors[1]} 100%)`,
+                                             transform: `rotate(${rot}deg)`,
+                                             border: `1.5px solid ${reverso.colors[0]}99`
+                                           }}>
+                                        <div className="w-full h-full rounded-md flex items-center justify-center">
+                                          <div className="w-4 h-4 rounded-sm border border-white/15 rotate-45" />
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* marco_avatar: circulo con el marco real */}
+                            {tipo === 'marco_avatar' && (() => {
+                              const marco = MARCOS_AVATAR[cosmetico.id];
+                              if (!marco) return <div className="absolute inset-0 bg-purple-900" />;
+                              return (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                  <div className={`w-14 h-14 rounded-full border-[3px] ${marco.border} ${marco.shadow} ${marco.ring} bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center`}>
+                                    <svg className="w-7 h-7 text-white/30" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                    </svg>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* fondo_perfil: gradiente real con mini card de perfil */}
+                            {tipo === 'fondo_perfil' && (() => {
+                              const gradient = FONDOS_PERFIL_PREVIEW[cosmetico.id] || 'from-gray-900 to-gray-800';
+                              return (
+                                <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`}>
+                                  <div className="absolute inset-2.5 rounded-lg border border-white/10 bg-black/20 flex items-center gap-2 px-3">
+                                    <div className="w-8 h-8 rounded-full bg-white/15 border border-white/15 shrink-0" />
+                                    <div className="flex-1 space-y-1.5">
+                                      <div className="h-2 w-16 bg-white/15 rounded" />
+                                      <div className="h-1.5 w-10 bg-white/10 rounded" />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* pack_sonido: boton de play con animacion */}
+                            {tipo === 'pack_sonido' && (() => {
+                              const soundId = SONIDO_DEMO[cosmetico.id] || 'card-play';
+                              const isPlaying = playingSoundId === cosmetico.id;
+                              return (
+                                <div className="absolute inset-0 bg-gradient-to-br from-teal-900/80 to-cyan-900/80 flex items-center justify-center">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      audioManager.initFromUserGesture();
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      audioManager.play(soundId as any);
+                                      setPlayingSoundId(cosmetico.id);
+                                      setTimeout(() => setPlayingSoundId(null), 1500);
+                                    }}
+                                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                                      isPlaying
+                                        ? 'bg-green-500/30 border-2 border-green-400/50 scale-110'
+                                        : 'bg-white/10 border-2 border-white/20 hover:bg-white/20 hover:scale-105'
+                                    }`}
+                                  >
+                                    {isPlaying ? (
+                                      <div className="flex items-center gap-[3px]">
+                                        {[10, 16, 20, 14, 8].map((h, i) => (
+                                          <div key={i} className="w-1 bg-green-400 rounded-full animate-pulse"
+                                               style={{ height: `${h}px`, animationDelay: `${i * 0.1}s` }} />
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <svg className="w-6 h-6 text-white/70 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z"/>
+                                      </svg>
+                                    )}
+                                  </button>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Badges de precio / estado */}
                             {!desbloqueado && cosmetico.precio_monedas > 0 && (
-                              <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold z-10 ${
                                 tieneMonedas ? 'bg-gold-500/30 text-gold-300' : 'bg-red-500/30 text-red-300'
                               }`}>
                                 &#x1FA99; {cosmetico.precio_monedas}
                               </span>
                             )}
                             {desbloqueado && !equipado && (
-                              <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-gold-500/20 text-gold-400">
+                              <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-gold-500/20 text-gold-400 z-10">
                                 Comprado
                               </span>
                             )}
