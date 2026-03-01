@@ -684,6 +684,101 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
     return;
   }
 
+  // Si hay jugadores con flor sin declarar, disparar la declaración automática
+  if (mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0 && !mesa.florYaCantada) {
+    const todosDeclararon = mesa.jugadoresConFlor.every(
+      id => mesa.floresCantadas.some(f => f.jugadorId === id)
+    );
+    if (!todosDeclararon) {
+      console.log(`[Bot] Hay flores sin declarar, disparando cantarFlorAutomatica...`);
+      const florResult = cantarFlorAutomatica(mesa);
+
+      // Emitir las flores cantadas a jugadores humanos
+      if (florResult.cantadas && florResult.cantadas.length > 0) {
+        florResult.cantadas.forEach((declaracion, index) => {
+          setTimeout(() => {
+            room.jugadores.forEach(p => {
+              if (p.isBot) return;
+              const pJugador = mesa.jugadores.find(j => j.id === p.socketId);
+              const mismoEquipo = pJugador && pJugador.equipo === declaracion.equipo;
+              io.to(p.socketId).emit('flor-cantada', {
+                jugadorId: declaracion.jugadorId,
+                audioCustomUrl: mesa.audiosCustom?.[declaracion.jugadorId]?.['flor'] || null,
+                declaracion: {
+                  ...declaracion,
+                  puntos: mismoEquipo ? declaracion.puntos : null,
+                },
+                estado: getEstadoParaJugador(mesa, p.socketId),
+              });
+            });
+          }, index * 1000);
+        });
+      }
+
+      // Después de emitir todas las flores, resolver o esperar respuesta
+      const delayTotal = (florResult.cantadas?.length || 0) * 1000 + 500;
+      setTimeout(() => {
+        const currentMesa = engines.get(mesaId);
+        const currentRoom = lobbyRooms.get(mesaId);
+        if (!currentMesa || !currentRoom) return;
+
+        if (florResult.esperandoRespuesta && currentMesa.florPendiente) {
+          // Ambos equipos tienen flor - emitir flor-pendiente
+          currentRoom.jugadores.forEach(p => {
+            if (p.isBot) return;
+            io.to(p.socketId).emit('flor-pendiente', {
+              equipoQueCanta: currentMesa.florPendiente.equipoQueCanta,
+              equipoQueResponde: currentMesa.florPendiente.equipoQueResponde,
+              estado: getEstadoParaJugador(currentMesa, p.socketId),
+            });
+          });
+          // Si hay bots que deben responder, hacer que respondan
+          const botsActivos = activeBots.get(mesaId) || [];
+          const hayBotQueResponde = botsActivos.some(b => b.equipo === currentMesa.florPendiente.equipoQueResponde);
+          if (hayBotQueResponde) {
+            setTimeout(() => botResponderFlor(mesaId, io), 800);
+          }
+        } else if (florResult.resultado) {
+          // Solo un equipo tiene flor - emitir resultado
+          currentRoom.jugadores.forEach(p => {
+            if (p.isBot) return;
+            io.to(p.socketId).emit('flor-resuelta', {
+              resultado: {
+                ganador: florResult.resultado.ganador,
+                puntosGanados: florResult.resultado.puntosGanados,
+                floresCantadas: (florResult.resultado.floresCantadas || []).map(f => ({
+                  ...f,
+                  puntos: null,
+                })),
+                mejorFlor: null,
+              },
+              estado: getEstadoParaJugador(currentMesa, p.socketId),
+            });
+          });
+
+          if (currentMesa.winnerJuego !== null) {
+            currentRoom.estado = 'terminado';
+            currentRoom.jugadores.forEach(p => {
+              if (p.isBot) return;
+              io.to(p.socketId).emit('juego-finalizado', {
+                ganadorEquipo: currentMesa.winnerJuego,
+                estado: getEstadoParaJugador(currentMesa, p.socketId),
+              });
+            });
+          } else {
+            // Flor resuelta, continuar con el turno del bot
+            setTimeout(() => procesarTurnoBot(mesaId, io), 1000);
+          }
+        } else {
+          // No hubo resultado ni espera - continuar
+          setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+        }
+      }, delayTotal);
+
+      return;
+    }
+  }
+
   const jugadorActual = mesa.jugadores[mesa.turnoActual];
   if (!jugadorActual || !jugadorActual.isBot) return;
 
@@ -700,6 +795,9 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
     const jugActual = currentMesa.jugadores[currentMesa.turnoActual];
     if (!jugActual || !jugActual.isBot || jugActual.id !== bot.id) return;
     if (currentMesa.fase !== 'jugando') return;
+    // No forzar carta si hay flor sin resolver
+    if (currentMesa.esperandoRespuestaFlor) return;
+    if (currentMesa.jugadoresConFlor && currentMesa.jugadoresConFlor.length > 0 && !currentMesa.florYaCantada) return;
 
     console.log(`[Bot TIMEOUT] ${bot.nombre} no respondió en 4s, forzando carta aleatoria`);
 
@@ -737,7 +835,9 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
   console.log(`[Bot] ${bot.nombre} pensando... (cartas: ${bot.cartas.length})`);
 
   // === CANTAR ENVIDO (solo en primera mano, antes de jugar primera carta) ===
-  if (!mesa.envidoYaCantado && mesa.manoActual === 1 && mesa.cartasMesa.length === 0) {
+  // No cantar envido si hay flor sin resolver (la flor anula el envido)
+  const hayFlorSinResolver = mesa.jugadoresConFlor && mesa.jugadoresConFlor.length > 0 && !mesa.florYaCantada;
+  if (!hayFlorSinResolver && !mesa.envidoYaCantado && mesa.manoActual === 1 && mesa.cartasMesa.length === 0) {
     try {
       const puntosEq1 = mesa.equipos[0].puntaje;
       const puntosEq2 = mesa.equipos[1].puntaje;

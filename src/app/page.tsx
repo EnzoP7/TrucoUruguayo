@@ -43,23 +43,20 @@ export default function HomePage() {
 
         {/* Hero Section */}
         <div className="text-center mb-8 animate-fade-in">
-          {/* Sol de Mayo real */}
+          {/* Logo principal */}
           <div className="flex justify-center mb-4">
             <Image
-              src="/Images/SolDeMayo.png"
-              alt="Sol de Mayo"
-              width={112}
-              height={112}
-              className="w-20 h-20 md:w-28 md:h-28 sun-glow drop-shadow-[0_0_20px_rgba(252,209,22,0.5)]"
+              src="/Images/LogoFinalTrucouruguayo.png"
+              alt="Truco Uruguayo Online"
+              width={280}
+              height={280}
+              className="w-48 h-48 md:w-64 md:h-64 lg:w-72 lg:h-72 drop-shadow-[0_4px_20px_rgba(0,0,0,0.6)]"
               priority
             />
           </div>
 
-          <h1 className="font-[var(--font-cinzel)] text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-gold-400 mb-4 tracking-wider">
+          <h1 className="font-[var(--font-cinzel)] text-3xl sm:text-4xl md:text-5xl font-bold text-gold-400 mb-4 tracking-wider">
             <span className="drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]">
-              Truco Uruguayo Online
-            </span>
-            <span className="block text-2xl sm:text-3xl md:text-4xl text-celeste-300 mt-2 font-normal">
               Juga Gratis con Amigos
             </span>
           </h1>

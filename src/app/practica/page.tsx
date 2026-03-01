@@ -34,7 +34,7 @@ export default function PracticaPage() {
         await socketService.iniciarPartida();
 
         // Redirigir al juego
-        router.push(`/game?mesaId=${mesaId}`);
+        router.push(`/game-v2?mesaId=${mesaId}`);
 
       } catch (err) {
         console.error('Error iniciando práctica:', err);

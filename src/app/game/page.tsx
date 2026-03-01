@@ -157,47 +157,63 @@ const paloAArchivo: Record<string, string> = {
 // Usar colores CSS directos en lugar de clases Tailwind dinámicas
 const TEMAS_MESA: Record<
   string,
-  { colors: [string, string, string]; accent: string; name: string }
+  { colors: [string, string, string]; accent: string; name: string; felt: string; feltLight: string }
 > = {
   mesa_clasico: {
     colors: ["#1a3d1a", "#0d2e0d", "#0a2a0a"],
     accent: "#10b981",
     name: "Clásico",
+    felt: "#064e3b",
+    feltLight: "rgba(30, 120, 60, 0.4)",
   },
   mesa_noche: {
     colors: ["#1a2744", "#0d1a2e", "#0a1525"],
     accent: "#3b82f6",
     name: "Noche",
+    felt: "#0f1d3d",
+    feltLight: "rgba(30, 60, 150, 0.4)",
   },
   mesa_rojo: {
     colors: ["#4a1a1a", "#2e0d0d", "#250a0a"],
     accent: "#ef4444",
     name: "Casino",
+    felt: "#3d1010",
+    feltLight: "rgba(150, 30, 30, 0.4)",
   },
   mesa_dorado: {
     colors: ["#3d3010", "#2a200a", "#1a1505"],
     accent: "#f59e0b",
     name: "Dorado",
+    felt: "#3d3010",
+    feltLight: "rgba(150, 120, 30, 0.4)",
   },
   mesa_cuero: {
     colors: ["#4a2c17", "#3b2010", "#2a1508"],
     accent: "#d97706",
     name: "Cuero",
+    felt: "#3d2510",
+    feltLight: "rgba(150, 90, 30, 0.4)",
   },
   mesa_marmol: {
     colors: ["#374151", "#1f2937", "#111827"],
     accent: "#9ca3af",
     name: "Mármol",
+    felt: "#1f2937",
+    feltLight: "rgba(100, 100, 120, 0.3)",
   },
   mesa_neon: {
     colors: ["#2e1065", "#1e1b4b", "#0f0a2e"],
     accent: "#a855f7",
     name: "Neón",
+    felt: "#1a0a3d",
+    feltLight: "rgba(120, 50, 200, 0.4)",
   },
   mesa_medianoche: {
     colors: ["#0a0a0a", "#0d0d0d", "#050505"],
     accent: "#6366f1",
     name: "Medianoche",
+    felt: "#0a0a15",
+    feltLight: "rgba(60, 60, 120, 0.3)",
   },
 };
 
@@ -882,7 +898,8 @@ function GamePage() {
     { jugadorIndex: number; cartaIndex: number }[]
   >([]);
   const [isDealing, setIsDealing] = useState(false);
-  const [florAnuncio, setFlorAnuncio] = useState<{
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_florAnuncio, setFlorAnuncio] = useState<{
     jugadorNombre: string;
   } | null>(null);
   const [florResultado, setFlorResultado] = useState<{
@@ -973,6 +990,8 @@ function GamePage() {
   const getTemaActivo = useCallback((): {
     colors: [string, string, string];
     accent: string;
+    felt: string;
+    feltLight: string;
   } | null => {
     // 1. Intentar desde cosméticos del server
     if (mesa?.cosmeticosJugadores && socketId) {
@@ -3759,24 +3778,7 @@ function GamePage() {
         </div>
       )}
 
-      {/* Anuncio de FLOR - Banner flotante menos invasivo */}
-      {florAnuncio && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-bounce-in">
-          <div className="bg-gradient-to-r from-pink-600/90 to-pink-500/90 backdrop-blur-md rounded-xl px-6 py-3 shadow-lg shadow-pink-500/30 border border-pink-400/40">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🌸</span>
-              <div>
-                <div className="text-lg font-bold text-white">¡FLOR!</div>
-                <div className="text-sm text-pink-100">
-                  {florAnuncio.jugadorNombre}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Resultado de FLOR - Banner flotante */}
+      {/* Resultado de FLOR - Banner flotante (el anuncio individual sale como speech bubble sobre el avatar) */}
       {florResultado && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-bounce-in">
           <div className="bg-gradient-to-r from-pink-700/90 to-purple-600/90 backdrop-blur-md rounded-xl px-6 py-3 shadow-lg shadow-pink-500/30 border border-pink-400/40">
@@ -4240,10 +4242,20 @@ function GamePage() {
             )}
 
             {/* Mesa central con fieltro */}
-            <div className="flex-1 mesa-flat wood-border rounded-[2rem] sm:rounded-[3rem] p-3 sm:p-4 relative flex flex-col justify-center items-center min-h-[220px] sm:min-h-[260px] lg:min-h-[300px]">
+            <div
+              className="flex-1 mesa-flat wood-border rounded-[2rem] sm:rounded-[3rem] p-3 sm:p-4 relative flex flex-col justify-center items-center min-h-[220px] sm:min-h-[260px] lg:min-h-[300px]"
+              style={temaActivo?.felt ? { backgroundColor: temaActivo.felt } : undefined}
+            >
               {/* Luz de lámpara */}
               <div className="lampara-glow" />
               <div className="pulperia-light rounded-[2rem] sm:rounded-[3rem]" />
+              {/* Highlight del fieltro según tema */}
+              {temaActivo?.feltLight && (
+                <div
+                  className="absolute inset-0 rounded-[2rem] sm:rounded-[3rem] pointer-events-none z-0"
+                  style={{ background: `radial-gradient(ellipse at 50% 50%, ${temaActivo.feltLight} 0%, transparent 70%)` }}
+                />
+              )}
 
               {/* Muestra y Mazo - en el centro de la mesa (tamaño reducido en mobile) */}
               {mesa.muestra && mesa.fase !== "cortando" && (

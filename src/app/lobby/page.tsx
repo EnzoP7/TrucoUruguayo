@@ -377,7 +377,7 @@ function LobbyPageContent() {
     sessionStorage.setItem('truco_nombre', nombre.trim());
     sessionStorage.setItem('truco_mesaId', mesaId);
     socketService.setNavigating(true);
-    window.location.href = `/game?mesaId=${mesaId}`;
+    window.location.href = `/game-v2?mesaId=${mesaId}`;
   };
 
   const handleCrearPartida = async () => {
