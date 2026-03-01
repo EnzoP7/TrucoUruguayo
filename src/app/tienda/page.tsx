@@ -17,12 +17,6 @@ const FONDOS_PERFIL_PREVIEW: Record<string, string> = {
   fondo_fuego: 'from-red-900 via-orange-900 to-yellow-900',
 };
 
-const SONIDO_DEMO: Record<string, string> = {
-  sonido_clasico: 'card-play',
-  sonido_casino: 'shuffle',
-  sonido_campo: 'flor',
-  sonido_fiesta: 'game-won',
-};
 
 interface Cosmetico {
   id: string;
@@ -200,6 +194,9 @@ export default function TiendaPage() {
         if (cosmeticoComprado && monedas !== null) {
           setMonedas(monedas - cosmeticoComprado.precio_monedas);
         }
+        if (cosmeticoComprado?.tipo === 'pack_sonido') {
+          audioManager.setMusicPack(cosmeticoId);
+        }
       } else {
         showAlert('error', 'Error', result.error || 'Error al comprar cosmético');
       }
@@ -221,6 +218,9 @@ export default function TiendaPage() {
           }
           return c;
         }));
+        if (tipo === 'pack_sonido') {
+          audioManager.setMusicPack(cosmeticoId);
+        }
       }
     } catch (err) {
       console.error('Error equipando cosmético:', err);
@@ -496,20 +496,23 @@ export default function TiendaPage() {
                               );
                             })()}
 
-                            {/* pack_sonido: boton de play con animacion */}
+                            {/* pack_sonido: boton de play con preview de musica de fondo */}
                             {tipo === 'pack_sonido' && (() => {
-                              const soundId = SONIDO_DEMO[cosmetico.id] || 'card-play';
                               const isPlaying = playingSoundId === cosmetico.id;
                               return (
                                 <div className="absolute inset-0 bg-gradient-to-br from-teal-900/80 to-cyan-900/80 flex items-center justify-center">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      if (isPlaying) {
+                                        audioManager.stopMusicPreview();
+                                        setPlayingSoundId(null);
+                                        return;
+                                      }
                                       audioManager.initFromUserGesture();
-                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                      audioManager.play(soundId as any);
+                                      audioManager.playMusicPreview(cosmetico.id);
                                       setPlayingSoundId(cosmetico.id);
-                                      setTimeout(() => setPlayingSoundId(null), 1500);
+                                      setTimeout(() => setPlayingSoundId(null), 4000);
                                     }}
                                     className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
                                       isPlaying

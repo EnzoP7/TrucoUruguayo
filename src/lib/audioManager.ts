@@ -30,6 +30,8 @@ class AudioManager {
   private musicGain: GainNode | null = null;
   private musicBuffer: AudioBuffer | null = null;
   private musicPlaying = false;
+  private musicPack = 'sonido_clasico';
+  private previewSource: AudioBufferSourceNode | null = null;
   private mp3Cache: Map<string, AudioBuffer> = new Map();
   private mp3Checked: Set<string> = new Set();
 
@@ -38,6 +40,8 @@ class AudioManager {
       this.muted = localStorage.getItem('truco_muted') === 'true';
       const savedVol = localStorage.getItem('truco_volume');
       if (savedVol !== null) this.masterVolume = parseFloat(savedVol);
+      const savedPack = localStorage.getItem('truco_music_pack');
+      if (savedPack) this.musicPack = savedPack;
     }
   }
 
@@ -566,15 +570,221 @@ class AudioManager {
     return buffer;
   }
 
+  // Casino: jazz/lounge - Dm7-G7-Cmaj7-Fmaj7, BPM 68, vibrato + Rhodes overtones
+  private generateMusicCasino(): AudioBuffer {
+    const ctx = this.getContext();
+    const bpm = 68;
+    const beatsPerChord = 2;
+    const totalBeats = 8;
+    const beatDuration = 60 / bpm;
+    const totalDuration = totalBeats * beatDuration;
+    const sampleRate = ctx.sampleRate;
+    const totalSamples = Math.ceil(totalDuration * sampleRate);
+    const buffer = ctx.createBuffer(2, totalSamples, sampleRate);
+
+    const chords: number[][] = [
+      [293.66, 349.23, 440, 523.25],  // Dm7
+      [196, 246.94, 293.66, 349.23],  // G7
+      [261.63, 329.63, 392, 493.88],  // Cmaj7
+      [174.61, 220, 261.63, 329.63],  // Fmaj7
+    ];
+
+    const leftChannel = buffer.getChannelData(0);
+    const rightChannel = buffer.getChannelData(1);
+
+    for (let chordIdx = 0; chordIdx < chords.length; chordIdx++) {
+      const chord = chords[chordIdx];
+      const chordStartSample = Math.floor(chordIdx * beatsPerChord * beatDuration * sampleRate);
+      const chordDurationSamples = Math.floor(beatsPerChord * beatDuration * sampleRate);
+
+      for (let s = 0; s < chordDurationSamples; s++) {
+        const globalSample = chordStartSample + s;
+        if (globalSample >= totalSamples) break;
+
+        const t = s / sampleRate;
+        const chordDuration = beatsPerChord * beatDuration;
+
+        let env = 1;
+        if (t < 0.15) env = t / 0.15;
+        if (t > chordDuration - 0.4) env = Math.max(0, (chordDuration - t) / 0.4);
+
+        let sampleVal = 0;
+        for (const freq of chord) {
+          const vibrato = Math.sin(2 * Math.PI * 5 * t) * 1.5;
+          sampleVal += Math.sin(2 * Math.PI * (freq + vibrato) * t) * 0.09;
+          sampleVal += Math.sin(2 * Math.PI * freq * 2 * t) * 0.025;
+          // Rhodes-like bell overtone
+          sampleVal += Math.sin(2 * Math.PI * freq * 4 * t) * 0.008 * Math.exp(-t * 3);
+        }
+
+        sampleVal *= env * 0.13;
+        leftChannel[globalSample] += sampleVal * 1.08;
+        rightChannel[globalSample] += sampleVal * 0.92;
+      }
+    }
+
+    const crossfadeSamples = Math.floor(0.15 * sampleRate);
+    for (let i = 0; i < crossfadeSamples; i++) {
+      const fadeOut = 1 - i / crossfadeSamples;
+      const fadeIn = i / crossfadeSamples;
+      const endIdx = totalSamples - crossfadeSamples + i;
+      leftChannel[endIdx] = leftChannel[endIdx] * fadeOut + leftChannel[i] * fadeIn;
+      rightChannel[endIdx] = rightChannel[endIdx] * fadeOut + rightChannel[i] * fadeIn;
+    }
+
+    return buffer;
+  }
+
+  // Campo: folk rural uruguayo - Em-C-G-D, BPM 50, guitarra calida con mucho detuning
+  private generateMusicCampo(): AudioBuffer {
+    const ctx = this.getContext();
+    const bpm = 50;
+    const beatsPerChord = 2;
+    const totalBeats = 8;
+    const beatDuration = 60 / bpm;
+    const totalDuration = totalBeats * beatDuration;
+    const sampleRate = ctx.sampleRate;
+    const totalSamples = Math.ceil(totalDuration * sampleRate);
+    const buffer = ctx.createBuffer(2, totalSamples, sampleRate);
+
+    const chords: number[][] = [
+      [164.81, 196, 246.94],   // Em
+      [130.81, 164.81, 196],   // C (registro bajo)
+      [196, 246.94, 293.66],   // G
+      [146.83, 185, 220],      // D
+    ];
+
+    const leftChannel = buffer.getChannelData(0);
+    const rightChannel = buffer.getChannelData(1);
+
+    for (let chordIdx = 0; chordIdx < chords.length; chordIdx++) {
+      const chord = chords[chordIdx];
+      const chordStartSample = Math.floor(chordIdx * beatsPerChord * beatDuration * sampleRate);
+      const chordDurationSamples = Math.floor(beatsPerChord * beatDuration * sampleRate);
+
+      for (let s = 0; s < chordDurationSamples; s++) {
+        const globalSample = chordStartSample + s;
+        if (globalSample >= totalSamples) break;
+
+        const t = s / sampleRate;
+        const chordDuration = beatsPerChord * beatDuration;
+
+        let env = 1;
+        if (t < 0.3) env = t / 0.3;
+        if (t > chordDuration - 0.5) env = Math.max(0, (chordDuration - t) / 0.5);
+
+        let sampleVal = 0;
+        for (const freq of chord) {
+          // Guitarra calida: fundamental + chorus con detuning pesado
+          sampleVal += Math.sin(2 * Math.PI * freq * t) * 0.14;
+          sampleVal += Math.sin(2 * Math.PI * (freq * 1.005) * t) * 0.06;
+          sampleVal += Math.sin(2 * Math.PI * (freq * 0.995) * t) * 0.06;
+          sampleVal += Math.sin(2 * Math.PI * freq * 2 * t) * 0.02;
+        }
+
+        sampleVal *= env * 0.12;
+        leftChannel[globalSample] += sampleVal * 1.1;
+        rightChannel[globalSample] += sampleVal * 0.9;
+      }
+    }
+
+    const crossfadeSamples = Math.floor(0.15 * sampleRate);
+    for (let i = 0; i < crossfadeSamples; i++) {
+      const fadeOut = 1 - i / crossfadeSamples;
+      const fadeIn = i / crossfadeSamples;
+      const endIdx = totalSamples - crossfadeSamples + i;
+      leftChannel[endIdx] = leftChannel[endIdx] * fadeOut + leftChannel[i] * fadeIn;
+      rightChannel[endIdx] = rightChannel[endIdx] * fadeOut + rightChannel[i] * fadeIn;
+    }
+
+    return buffer;
+  }
+
+  // Fiesta: festivo/upbeat - C-G-Am-F octava alta, BPM 92, ondas triangulares brillantes
+  private generateMusicFiesta(): AudioBuffer {
+    const ctx = this.getContext();
+    const bpm = 92;
+    const beatsPerChord = 2;
+    const totalBeats = 8;
+    const beatDuration = 60 / bpm;
+    const totalDuration = totalBeats * beatDuration;
+    const sampleRate = ctx.sampleRate;
+    const totalSamples = Math.ceil(totalDuration * sampleRate);
+    const buffer = ctx.createBuffer(2, totalSamples, sampleRate);
+
+    const chords: number[][] = [
+      [523.25, 659.25, 783.99],  // C5
+      [392, 493.88, 587.33],     // G4
+      [440, 523.25, 659.25],     // Am
+      [349.23, 440, 523.25],     // F
+    ];
+
+    const leftChannel = buffer.getChannelData(0);
+    const rightChannel = buffer.getChannelData(1);
+
+    for (let chordIdx = 0; chordIdx < chords.length; chordIdx++) {
+      const chord = chords[chordIdx];
+      const chordStartSample = Math.floor(chordIdx * beatsPerChord * beatDuration * sampleRate);
+      const chordDurationSamples = Math.floor(beatsPerChord * beatDuration * sampleRate);
+
+      for (let s = 0; s < chordDurationSamples; s++) {
+        const globalSample = chordStartSample + s;
+        if (globalSample >= totalSamples) break;
+
+        const t = s / sampleRate;
+        const chordDuration = beatsPerChord * beatDuration;
+
+        let env = 1;
+        if (t < 0.1) env = t / 0.1;
+        if (t > chordDuration - 0.2) env = Math.max(0, (chordDuration - t) / 0.2);
+
+        let sampleVal = 0;
+        for (const freq of chord) {
+          // Triangular brillante + armonicos
+          const phase = (freq * t) % 1;
+          const triangle = 4 * Math.abs(phase - 0.5) - 1;
+          sampleVal += triangle * 0.08;
+          sampleVal += Math.sin(2 * Math.PI * freq * t) * 0.06;
+          sampleVal += Math.sin(2 * Math.PI * freq * 3 * t) * 0.015;
+          sampleVal += Math.sin(2 * Math.PI * (freq * 1.002) * t) * 0.03;
+        }
+
+        sampleVal *= env * 0.11;
+        leftChannel[globalSample] += sampleVal * 1.03;
+        rightChannel[globalSample] += sampleVal * 0.97;
+      }
+    }
+
+    const crossfadeSamples = Math.floor(0.15 * sampleRate);
+    for (let i = 0; i < crossfadeSamples; i++) {
+      const fadeOut = 1 - i / crossfadeSamples;
+      const fadeIn = i / crossfadeSamples;
+      const endIdx = totalSamples - crossfadeSamples + i;
+      leftChannel[endIdx] = leftChannel[endIdx] * fadeOut + leftChannel[i] * fadeIn;
+      rightChannel[endIdx] = rightChannel[endIdx] * fadeOut + rightChannel[i] * fadeIn;
+    }
+
+    return buffer;
+  }
+
+  private generateMusicForPack(packId: string): AudioBuffer {
+    switch (packId) {
+      case 'sonido_casino': return this.generateMusicCasino();
+      case 'sonido_campo': return this.generateMusicCampo();
+      case 'sonido_fiesta': return this.generateMusicFiesta();
+      default: return this.generateMusicBuffer();
+    }
+  }
+
   startMusic(): void {
     if (this.musicPlaying || this.muted) return;
     this.musicPlaying = true;
 
     const ctx = this.getContext();
 
-    // Generate music buffer once
+    // Generate music buffer for current pack
     if (!this.musicBuffer) {
-      this.musicBuffer = this.generateMusicBuffer();
+      this.musicBuffer = this.generateMusicForPack(this.musicPack);
     }
 
     // Create gain node for volume control
@@ -599,6 +809,48 @@ class AudioManager {
     if (this.musicGain) {
       this.musicGain.disconnect();
       this.musicGain = null;
+    }
+  }
+
+  // === Packs de musica ===
+
+  setMusicPack(packId: string): void {
+    if (this.musicPack === packId) return;
+    this.musicPack = packId;
+    this.musicBuffer = null;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('truco_music_pack', packId);
+    }
+    if (this.musicPlaying) {
+      this.stopMusic();
+      this.startMusic();
+    }
+  }
+
+  getMusicPack(): string {
+    return this.musicPack;
+  }
+
+  async playMusicPreview(packId: string): Promise<void> {
+    this.stopMusicPreview();
+    if (this.muted) return;
+    const ctx = await this.ensureContextReady();
+    const buffer = this.generateMusicForPack(packId);
+    this.previewSource = ctx.createBufferSource();
+    this.previewSource.buffer = buffer;
+    const gain = ctx.createGain();
+    const previewDuration = Math.min(buffer.duration, 4);
+    gain.gain.setValueAtTime(this.masterVolume * 0.6, ctx.currentTime);
+    gain.gain.setValueAtTime(this.masterVolume * 0.6, ctx.currentTime + previewDuration - 0.8);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + previewDuration);
+    this.previewSource.connect(gain).connect(ctx.destination);
+    this.previewSource.start(0, 0, previewDuration);
+  }
+
+  stopMusicPreview(): void {
+    if (this.previewSource) {
+      try { this.previewSource.stop(); } catch { /* already stopped */ }
+      this.previewSource = null;
     }
   }
 

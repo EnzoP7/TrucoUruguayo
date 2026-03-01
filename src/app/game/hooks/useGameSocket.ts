@@ -701,9 +701,15 @@ export function useGameSocket(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mesa?.turnoActual, socketId]);
 
-  // Iniciar música cuando empieza el juego
+  // Cargar pack de sonido equipado y iniciar música cuando empieza el juego
   useEffect(() => {
     if (mesa?.estado === "jugando" && !esperandoInicio) {
+      if (mesa?.cosmeticosJugadores && socketId) {
+        const misCosmetics = mesa.cosmeticosJugadores[socketId];
+        if (misCosmetics?.pack_sonido) {
+          audioManager.setMusicPack(misCosmetics.pack_sonido);
+        }
+      }
       audioManager.startMusic();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
