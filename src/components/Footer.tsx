@@ -31,13 +31,25 @@ export default function Footer({ className = '', minimal = false }: FooterProps)
         La tradicion del campo oriental
       </p>
 
-      {/* Creditos del desarrollador */}
+      {/* Sobre el proyecto */}
       <div className="border-t border-celeste-600/20 pt-4 mt-4">
+        <p className="text-celeste-400/80 text-sm font-semibold mb-2">
+          Por que Truco Uruguayo Online?
+        </p>
+        <p className="text-white/50 text-xs leading-relaxed max-w-md mx-auto mb-3">
+          Este proyecto nacio con una idea simple: que cualquiera pueda disfrutar del truco uruguayo
+          de forma <span className="text-celeste-400/70">gratuita</span> y <span className="text-celeste-400/70">online</span>, sin importar donde este.
+          Un juego entretenido, siempre actualizado y hecho con dedicacion para toda la comunidad.
+        </p>
+        <p className="text-white/40 text-xs mb-4">
+          Tu opinion importa — si tenes ideas, sugerencias o encontras algun error, escribinos y ayudanos a seguir mejorando.
+        </p>
+      </div>
+
+      {/* Creditos y contacto */}
+      <div className="border-t border-celeste-600/20 pt-4 mt-2">
         <p className="text-gold-400/70 text-sm mb-2">
           Desarrollado por <span className="font-semibold text-gold-400">Enzo Pontet</span>
-        </p>
-        <p className="text-white/40 text-xs mb-3">
-          Queres colaborar o sugerir mejoras?
         </p>
         <a
           href="mailto:enzopch2022@gmail.com"

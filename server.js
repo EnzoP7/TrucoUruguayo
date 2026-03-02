@@ -156,6 +156,7 @@ function iniciarAfkTimeout(io, room, mesa) {
     console.log(`[AFK] Jugador ${jugadorActual.nombre} se fue al mazo por inactividad (60s)`);
     const resultado = irseAlMazo(mesa, jugadorActual.id);
     if (resultado.success) {
+      incrementarStatJugador(mesa, jugadorActual.id, 'idasAlMazo');
       room.jugadores.forEach(p => {
         io.to(p.socketId).emit('jugador-al-mazo', {
           jugadorId: jugadorActual.id,
@@ -298,12 +299,32 @@ function crearEstadoMesa(mesaId, jugadores, puntosLimite = 30, opciones = {}) {
     respuestasEnvido: {}, // { jugadorId: true/false } - respuestas de cada jugador del equipo
     esperandoRespuestasGrupales: false, // Si estamos esperando que todos respondan
     tipoRespuestaGrupal: null, // 'truco' o 'envido'
+    rondaNumero: 0, // Número de ronda actual (se incrementa en cada nueva ronda)
+    statsJugadores: new Map(), // Map<socketId, { trucosCantados, trucosGanados, envidosCantados, envidosGanados, floresCantadas, floresGanadas, idasAlMazo }>
   };
+}
+
+// Helper para incrementar estadísticas de jugador en la partida
+function incrementarStatJugador(mesa, socketId, stat, amount = 1) {
+  if (!mesa.statsJugadores) mesa.statsJugadores = new Map();
+  const stats = mesa.statsJugadores.get(socketId) || {};
+  stats[stat] = (stats[stat] || 0) + amount;
+  mesa.statsJugadores.set(socketId, stats);
+}
+
+// Helper para incrementar stat para todos los jugadores de un equipo
+function incrementarStatEquipo(mesa, equipoId, stat, amount = 1) {
+  mesa.jugadores.forEach(j => {
+    if (j.equipo === equipoId) {
+      incrementarStatJugador(mesa, j.id, stat, amount);
+    }
+  });
 }
 
 // Phase 1: Shuffle the deck and wait for cut
 function iniciarRondaFase1(mesa) {
   mesa.estado = 'jugando';
+  mesa.rondaNumero = (mesa.rondaNumero || 0) + 1;
   mesa.cartasMesa = [];
   mesa.ganadoresManos = [];
   mesa.manoGanadorJugadorId = null;
@@ -848,6 +869,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
 
         const success = cantarEnvido(mesa, bot.id, decisionEnvido.tipo);
         if (success) {
+          incrementarStatJugador(mesa, bot.id, 'envidosCantados');
           // Notificar a todos
           const equipoQueResponde = mesa.envidoActivo.equipoQueCanta === 1 ? 2 : 1;
           room.jugadores.forEach(p => {
@@ -888,6 +910,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
 
         const success = cantarTruco(mesa, bot.id, decisionTruco.tipo);
         if (success) {
+          incrementarStatJugador(mesa, bot.id, 'trucosCantados');
           // Notificar a todos
           const equipoQueResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
           room.jugadores.forEach(p => {
@@ -2000,6 +2023,11 @@ function finalizarRonda(mesa, equipoGanador) {
   if (equipo) equipo.puntaje += mesa.puntosEnJuego;
   mesa.mensajeRonda = `Equipo ${equipoGanador} ganó la ronda (+${mesa.puntosEnJuego} pts)`;
 
+  // Estadísticas: truco ganado si había truco en juego
+  if (mesa.puntosEnJuego > 1) {
+    incrementarStatEquipo(mesa, equipoGanador, 'trucosGanados');
+  }
+
   // === MODO PICO A PICO: Incrementar contador de cruces jugados ===
   if (mesa.jugadores.length === 6 && mesa.modoAlternadoHabilitado && mesa.modoRondaActual === '1v1') {
     // Guardar el ganador de este cruce para el sub-marcador
@@ -2480,6 +2508,7 @@ function cantarFlorAutomatica(mesa) {
       cartas: cartasFlor,
     });
     declaraciones.push(declaracion);
+    incrementarStatJugador(mesa, jugadorId, 'floresCantadas');
   });
 
   // Si ambos equipos tienen flor, esperar respuesta del segundo equipo
@@ -3260,6 +3289,9 @@ function responderFlor(mesa, jugadorId, tipoRespuesta, diferirPuntos = false) {
 
   // Aplicar puntos (solo si no se difieren para animaciones)
   if (ganador) {
+    // Estadísticas: flor ganada
+    incrementarStatEquipo(mesa, ganador, 'floresGanadas');
+
     mesa.envidoYaCantado = true;
     mesa.envidoActivo = null;
     mesa.florYaCantada = true;
@@ -3568,6 +3600,9 @@ function resolverEnvidoAutomatico(mesa, puntosAcumulados, diferirPuntos = false)
   if (mejorMano === mejorContrario) {
     ganador = equipoMano; // Empate gana mano
   }
+
+  // Estadísticas: envido ganado
+  incrementarStatEquipo(mesa, ganador, 'envidosGanados');
 
   // Asignar puntos (solo si no se difieren)
   const equipo = mesa.equipos.find(e => e.id === ganador);
@@ -4013,6 +4048,7 @@ app.prepare().then(async () => {
       const jugadoresConUserId = mesa.jugadores.map(j => {
         const roomJugador = room.jugadores.find(rj => rj.socketId === j.id);
         return {
+          socketId: j.id,
           userId: roomJugador?.userId || j.userId || null,
           equipo: j.equipo,
         };
@@ -4057,15 +4093,18 @@ app.prepare().then(async () => {
             statsActualizacion.partidas_perfectas = 1;
           }
 
-          // Obtener estadísticas de cantos del jugador (si las hay)
-          const jugadorStats = mesa.statsJugadores?.get(j.userId) || {};
-          if (jugadorStats.trucosCantados) statsActualizacion.trucos_cantados = jugadorStats.trucosCantados;
-          if (jugadorStats.trucosGanados) statsActualizacion.trucos_ganados = jugadorStats.trucosGanados;
-          if (jugadorStats.envidosCantados) statsActualizacion.envidos_cantados = jugadorStats.envidosCantados;
-          if (jugadorStats.envidosGanados) statsActualizacion.envidos_ganados = jugadorStats.envidosGanados;
-          if (jugadorStats.floresCantadas) statsActualizacion.flores_cantadas = jugadorStats.floresCantadas;
-          if (jugadorStats.floresGanadas) statsActualizacion.flores_ganadas = jugadorStats.floresGanadas;
-          if (jugadorStats.idasAlMazo) statsActualizacion.idas_al_mazo = jugadorStats.idasAlMazo;
+          // Obtener estadísticas detalladas de cantos (solo para usuarios premium)
+          const usuarioInfo = socketUsuarios.get(j.socketId);
+          if (usuarioInfo?.es_premium) {
+            const jugadorStats = mesa.statsJugadores?.get(j.socketId) || {};
+            if (jugadorStats.trucosCantados) statsActualizacion.trucos_cantados = jugadorStats.trucosCantados;
+            if (jugadorStats.trucosGanados) statsActualizacion.trucos_ganados = jugadorStats.trucosGanados;
+            if (jugadorStats.envidosCantados) statsActualizacion.envidos_cantados = jugadorStats.envidosCantados;
+            if (jugadorStats.envidosGanados) statsActualizacion.envidos_ganados = jugadorStats.envidosGanados;
+            if (jugadorStats.floresCantadas) statsActualizacion.flores_cantadas = jugadorStats.floresCantadas;
+            if (jugadorStats.floresGanadas) statsActualizacion.flores_ganadas = jugadorStats.floresGanadas;
+            if (jugadorStats.idasAlMazo) statsActualizacion.idas_al_mazo = jugadorStats.idasAlMazo;
+          }
 
           try {
             await actualizarEstadisticasDetalladas(j.userId, statsActualizacion);
@@ -5229,8 +5268,8 @@ app.prepare().then(async () => {
           return;
         }
 
-        // Solo el creador puede eliminar la partida (verificar por nombre)
-        if (room.creadorNombre !== nombre) {
+        // Solo el creador puede eliminar la partida (verificar por socket.id)
+        if (room.creadorSocketId !== socket.id) {
           callback(false, 'Solo el creador puede eliminar la partida');
           return;
         }
@@ -6031,6 +6070,8 @@ app.prepare().then(async () => {
         const success = cantarTruco(mesa, socket.id, tipo);
         if (!success) { callback(false, 'No se puede cantar'); return; }
 
+        incrementarStatJugador(mesa, socket.id, 'trucosCantados');
+
         const audioTipo = tipo === 'vale_cuatro' ? 'vale4' : tipo;
         const equipoQueResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
         room.jugadores.forEach(p => {
@@ -6254,6 +6295,8 @@ app.prepare().then(async () => {
         const puntosCustom = data.puntosCustom || null;
         const success = cantarEnvido(mesa, socket.id, tipo, puntosCustom);
         if (!success) { callback(false, 'No se puede cantar envido'); return; }
+
+        incrementarStatJugador(mesa, socket.id, 'envidosCantados');
 
         // Nombre del envido para mostrar
         let nombreEnvido = tipo;
@@ -6561,6 +6604,8 @@ app.prepare().then(async () => {
         const result = cantarFlor(mesa, socket.id);
         if (!result.success) { callback(false, result.error); return; }
 
+        incrementarStatJugador(mesa, socket.id, 'floresCantadas');
+
         if (result.finalizado) {
           // Flor resolved - send final result without individual scores
           room.jugadores.forEach(p => {
@@ -6785,6 +6830,8 @@ app.prepare().then(async () => {
         const jugador = mesa.jugadores.find(j => j.id === socket.id);
         const result = irseAlMazo(mesa, socket.id);
         if (!result) { callback(false, 'No se puede ir al mazo'); return; }
+
+        incrementarStatJugador(mesa, socket.id, 'idasAlMazo');
 
         // Notificar que el jugador se fue al mazo
         const mazoAudioUrl = mesa.audiosCustom?.[socket.id]?.['me-voy-al-mazo'] || null;
@@ -7718,7 +7765,7 @@ app.prepare().then(async () => {
             // Calcular puntos de falta envido (lo que le falta al perdedor para llegar al límite)
             const puntajeEquipo1 = mesa.equipos.find(e => e.id === 1)?.puntaje || 0;
             const puntajeEquipo2 = mesa.equipos.find(e => e.id === 2)?.puntaje || 0;
-            const puntosParaGanar = Math.max(
+            const puntosParaGanar = Math.min(
               mesa.puntosLimite - puntajeEquipo1,
               mesa.puntosLimite - puntajeEquipo2
             );
