@@ -110,6 +110,8 @@ async function loginConGoogle(googleId, email, nombre, avatarUrl) {
         id: Number(usuario.id),
         apodo: usuario.apodo,
         email: usuario.email,
+        google_id: googleId,
+        auth_provider: 'google',
         es_premium: !!usuario.es_premium,
         avatar_url: usuario.avatar_url || null,
         tema_mesa: usuario.tema_mesa || 'clasico',
