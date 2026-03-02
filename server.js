@@ -3983,7 +3983,7 @@ app.prepare().then(async () => {
     path: '/api/socket/io',
     addTrailingSlash: false,
     cors: {
-      origin: '*',
+      origin: process.env.NEXT_PUBLIC_SITE_URL || 'https://trucouruguayo.onrender.com',
       methods: ['GET', 'POST'],
     },
   });
@@ -4223,6 +4223,10 @@ app.prepare().then(async () => {
     'enviar-mensaje': { max: 10, windowMs: 10000 },      // 10 por 10 segundos
     'registrar': { max: 5, windowMs: 60000 },             // 5 por minuto
     'login': { max: 5, windowMs: 60000 },                 // 5 por minuto
+    'comprar-cosmetico': { max: 5, windowMs: 60000 },     // 5 por minuto
+    'equipar-cosmetico': { max: 10, windowMs: 60000 },    // 10 por minuto
+    'reclamar-recompensa-video': { max: 4, windowMs: 60000 }, // 4 por minuto
+    'reclamar-recompensa-diaria': { max: 3, windowMs: 60000 }, // 3 por minuto
   };
 
   function checkRateLimit(socketId, eventName) {
@@ -4469,6 +4473,9 @@ app.prepare().then(async () => {
     });
 
     socket.on('reclamar-recompensa-diaria', async (callback) => {
+      if (!checkRateLimit(socket.id, 'reclamar-recompensa-diaria')) {
+        return callback({ success: false, error: 'Demasiados intentos. Esperá un momento.' });
+      }
       try {
         const usuario = socketUsuarios.get(socket.id);
         if (!usuario?.id) return callback({ success: false, error: 'No autenticado' });
@@ -4485,6 +4492,9 @@ app.prepare().then(async () => {
 
     // === REWARDED ADS ===
     socket.on('reclamar-recompensa-video', async (callback) => {
+      if (!checkRateLimit(socket.id, 'reclamar-recompensa-video')) {
+        return callback({ success: false, error: 'Demasiados intentos. Esperá un momento.' });
+      }
       try {
         const usuario = socketUsuarios.get(socket.id);
         if (!usuario?.id) return callback({ success: false, error: 'No autenticado' });
@@ -4745,6 +4755,9 @@ app.prepare().then(async () => {
     });
 
     socket.on('comprar-cosmetico', async (data, callback) => {
+      if (!checkRateLimit(socket.id, 'comprar-cosmetico')) {
+        return callback({ success: false, error: 'Demasiados intentos. Esperá un momento.' });
+      }
       try {
         const usuario = socketUsuarios.get(socket.id);
         if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }
@@ -4772,6 +4785,9 @@ app.prepare().then(async () => {
     });
 
     socket.on('equipar-cosmetico', async (data, callback) => {
+      if (!checkRateLimit(socket.id, 'equipar-cosmetico')) {
+        return callback({ success: false, error: 'Demasiados intentos. Esperá un momento.' });
+      }
       try {
         const usuario = socketUsuarios.get(socket.id);
         if (!usuario) { callback({ success: false, error: 'No autenticado' }); return; }

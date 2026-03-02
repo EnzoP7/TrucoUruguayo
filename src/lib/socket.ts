@@ -399,13 +399,6 @@ class SocketService {
 
   // === PREMIUM ===
 
-  async togglePremium(): Promise<{ success: boolean; es_premium?: boolean; error?: string }> {
-    if (!this.socket) return { success: false, error: 'Sin conexión' };
-    return new Promise((resolve) => {
-      this.socket!.emit('toggle-premium' as any, (result: any) => resolve(result));
-    });
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async obtenerEstadoPremium(): Promise<{ success: boolean; es_premium?: boolean; premium_expira?: string; dias_restantes?: number }> {
     if (!this.socket) return { success: false };
