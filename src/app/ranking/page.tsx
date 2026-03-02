@@ -91,6 +91,23 @@ export default function RankingPage() {
       try {
         await socketService.connect();
 
+        // Autenticar si hay sesión guardada
+        const savedPw = sessionStorage.getItem('truco_auth');
+        if (savedUsuario) {
+          const u = JSON.parse(savedUsuario);
+
+          if (savedPw) {
+            await socketService.login(u.apodo, savedPw);
+          } else if (u.google_id || u.auth_provider === 'google') {
+            await socketService.loginConGoogle(
+              u.google_id,
+              u.email,
+              u.apodo,
+              u.avatar_url
+            );
+          }
+        }
+
         // Cargar ranking y amigos en paralelo
         const [rankingResult, amigosResult] = await Promise.all([
           socketService.obtenerRanking(),

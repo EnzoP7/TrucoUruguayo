@@ -232,9 +232,22 @@ export default function PerfilPage() {
 
         const savedUsuario = sessionStorage.getItem('truco_usuario');
         const savedPw = sessionStorage.getItem('truco_auth');
-        if (savedUsuario && savedPw) {
+
+        if (savedUsuario) {
           const u = JSON.parse(savedUsuario);
-          await socketService.login(u.apodo, savedPw);
+
+          if (savedPw) {
+            // Usuario con password - login normal
+            await socketService.login(u.apodo, savedPw);
+          } else if (u.google_id || u.auth_provider === 'google') {
+            // Usuario de Google - login con datos guardados
+            await socketService.loginConGoogle(
+              u.google_id,
+              u.email,
+              u.apodo,
+              u.avatar_url
+            );
+          }
         }
 
         const result = await socketService.obtenerPerfil();

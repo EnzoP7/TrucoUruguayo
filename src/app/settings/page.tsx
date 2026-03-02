@@ -76,10 +76,24 @@ export default function SettingsPage() {
         setConectado(true);
 
         // Re-authenticate if we have credentials
-        const nombre = sessionStorage.getItem('truco_nombre');
+        const saved = sessionStorage.getItem('truco_usuario');
         const auth = sessionStorage.getItem('truco_auth');
-        if (nombre && auth) {
-          await socketService.login(nombre, auth);
+
+        if (saved) {
+          const u = JSON.parse(saved);
+
+          if (auth) {
+            // Usuario con password - login normal
+            await socketService.login(u.apodo, auth);
+          } else if (u.google_id || u.auth_provider === 'google') {
+            // Usuario de Google - login con datos guardados
+            await socketService.loginConGoogle(
+              u.google_id,
+              u.email,
+              u.apodo,
+              u.avatar_url
+            );
+          }
         }
       } catch {
         // Not critical for audio/notif tabs

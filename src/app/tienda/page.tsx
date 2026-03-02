@@ -68,9 +68,22 @@ export default function TiendaPage() {
           await socketService.connect();
           const saved = sessionStorage.getItem('truco_usuario');
           const savedPw = sessionStorage.getItem('truco_auth');
-          if (saved && savedPw) {
+
+          if (saved) {
             const u = JSON.parse(saved);
-            await socketService.login(u.apodo, savedPw);
+
+            if (savedPw) {
+              // Usuario con password - login normal
+              await socketService.login(u.apodo, savedPw);
+            } else if (u.google_id || u.auth_provider === 'google') {
+              // Usuario de Google - login con datos guardados
+              await socketService.loginConGoogle(
+                u.google_id,
+                u.email,
+                u.apodo,
+                u.avatar_url
+              );
+            }
           }
         }
 
