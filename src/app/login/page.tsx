@@ -149,6 +149,13 @@ export default function LoginPage() {
               />
             </div>
 
+            {mode === 'login' && (
+              <p className="text-celeste-400/50 text-xs">
+                Si olvidaste tu contraseña y tenes Google vinculado, ingresa con Google y cambiala desde{' '}
+                <Link href="/settings" className="text-celeste-400 hover:text-celeste-300 underline">Configuracion</Link>.
+              </p>
+            )}
+
             {error && (
               <div className="text-red-400 text-sm bg-red-900/20 rounded-lg px-3 py-2 border border-red-500/20">
                 {error}

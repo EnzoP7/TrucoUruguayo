@@ -4,7 +4,7 @@ const { parse } = require('url');
 const next = require('next');
 const { Server: SocketIOServer } = require('socket.io');
 const { initDB, guardarPartida, obtenerEstadisticas, actualizarEstadisticas, obtenerRanking, obtenerHistorial, obtenerAmigos, agregarAmigo, eliminarAmigo, buscarUsuarios, setPremium, obtenerAudiosCustom, eliminarAudioCustom, obtenerAudiosCustomMultiples, actualizarPersonalizacion, obtenerPersonalizacion, inicializarLogros, inicializarCosmeticos, obtenerEstadisticasDetalladas, actualizarEstadisticasDetalladas, verificarYDesbloquearLogros, obtenerLogrosUsuario, obtenerCosmeticosUsuario, comprarCosmetico, equiparCosmetico, obtenerCosmeticosEquipados, obtenerMonedas, agregarMonedas, gastarMonedas, obtenerRecompensaDiaria, reclamarRecompensaDiaria, verificarExpiracionPremium, obtenerEstadoPremium } = require('./db');
-const { registrar, login, loginConGoogle, vincularCuentaGoogle, agregarPassword } = require('./auth');
+const { registrar, login, loginConGoogle, vincularCuentaGoogle, agregarPassword, cambiarPassword } = require('./auth');
 const TrucoBot = require('./src/truco/bot/TrucoBot');
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -4467,6 +4467,23 @@ app.prepare().then(async () => {
         callback(result);
       } catch (err) {
         console.error('[Auth] Error agregar-password:', err);
+        callback({ success: false, error: 'Error interno del servidor' });
+      }
+    });
+
+    // === CAMBIAR PASSWORD ===
+    socket.on('cambiar-password', async (data, callback) => {
+      try {
+        const usuario = socketUsuarios.get(socket.id);
+        if (!usuario) {
+          return callback({ success: false, error: 'No autenticado' });
+        }
+
+        const { passwordActual, passwordNueva } = data;
+        const result = await cambiarPassword(usuario.id, passwordActual, passwordNueva);
+        callback(result);
+      } catch (err) {
+        console.error('[Auth] Error cambiar-password:', err);
         callback({ success: false, error: 'Error interno del servidor' });
       }
     });

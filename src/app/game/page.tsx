@@ -1093,15 +1093,6 @@ function GamePage() {
           }
         });
 
-        socketService.onAnfitrionDesconectado((data) => {
-          if (!mounted) return;
-          audioManager.play("notification");
-          mostrarMensaje(
-            `El anfitrión (${data.nombre}) se ha desconectado`,
-            5000,
-          );
-        });
-
         socketService.onJugadorDesconectado((data) => {
           if (!mounted) return;
           audioManager.play("notification");

@@ -21,7 +21,8 @@ export function useGameSocket(
     setReyesAnimacion, setReyesAnimStep, setReyesAnimDone,
     setPerrosActivos, setEquipoPerros,
     setMensajesChat, setChatAbierto, setMensajesNoLeidos,
-    mostrarMensaje,
+    setLogrosDesbloqueados, setReconectando,
+    setAfkSecondsLeft, afkIntervalRef,
     prevTurno, setPrevTurno,
     mesa, socketId, esperandoInicio, conectado,
   } = state;
@@ -62,15 +63,6 @@ export function useGameSocket(
           if (data.estado.estado === "jugando") {
             setEsperandoInicio(false);
           }
-        });
-
-        socketService.onAnfitrionDesconectado((data) => {
-          if (!mounted) return;
-          audioManager.play("notification");
-          mostrarMensaje(
-            `El anfitrión (${data.nombre}) se ha desconectado`,
-            5000,
-          );
         });
 
         socketService.onJugadorDesconectado((data) => {
@@ -638,6 +630,23 @@ export function useGameSocket(
           });
         });
 
+        // Logros desbloqueados (in-game notifications)
+        socketService.onLogrosDesbloqueados((data) => {
+          if (!mounted) return;
+          audioManager.play("notification");
+          setLogrosDesbloqueados(data.logros || []);
+        });
+
+        // Reconnection indicator
+        socketService.onSocketDisconnect(() => {
+          if (!mounted) return;
+          setReconectando(true);
+        });
+        socketService.onSocketReconnect(() => {
+          if (!mounted) return;
+          setReconectando(false);
+        });
+
         // Obtener userId si está logueado
         let userId: number | undefined;
         try {
@@ -700,6 +709,46 @@ export function useGameSocket(
     setPrevTurno(turnoActualId || null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mesa?.turnoActual, socketId]);
+
+  // AFK Timer: 60s countdown that resets on turn changes
+  useEffect(() => {
+    // Only run during active play phase
+    if (!mesa || mesa.estado !== "jugando" || mesa.fase !== "jugando") {
+      if (afkIntervalRef.current) {
+        clearInterval(afkIntervalRef.current);
+        afkIntervalRef.current = null;
+      }
+      setAfkSecondsLeft(60);
+      return;
+    }
+
+    // Don't count when waiting for grito/envido/flor responses
+    if (mesa.gritoActivo || mesa.envidoActivo || mesa.florPendiente) {
+      return;
+    }
+
+    // Reset to 60 on turn change
+    setAfkSecondsLeft(60);
+
+    if (afkIntervalRef.current) {
+      clearInterval(afkIntervalRef.current);
+    }
+
+    afkIntervalRef.current = setInterval(() => {
+      setAfkSecondsLeft((prev) => {
+        if (prev <= 1) return 0;
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (afkIntervalRef.current) {
+        clearInterval(afkIntervalRef.current);
+        afkIntervalRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesa?.turnoActual, mesa?.estado, mesa?.fase, mesa?.manoActual, mesa?.gritoActivo, mesa?.envidoActivo, mesa?.florPendiente]);
 
   // Cargar pack de sonido equipado y iniciar música cuando empieza el juego
   useEffect(() => {

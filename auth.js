@@ -159,4 +159,43 @@ async function agregarPassword(userId, password) {
   }
 }
 
-module.exports = { registrar, login, loginConGoogle, vincularCuentaGoogle, agregarPassword };
+// Cambiar contraseña (requiere contraseña actual o ser auth_provider "google"/"both")
+async function cambiarPassword(userId, passwordActual, passwordNueva) {
+  if (!passwordNueva || passwordNueva.length < 8) {
+    return { success: false, error: 'La nueva contraseña debe tener al menos 8 caracteres' };
+  }
+
+  try {
+    const { db } = require('./db');
+    const result = await db.execute({ sql: 'SELECT * FROM usuarios WHERE id = ?', args: [userId] });
+    const usuario = result.rows[0];
+    if (!usuario) {
+      return { success: false, error: 'Usuario no encontrado' };
+    }
+
+    // Si tiene contraseña existente, verificarla
+    if (usuario.password_hash && usuario.password_hash !== '') {
+      if (!passwordActual) {
+        return { success: false, error: 'Debe ingresar la contraseña actual' };
+      }
+      const coincide = await bcrypt.compare(passwordActual, usuario.password_hash);
+      if (!coincide) {
+        return { success: false, error: 'La contraseña actual es incorrecta' };
+      }
+    }
+
+    const hash = await bcrypt.hash(passwordNueva, SALT_ROUNDS);
+    const authProvider = usuario.google_id ? 'both' : 'local';
+    await db.execute({
+      sql: 'UPDATE usuarios SET password_hash = ?, auth_provider = ? WHERE id = ?',
+      args: [hash, authProvider, userId],
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('[Auth] Error en cambiarPassword:', error);
+    return { success: false, error: error.message || 'Error al cambiar contraseña' };
+  }
+}
+
+module.exports = { registrar, login, loginConGoogle, vincularCuentaGoogle, agregarPassword, cambiarPassword };

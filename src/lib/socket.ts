@@ -353,6 +353,13 @@ class SocketService {
     });
   }
 
+  async cambiarPassword(passwordActual: string, passwordNueva: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('cambiar-password' as any, { passwordActual, passwordNueva }, (result: any) => resolve(result));
+    });
+  }
+
   async obtenerPerfil(): Promise<any> {
     if (!this.socket) return { success: false, error: 'Sin conexión' };
     return new Promise((resolve) => {
@@ -586,12 +593,18 @@ class SocketService {
     this.socket?.on('reconectado', callback);
   }
 
-  onAnfitrionDesconectado(callback: (data: { nombre: string }) => void): void {
-    this.socket?.on('anfitrion-desconectado', callback);
-  }
-
   onJugadorDesconectado(callback: (data: { nombre: string; esAnfitrion: boolean; jugadorId: string }) => void): void {
     this.socket?.on('jugador-desconectado', callback);
+  }
+
+  // Native socket disconnect/reconnect events for UI indicators
+  onSocketDisconnect(callback: () => void): void {
+    this.socket?.on('disconnect', callback as any);
+  }
+
+  onSocketReconnect(callback: () => void): void {
+    // Socket.IO 'connect' fires on reconnect too
+    this.socket?.io.on('reconnect', callback as any);
   }
 
   onEstadoActualizado(callback: (estado: any) => void): void {

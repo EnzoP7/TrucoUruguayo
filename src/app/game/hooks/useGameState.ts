@@ -3,6 +3,15 @@
 import { useState, useRef, useCallback } from "react";
 import { Mesa, Carta, EnvidoDeclaracion } from "../types";
 
+export interface LogroDesbloqueado {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  icono: string;
+  experienciaGanada: number;
+  subioNivel: boolean;
+}
+
 export function useGameState() {
   const [mesa, setMesa] = useState<Mesa | null>(null);
   const [socketId, setSocketId] = useState<string | null>(null);
@@ -112,6 +121,19 @@ export function useGameState() {
   const [volume, setVolume] = useState(0.5);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
+  // AFK Timer (60s countdown)
+  const [afkSecondsLeft, setAfkSecondsLeft] = useState(60);
+  const afkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Logros desbloqueados (in-game notifications)
+  const [logrosDesbloqueados, setLogrosDesbloqueados] = useState<LogroDesbloqueado[]>([]);
+
+  // Reconexión indicator
+  const [reconectando, setReconectando] = useState(false);
+
+  // Confirmación de mazo
+  const [mostrarConfirmMazo, setMostrarConfirmMazo] = useState(false);
+
   const mensajeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mostrarMensaje = useCallback((msg: string, duracion = 3000) => {
     setMensaje(msg);
@@ -163,6 +185,11 @@ export function useGameState() {
     muted, setMuted,
     volume, setVolume,
     showVolumeSlider, setShowVolumeSlider,
+    afkSecondsLeft, setAfkSecondsLeft,
+    afkIntervalRef,
+    logrosDesbloqueados, setLogrosDesbloqueados,
+    reconectando, setReconectando,
+    mostrarConfirmMazo, setMostrarConfirmMazo,
     mensajeTimerRef,
     mostrarMensaje,
   };

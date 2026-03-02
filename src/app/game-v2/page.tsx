@@ -73,6 +73,10 @@ function GamePage() {
     muted, setMuted,
     volume, setVolume,
     showVolumeSlider, setShowVolumeSlider,
+    afkSecondsLeft,
+    logrosDesbloqueados, setLogrosDesbloqueados,
+    reconectando,
+    mostrarConfirmMazo, setMostrarConfirmMazo,
     mostrarMensaje, setLoading,
   } = state;
 
@@ -823,6 +827,60 @@ function GamePage() {
         </div>
       )}
 
+      {/* Confirmación de irse al mazo */}
+      {mostrarConfirmMazo && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Confirmar mazo">
+          <div className="glass rounded-2xl p-6 max-w-sm w-full border border-amber-600/50 animate-slide-up text-center">
+            <div className="text-4xl mb-3">🃏</div>
+            <h3 className="text-lg font-bold text-amber-300 mb-2">Irse al mazo</h3>
+            <p className="text-sm text-gold-400/70 mb-4">
+              Esta accion no se puede deshacer. El equipo rival gana la ronda.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setMostrarConfirmMazo(false)} className="px-5 py-2.5 rounded-xl font-bold bg-gradient-to-r from-gray-700 to-gray-600 text-white hover:from-gray-600 hover:to-gray-500 transition-all shadow-lg">Cancelar</button>
+              <button onClick={() => { setMostrarConfirmMazo(false); handleIrseAlMazo(); }} className="px-5 py-2.5 rounded-xl font-bold bg-gradient-to-r from-red-700 to-red-600 text-white hover:from-red-600 hover:to-red-500 transition-all shadow-lg">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de reconexión */}
+      {reconectando && (
+        <div className="fixed top-0 inset-x-0 z-[60] flex justify-center pointer-events-none">
+          <div className="bg-amber-600/90 text-white px-4 py-2 rounded-b-xl flex items-center gap-2 shadow-lg animate-slide-down">
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="font-bold text-sm">Reconectando...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Notificación de logros desbloqueados */}
+      {logrosDesbloqueados.length > 0 && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[55] flex flex-col gap-2 pointer-events-auto">
+          {logrosDesbloqueados.map((logro, i) => (
+            <div key={logro.id} className="glass rounded-xl p-4 border border-gold-500/50 shadow-2xl animate-slide-down max-w-sm w-full flex items-start gap-3"
+              style={{ animationDelay: `${i * 300}ms` }}>
+              <div className="text-3xl flex-shrink-0">{logro.icono || "🏆"}</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gold-400/70 uppercase tracking-wider font-bold">Logro desbloqueado</div>
+                <div className="text-sm font-bold text-gold-300 truncate">{logro.nombre}</div>
+                <div className="text-xs text-white/60 truncate">{logro.descripcion}</div>
+                <div className="text-xs text-celeste-400 mt-1">+{logro.experienciaGanada} XP{logro.subioNivel ? " - Subiste de nivel!" : ""}</div>
+              </div>
+              <button
+                onClick={() => setLogrosDesbloqueados((prev) => prev.filter((l) => l.id !== logro.id))}
+                className="text-white/40 hover:text-white/70 text-lg flex-shrink-0"
+              >
+                x
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Panel de ayuda */}
       {mesa.estado === "jugando" && misCartas().length > 0 && (
         <PanelAyuda cartas={misCartas()} muestra={mesa.muestra} envidoYaCantado={mesa.envidoYaCantado} florYaCantada={!!mesa.florYaCantada} />
@@ -1367,12 +1425,22 @@ function GamePage() {
                 </>
               )}
 
-              {/* Indicador de turno */}
+              {/* Indicador de turno + AFK Timer */}
               {mesa.estado === "jugando" && mesa.fase === "jugando" && !mesa.gritoActivo && !mesa.envidoActivo && (
-                <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 z-20">
+                <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
                   <div className={`text-xs sm:text-sm font-bold px-3 py-1.5 rounded-full ${esMiTurno() ? "bg-gold-500 text-wood-950 turn-indicator" : "bg-black/40 text-white/70"}`}>
                     {esMiTurno() ? "¡Tu turno!" : `Turno: ${jugadorDelTurno?.nombre}`}
                   </div>
+                  {afkSecondsLeft <= 30 && (
+                    <div className={`text-xs font-bold px-2 py-1.5 rounded-full flex items-center gap-1 ${
+                      afkSecondsLeft <= 10 ? "bg-red-600/90 text-white animate-pulse" :
+                      afkSecondsLeft <= 20 ? "bg-amber-600/80 text-white" :
+                      "bg-black/40 text-white/70"
+                    }`}>
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      {afkSecondsLeft}s
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1566,7 +1634,7 @@ function GamePage() {
                   {puedoCantarRetruco() && <button onClick={() => handleCantarTruco("retruco")} disabled={loading || !esMiTurno()} className={`btn-truco text-white ${!esMiTurno() ? "opacity-50 cursor-not-allowed" : ""}`} title={!esMiTurno() ? "Esperá tu turno" : "Cantar Retruco"}>Retruco</button>}
                   {puedoCantarVale4() && <button onClick={() => handleCantarTruco("vale4")} disabled={loading || !esMiTurno()} className={`btn-truco text-white ${!esMiTurno() ? "opacity-50 cursor-not-allowed" : ""}`} title={!esMiTurno() ? "Esperá tu turno" : "Cantar Vale 4"}>Vale 4</button>}
                   {mesa.estado === "jugando" && mesa.fase === "jugando" && !miJugador?.seVaAlMazo && (
-                    <button onClick={handleIrseAlMazo} disabled={loading} className="btn-mazo text-white">Mazo</button>
+                    <button onClick={() => setMostrarConfirmMazo(true)} disabled={loading} className="btn-mazo text-white">Mazo</button>
                   )}
                 </div>
               </div>
