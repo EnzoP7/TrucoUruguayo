@@ -188,38 +188,48 @@ function LobbyPageContent() {
 
         await socketService.joinLobby();
 
-        // Re-autenticar el socket si ya tenemos sesión
+        // Re-autenticar el socket si ya tenemos sesión guardada
         if (savedUsuario) {
           try {
             const u = JSON.parse(savedUsuario);
             const savedPw = sessionStorage.getItem('truco_auth');
+            let loginResult = null;
+
             if (savedPw) {
-              const loginResult = await socketService.login(u.apodo, savedPw);
-              if (loginResult?.success) {
-                // Actualizar usuario con datos frescos del servidor (avatar_url, etc.)
-                if (loginResult.usuario) {
-                  setUsuario(loginResult.usuario);
-                  setMonedas(loginResult.usuario.monedas ?? 0);
-                  sessionStorage.setItem('truco_usuario', JSON.stringify(loginResult.usuario));
+              // Usuario con password - login normal
+              loginResult = await socketService.login(u.apodo, savedPw);
+            } else if (u.google_id || u.auth_provider === 'google') {
+              // Usuario de Google sin password - intentar re-auth con Google
+              // Necesita que NextAuth tenga sesión activa (se maneja en otro useEffect)
+              // Por ahora solo restauramos el estado visual, la autenticación real
+              // se hará cuando el useEffect de Google detecte la sesión
+              setMonedas(u.monedas ?? 0);
+            }
+
+            if (loginResult?.success) {
+              // Actualizar usuario con datos frescos del servidor (avatar_url, etc.)
+              if (loginResult.usuario) {
+                setUsuario(loginResult.usuario);
+                setMonedas(loginResult.usuario.monedas ?? 0);
+                sessionStorage.setItem('truco_usuario', JSON.stringify(loginResult.usuario));
+              }
+              if (loginResult.partidasActivas) {
+                setMisPartidas(loginResult.partidasActivas);
+              }
+              // Verificar recompensa diaria
+              if (loginResult.recompensaDiaria && !loginResult.recompensaDiaria.yaReclamado) {
+                setRecompensaDiaria(loginResult.recompensaDiaria);
+                setMostrarModalDiario(true);
+              }
+              // Obtener estado de videos rewarded
+              const estadoVideos = await socketService.obtenerEstadoVideos();
+              if (estadoVideos.success) {
+                setVideosRestantes(estadoVideos.videosRestantes ?? 0);
+                if (estadoVideos.recompensaPorVideo) {
+                  setRecompensaPorVideo(estadoVideos.recompensaPorVideo);
                 }
-                if (loginResult.partidasActivas) {
-                  setMisPartidas(loginResult.partidasActivas);
-                }
-                // Verificar recompensa diaria
-                if (loginResult.recompensaDiaria && !loginResult.recompensaDiaria.yaReclamado) {
-                  setRecompensaDiaria(loginResult.recompensaDiaria);
-                  setMostrarModalDiario(true);
-                }
-                // Obtener estado de videos rewarded
-                const estadoVideos = await socketService.obtenerEstadoVideos();
-                if (estadoVideos.success) {
-                  setVideosRestantes(estadoVideos.videosRestantes ?? 0);
-                  if (estadoVideos.recompensaPorVideo) {
-                    setRecompensaPorVideo(estadoVideos.recompensaPorVideo);
-                  }
-                  if (estadoVideos.cooldownRestante && estadoVideos.cooldownRestante > 0) {
-                    setVideoCooldown(estadoVideos.cooldownRestante);
-                  }
+                if (estadoVideos.cooldownRestante && estadoVideos.cooldownRestante > 0) {
+                  setVideoCooldown(estadoVideos.cooldownRestante);
                 }
               }
             }
@@ -251,8 +261,25 @@ function LobbyPageContent() {
   useEffect(() => {
     const fromGoogle = searchParams?.get('from') === 'google';
 
-    // Si viene de Google auth y tiene sesión de NextAuth pero no está autenticado en Socket.IO
-    if (fromGoogle && session?.user && !usuario && conectado && !googleAuthPending) {
+    // Verificar si el usuario guardado es de Google y necesita re-autenticación
+    const savedUsuario = sessionStorage.getItem('truco_usuario');
+    let isGoogleUser = false;
+    if (savedUsuario) {
+      try {
+        const u = JSON.parse(savedUsuario);
+        isGoogleUser = u.google_id || u.auth_provider === 'google';
+      } catch { /* ignorar */ }
+    }
+
+    // Sincronizar si:
+    // 1. Viene de Google auth (fromGoogle) y tiene sesión NextAuth
+    // 2. O si es usuario de Google guardado, tiene sesión NextAuth, pero no está autenticado en socket
+    const needsGoogleSync = (fromGoogle || isGoogleUser) && session?.user && conectado && !googleAuthPending;
+
+    // Solo sincronizar si no tenemos usuario O si el usuario actual no tiene socket autenticado
+    const shouldSync = needsGoogleSync && (!usuario || (isGoogleUser && !sessionStorage.getItem('truco_auth')));
+
+    if (shouldSync) {
       setGoogleAuthPending(true);
 
       const syncGoogleAuth = async () => {
@@ -268,6 +295,7 @@ function LobbyPageContent() {
             if (result.success) {
               setUsuario(result.usuario);
               setNombre(result.usuario.apodo);
+              setMonedas(result.usuario.monedas ?? 0);
               sessionStorage.setItem('truco_usuario', JSON.stringify(result.usuario));
               sessionStorage.setItem('truco_nombre', result.usuario.apodo);
               // No guardamos password para usuarios de Google
@@ -277,10 +305,35 @@ function LobbyPageContent() {
                 setMisPartidas(result.partidasActivas);
               }
 
-              // Limpiar el query param
-              window.history.replaceState({}, '', '/lobby');
+              // Verificar recompensa diaria
+              if (result.recompensaDiaria && !result.recompensaDiaria.yaReclamado) {
+                setRecompensaDiaria(result.recompensaDiaria);
+                setMostrarModalDiario(true);
+              }
+
+              // Obtener estado de videos rewarded
+              const estadoVideos = await socketService.obtenerEstadoVideos();
+              if (estadoVideos.success) {
+                setVideosRestantes(estadoVideos.videosRestantes ?? 0);
+                if (estadoVideos.recompensaPorVideo) {
+                  setRecompensaPorVideo(estadoVideos.recompensaPorVideo);
+                }
+                if (estadoVideos.cooldownRestante && estadoVideos.cooldownRestante > 0) {
+                  setVideoCooldown(estadoVideos.cooldownRestante);
+                }
+              }
+
+              // Limpiar el query param si existe
+              if (fromGoogle) {
+                window.history.replaceState({}, '', '/lobby');
+              }
             } else {
               console.error('[Google Auth] Error:', result.error);
+              // Si falla la autenticación de Google, limpiar sesión corrupta
+              sessionStorage.removeItem('truco_usuario');
+              sessionStorage.removeItem('truco_nombre');
+              setUsuario(null);
+              setNombre('');
             }
           }
         } catch (error) {
@@ -656,24 +709,54 @@ function LobbyPageContent() {
 
         {/* Barra de usuario o invitado */}
         {usuario ? (
-          <div className="glass rounded-2xl mb-6 animate-slide-up border border-celeste-500/30 overflow-hidden">
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-celeste-400/60 to-transparent" />
+          <div className={`glass rounded-2xl mb-6 animate-slide-up overflow-hidden ${
+            isPremium
+              ? 'border-2 border-gold-400/70 shadow-lg shadow-gold-500/20'
+              : 'border border-celeste-500/30'
+          }`}>
+            <div className={`h-0.5 bg-gradient-to-r ${
+              isPremium
+                ? 'from-transparent via-gold-400 to-transparent'
+                : 'from-transparent via-celeste-400/60 to-transparent'
+            }`} />
             <div className="p-4 flex items-center justify-between">
               {/* Avatar + nombre */}
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative flex-shrink-0">
                   {usuario.avatar_url ? (
-                    <Image src={usuario.avatar_url} alt="" width={44} height={44} className="w-11 h-11 rounded-full object-cover border-2 border-celeste-500/40 shadow-lg shadow-celeste-500/10" unoptimized />
+                    <Image src={usuario.avatar_url} alt="" width={44} height={44} className={`w-11 h-11 rounded-full object-cover border-2 shadow-lg ${
+                      isPremium
+                        ? 'border-gold-400/70 shadow-gold-500/30'
+                        : 'border-celeste-500/40 shadow-celeste-500/10'
+                    }`} unoptimized />
                   ) : (
-                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-celeste-400 to-celeste-700 flex items-center justify-center text-white font-bold text-lg border-2 border-celeste-500/40 shadow-lg shadow-celeste-500/10">
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-lg border-2 shadow-lg ${
+                      isPremium
+                        ? 'bg-gradient-to-br from-gold-400 to-gold-600 border-gold-400/70 shadow-gold-500/30'
+                        : 'bg-gradient-to-br from-celeste-400 to-celeste-700 border-celeste-500/40 shadow-celeste-500/10'
+                    }`}>
                       {usuario.apodo[0].toUpperCase()}
                     </div>
                   )}
                   <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#1a2a1a] shadow-sm shadow-green-500/50" />
+                  {isPremium && (
+                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-br from-gold-400 to-gold-600 rounded-full flex items-center justify-center border border-gold-300/50 shadow-lg shadow-gold-500/40">
+                      <span className="text-[10px]">👑</span>
+                    </div>
+                  )}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-white font-bold truncate">{usuario.apodo}</div>
-                  <div className="text-celeste-400/50 text-xs">En linea</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-bold truncate">{usuario.apodo}</span>
+                    {isPremium && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-gradient-to-r from-gold-500 to-gold-600 text-white rounded shadow-sm shadow-gold-500/30">
+                        PRO
+                      </span>
+                    )}
+                  </div>
+                  <div className={`text-xs ${isPremium ? 'text-gold-400/70' : 'text-celeste-400/50'}`}>
+                    {isPremium ? '⭐ Premium' : 'En linea'}
+                  </div>
                 </div>
                 {monedas !== null && (
                   <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gold-500/15 border border-gold-500/30">
