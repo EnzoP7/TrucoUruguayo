@@ -4349,6 +4349,7 @@ app.prepare().then(async () => {
               jugadores: room.jugadores.map(j => j.nombre),
               jugadoresCount: room.jugadores.length,
               maxJugadores: room.maxJugadores,
+              esRankeada: room.esRankeada || false,
             };
             if (room.estado === 'jugando' && mesa) {
               partidaInfo.puntaje = {
@@ -4410,6 +4411,7 @@ app.prepare().then(async () => {
               jugadores: room.jugadores.map(j => j.nombre),
               jugadoresCount: room.jugadores.length,
               maxJugadores: room.maxJugadores,
+              esRankeada: room.esRankeada || false,
             };
             if (room.estado === 'jugando' && mesa) {
               partidaInfo.puntaje = {
@@ -4947,6 +4949,7 @@ app.prepare().then(async () => {
             jugadores: room.jugadores.map(j => j.nombre),
             jugadoresCount: room.jugadores.length,
             maxJugadores: room.maxJugadores,
+            esRankeada: room.esRankeada || false,
           };
 
           if (room.estado === 'jugando' && mesa) {

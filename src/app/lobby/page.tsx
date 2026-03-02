@@ -85,6 +85,7 @@ interface MiPartida {
   maxJugadores: number;
   puntaje?: { equipo1: number; equipo2: number; limite: number };
   miEquipo?: number;
+  esRankeada?: boolean;
 }
 
 function LobbyPageContent() {
@@ -127,6 +128,7 @@ function LobbyPageContent() {
   const [invitacion, setInvitacion] = useState<{ de: string; mesaId: string; tamañoSala: string } | null>(null);
   const [notificacionesPermitidas, setNotificacionesPermitidas] = useState<boolean | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     // Restaurar sesión guardada
@@ -654,22 +656,27 @@ function LobbyPageContent() {
 
         {/* Barra de usuario o invitado */}
         {usuario ? (
-          <div className="glass rounded-2xl p-4 sm:p-5 mb-6 animate-slide-up border border-celeste-500/30 bg-celeste-900/5">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-3">
-                {usuario.avatar_url ? (
-                  <Image src={usuario.avatar_url} alt="" width={40} height={40} className="w-10 h-10 rounded-full object-cover border-2 border-celeste-500/50 shadow-lg shadow-celeste-500/10" unoptimized />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-celeste-500 to-celeste-700 flex items-center justify-center text-white font-bold text-lg">
-                    {usuario.apodo[0].toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <div className="text-white font-bold">{usuario.apodo}</div>
-                  <div className="text-celeste-400/60 text-xs">Jugador registrado</div>
+          <div className="glass rounded-2xl mb-6 animate-slide-up border border-celeste-500/30 overflow-hidden">
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-celeste-400/60 to-transparent" />
+            <div className="p-4 flex items-center justify-between">
+              {/* Avatar + nombre */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative flex-shrink-0">
+                  {usuario.avatar_url ? (
+                    <Image src={usuario.avatar_url} alt="" width={44} height={44} className="w-11 h-11 rounded-full object-cover border-2 border-celeste-500/40 shadow-lg shadow-celeste-500/10" unoptimized />
+                  ) : (
+                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-celeste-400 to-celeste-700 flex items-center justify-center text-white font-bold text-lg border-2 border-celeste-500/40 shadow-lg shadow-celeste-500/10">
+                      {usuario.apodo[0].toUpperCase()}
+                    </div>
+                  )}
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#1a2a1a] shadow-sm shadow-green-500/50" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-white font-bold truncate">{usuario.apodo}</div>
+                  <div className="text-celeste-400/50 text-xs">En linea</div>
                 </div>
                 {monedas !== null && (
-                  <div className="ml-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gold-500/15 border border-gold-500/30">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gold-500/15 border border-gold-500/30">
                     <span className="text-gold-400 text-sm">&#x1FA99;</span>
                     <span className="text-gold-300 font-bold text-sm">{monedas}</span>
                   </div>
@@ -678,7 +685,7 @@ function LobbyPageContent() {
                   <button
                     onClick={() => setMostrarRewardedAd(true)}
                     disabled={videoCooldown > 0}
-                    className={`ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                       videoCooldown > 0
                         ? 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
                         : 'bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 hover:text-green-300'
@@ -687,31 +694,59 @@ function LobbyPageContent() {
                     <span>&#x1F4FA;</span>
                     {videoCooldown > 0
                       ? <span>{videoCooldown}s</span>
-                      : <span>+{20} monedas</span>
+                      : <span>+{recompensaPorVideo}</span>
                     }
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Link href="/tutorial" className="px-3 py-1.5 rounded-lg text-xs text-green-400/70 hover:text-green-300 hover:bg-green-500/10 transition-all">
-                  Tutorial
+
+              {/* Desktop: nav links estilizados */}
+              <div className="hidden md:flex items-center gap-1 flex-shrink-0">
+                <Link href="/tutorial" className="group flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-green-500/10 transition-all">
+                  <svg className="w-4 h-4 text-green-400/60 group-hover:text-green-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                  <span className="text-xs font-medium text-white/50 group-hover:text-green-300 transition-colors">Tutorial</span>
                 </Link>
-                <Link href="/perfil" className="px-3 py-1.5 rounded-lg text-xs text-celeste-400/70 hover:text-celeste-300 hover:bg-celeste-500/10 transition-all">
-                  Mi Perfil
+                <Link href="/perfil" className="group flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-celeste-500/10 transition-all">
+                  <svg className="w-4 h-4 text-celeste-400/60 group-hover:text-celeste-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span className="text-xs font-medium text-white/50 group-hover:text-celeste-300 transition-colors">Mi Perfil</span>
                 </Link>
-                <Link href="/tienda" className="px-3 py-1.5 rounded-lg text-xs text-gold-400/70 hover:text-gold-300 hover:bg-gold-500/10 transition-all">
-                  Tienda
+                <Link href="/tienda" className="group flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-gold-500/10 transition-all">
+                  <svg className="w-4 h-4 text-gold-400/60 group-hover:text-gold-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                  <span className="text-xs font-medium text-white/50 group-hover:text-gold-300 transition-colors">Tienda</span>
                 </Link>
-                <Link href="/ranking" className="px-3 py-1.5 rounded-lg text-xs text-celeste-400/70 hover:text-celeste-300 hover:bg-celeste-500/10 transition-all">
-                  Ranking
+                <Link href="/ranking" className="group flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-purple-500/10 transition-all">
+                  <svg className="w-4 h-4 text-purple-400/60 group-hover:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <span className="text-xs font-medium text-white/50 group-hover:text-purple-300 transition-colors">Ranking</span>
                 </Link>
+                <div className="w-px h-5 bg-white/10 mx-1" />
                 <button
                   onClick={handleCerrarSesion}
-                  className="px-3 py-1.5 rounded-lg text-xs text-red-400/70 hover:text-red-300 hover:bg-red-900/20 transition-all"
+                  className="group flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-all"
                 >
-                  Salir
+                  <svg className="w-4 h-4 text-red-400/40 group-hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span className="text-xs font-medium text-white/40 group-hover:text-red-300 transition-colors">Salir</span>
                 </button>
               </div>
+
+              {/* Mobile: hamburger menu */}
+              <button
+                onClick={() => setMenuOpen(true)}
+                className="md:hidden w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 hover:border-celeste-500/30 transition-all active:scale-95 flex-shrink-0"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
             </div>
           </div>
         ) : (
@@ -938,6 +973,12 @@ function LobbyPageContent() {
                             {estaJugando ? 'En juego' : 'Esperando'}
                           </span>
 
+                          {partida.esRankeada && (
+                            <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 rounded-full text-xs font-bold flex items-center gap-1">
+                              ⚔️ Rankeada
+                            </span>
+                          )}
+
                           {estaJugando && partida.puntaje && (
                             <span className="px-2.5 py-0.5 bg-gold-600/20 text-gold-300 rounded-full text-xs font-medium">
                               {partida.puntaje.equipo1} - {partida.puntaje.equipo2}
@@ -1111,7 +1152,7 @@ function LobbyPageContent() {
           <button
             onClick={handleCrearPartida}
             disabled={loading || buscandoPartida || !nombre.trim() || (esRankeada && (monedas ?? 0) < 25)}
-            className="group w-full py-3 px-5 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-900/20 via-emerald-800/15 to-emerald-900/20 hover:from-emerald-800/30 hover:via-emerald-700/25 hover:to-emerald-800/30 hover:border-emerald-400/40 hover:shadow-lg hover:shadow-emerald-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="group w-full mt-3 py-3 px-5 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-900/20 via-emerald-800/15 to-emerald-900/20 hover:from-emerald-800/30 hover:via-emerald-700/25 hover:to-emerald-800/30 hover:border-emerald-400/40 hover:shadow-lg hover:shadow-emerald-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2 text-emerald-300/60">
@@ -1240,8 +1281,8 @@ function LobbyPageContent() {
                             {partida.tamañoSala}
                           </span>
                           {partida.esRankeada && (
-                            <span className="px-2.5 py-0.5 bg-gold-500/20 text-gold-300 rounded-full text-xs font-bold">
-                              Rankeada
+                            <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 rounded-full text-xs font-bold flex items-center gap-1">
+                              ⚔️ Rankeada
                             </span>
                           )}
 
@@ -1462,15 +1503,7 @@ function LobbyPageContent() {
             </span>
           </div>
 
-          {/* Creditos del desarrollador */}
           <div className="border-t border-celeste-600/20 pt-4">
-            <p className="text-gold-400/70 text-sm mb-2">
-              Desarrollado por <span className="font-semibold text-gold-400">Enzo Pontet</span>
-            </p>
-            <p className="text-white/40 text-xs mb-4">
-              Queres colaborar o sugerir mejoras?
-            </p>
-
             {/* Boton de sugerencias destacado */}
             <button
               onClick={() => setFeedbackOpen(true)}
@@ -1683,6 +1716,158 @@ function LobbyPageContent() {
             >
               Cancelar búsqueda
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Menu de Usuario - solo mobile */}
+      {menuOpen && usuario && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:hidden" onClick={() => setMenuOpen(false)}>
+          <div
+            className="glass rounded-2xl max-w-sm w-full border border-celeste-500/30 overflow-hidden animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Gradient accent top */}
+            <div className="h-1 bg-gradient-to-r from-celeste-500 via-gold-400 to-celeste-500" />
+
+            {/* Header background with subtle pattern */}
+            <div className="relative bg-gradient-to-b from-celeste-900/30 to-transparent pt-5 pb-6 px-6">
+              {/* Decorative glow */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-gradient-radial from-celeste-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
+
+              {/* Close button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }}
+                className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/20 transition-all active:scale-90"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              {/* Avatar */}
+              <div className="relative flex flex-col items-center">
+                <div className="relative mb-3">
+                  {usuario.avatar_url ? (
+                    <Image src={usuario.avatar_url} alt="" width={80} height={80} className="w-20 h-20 rounded-full object-cover border-[3px] border-celeste-500/50 shadow-xl shadow-celeste-500/20" unoptimized />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-celeste-400 to-celeste-700 flex items-center justify-center text-white font-bold text-3xl border-[3px] border-celeste-500/50 shadow-xl shadow-celeste-500/20">
+                      {usuario.apodo[0].toUpperCase()}
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-[3px] border-[#1a2a1a] shadow-lg shadow-green-500/40" />
+                </div>
+
+                <h3 className="text-white font-bold text-xl">{usuario.apodo}</h3>
+                <p className="text-celeste-400/50 text-sm mt-0.5">Jugador registrado</p>
+
+                {/* Coins display */}
+                {monedas !== null && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gold-500/15 border border-gold-500/30 mt-3">
+                    <span className="text-gold-400 text-lg">&#x1FA99;</span>
+                    <span className="text-gold-300 font-bold text-lg">{monedas}</span>
+                    <span className="text-gold-400/40 text-sm">monedas</span>
+                  </div>
+                )}
+
+                {/* Video reward button */}
+                {showAds && videosRestantes !== null && videosRestantes > 0 && (
+                  <button
+                    onClick={() => { setMostrarRewardedAd(true); setMenuOpen(false); }}
+                    disabled={videoCooldown > 0}
+                    className={`mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      videoCooldown > 0
+                        ? 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
+                        : 'bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 hover:text-green-300'
+                    }`}
+                  >
+                    <span>&#x1F4FA;</span>
+                    {videoCooldown > 0
+                      ? <span>Espera {videoCooldown}s</span>
+                      : <span>Ver anuncio +{recompensaPorVideo} monedas</span>
+                    }
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Navigation grid */}
+            <div className="grid grid-cols-2 gap-3 px-5 pb-4">
+              <Link
+                href="/tutorial"
+                onClick={() => setMenuOpen(false)}
+                className="group flex flex-col items-center gap-2.5 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-green-500/10 hover:border-green-500/25 transition-all duration-200"
+              >
+                <div className="w-12 h-12 rounded-xl bg-green-500/15 flex items-center justify-center group-hover:bg-green-500/25 group-hover:scale-110 transition-all duration-200">
+                  <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                </div>
+                <span className="text-sm text-white/60 group-hover:text-green-300 font-medium transition-colors">Tutorial</span>
+              </Link>
+
+              <Link
+                href="/perfil"
+                onClick={() => setMenuOpen(false)}
+                className="group flex flex-col items-center gap-2.5 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-celeste-500/10 hover:border-celeste-500/25 transition-all duration-200"
+              >
+                <div className="w-12 h-12 rounded-xl bg-celeste-500/15 flex items-center justify-center group-hover:bg-celeste-500/25 group-hover:scale-110 transition-all duration-200">
+                  <svg className="w-6 h-6 text-celeste-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <span className="text-sm text-white/60 group-hover:text-celeste-300 font-medium transition-colors">Mi Perfil</span>
+              </Link>
+
+              <Link
+                href="/tienda"
+                onClick={() => setMenuOpen(false)}
+                className="group flex flex-col items-center gap-2.5 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-gold-500/10 hover:border-gold-500/25 transition-all duration-200"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gold-500/15 flex items-center justify-center group-hover:bg-gold-500/25 group-hover:scale-110 transition-all duration-200">
+                  <svg className="w-6 h-6 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                </div>
+                <span className="text-sm text-white/60 group-hover:text-gold-300 font-medium transition-colors">Tienda</span>
+              </Link>
+
+              <Link
+                href="/ranking"
+                onClick={() => setMenuOpen(false)}
+                className="group flex flex-col items-center gap-2.5 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-purple-500/10 hover:border-purple-500/25 transition-all duration-200"
+              >
+                <div className="w-12 h-12 rounded-xl bg-purple-500/15 flex items-center justify-center group-hover:bg-purple-500/25 group-hover:scale-110 transition-all duration-200">
+                  <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <span className="text-sm text-white/60 group-hover:text-purple-300 font-medium transition-colors">Ranking</span>
+              </Link>
+            </div>
+
+            {/* Feedback button */}
+            <div className="px-5 pb-3">
+              <button
+                onClick={() => { setFeedbackOpen(true); setMenuOpen(false); }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-emerald-400/70 bg-emerald-500/5 border border-emerald-500/15 hover:bg-emerald-500/10 hover:border-emerald-500/25 hover:text-emerald-300 transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                Enviar Sugerencia
+              </button>
+            </div>
+
+            {/* Logout */}
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => { handleCerrarSesion(); setMenuOpen(false); }}
+                className="w-full py-2.5 rounded-xl text-sm font-medium text-red-400/60 bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 hover:border-red-500/25 hover:text-red-300 transition-all"
+              >
+                Cerrar Sesion
+              </button>
+            </div>
           </div>
         </div>
       )}
