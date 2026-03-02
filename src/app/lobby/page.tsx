@@ -111,6 +111,9 @@ function LobbyPageContent() {
   const [videoCooldown, setVideoCooldown] = useState(0);
   const [recompensaPorVideo, setRecompensaPorVideo] = useState(20);
   const [cargandoPremium, setCargandoPremium] = useState(false);
+  const [usuariosOnline, setUsuariosOnline] = useState(0);
+  const [buscandoPartida, setBuscandoPartida] = useState(false);
+  const [mesaBuscando, setMesaBuscando] = useState<string | null>(null);
 
   // Auth state
   const [usuario, setUsuario] = useState<Usuario | null>(null);
@@ -149,6 +152,10 @@ function LobbyPageContent() {
       try {
         await socketService.connect();
         setConectado(true);
+
+        socketService.onUsuariosOnline((count) => {
+          setUsuariosOnline(count);
+        });
 
         socketService.onPartidasDisponibles((partidasData) => {
           setPartidas(partidasData);
@@ -409,6 +416,46 @@ function LobbyPageContent() {
     }
   };
 
+  const handleBuscarPartida = async () => {
+    if (!nombre.trim()) {
+      showAlert('warning', 'Nombre requerido', 'Por favor ingresa tu nombre');
+      return;
+    }
+    setBuscandoPartida(true);
+    try {
+      const result = await socketService.buscarPartida(nombre.trim(), tamañoSala, esRankeada);
+      if (result.success && result.mesaId) {
+        if (esRankeada && monedas !== null) setMonedas(monedas - 25);
+        if (result.accion === 'unido') {
+          // Encontró partida existente con espacio — entrar directo
+          navigateToGame(result.mesaId);
+        } else {
+          // Creó partida nueva — quedarse en lobby esperando que alguien se una
+          setMesaBuscando(result.mesaId);
+          // Escuchar cuando alguien se une a nuestra partida
+          socketService.onJugadorUnido(() => {
+            navigateToGame(result.mesaId!);
+          });
+        }
+      } else {
+        setBuscandoPartida(false);
+        showAlert('error', 'Error', result.error || 'Error al buscar partida');
+      }
+    } catch (error) {
+      console.error('Error searching game:', error);
+      setBuscandoPartida(false);
+      showAlert('error', 'Error', 'Error al buscar partida');
+    }
+  };
+
+  const handleCancelarBusqueda = async () => {
+    if (mesaBuscando) {
+      await socketService.eliminarPartida(mesaBuscando, nombre.trim());
+    }
+    setMesaBuscando(null);
+    setBuscandoPartida(false);
+  };
+
   const handleUnirsePartida = async (mesaId: string) => {
     if (!nombre.trim()) {
       showAlert('warning', 'Nombre requerido', 'Por favor ingresa tu nombre');
@@ -543,6 +590,15 @@ function LobbyPageContent() {
             <Image src="/Images/TermoYMate.png" alt="" width={20} height={20} className="w-5 h-5 opacity-50 -scale-x-100" />
             <div className="h-px w-8 bg-celeste-500/40" />
           </div>
+          {conectado && usuariosOnline > 0 && (
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+              </span>
+              <span className="text-green-400/80 text-sm font-medium">{usuariosOnline} {usuariosOnline === 1 ? 'jugador' : 'jugadores'} online</span>
+            </div>
+          )}
         </header>
 
         {/* Banner de notificaciones */}
@@ -1024,18 +1080,41 @@ function LobbyPageContent() {
             </div>
           )}
 
-          {/* Botón crear */}
+          {/* Botón Buscar Partida (principal) */}
           <button
-            onClick={handleCrearPartida}
-            disabled={loading || !nombre.trim() || (esRankeada && (monedas ?? 0) < 25)}
+            onClick={handleBuscarPartida}
+            disabled={buscandoPartida || loading || !nombre.trim() || (esRankeada && (monedas ?? 0) < 25)}
             className={`w-full text-white text-lg py-4 px-6 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg font-bold ${
               esRankeada
                 ? 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 shadow-gold-500/30'
                 : 'bg-gradient-to-r from-celeste-500 to-celeste-600 hover:from-celeste-400 hover:to-celeste-500 shadow-celeste-600/30'
             }`}
           >
-            {loading ? (
+            {buscandoPartida ? (
               <span className="flex items-center justify-center gap-2">
+                <div className="loading-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                Buscando partida...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" /></svg>
+                {esRankeada ? `Buscar Rankeada ${tamañoSala} (25 monedas)` : `Buscar Partida ${tamañoSala}`}
+              </span>
+            )}
+          </button>
+
+          {/* Botón Crear Partida Privada (secundario) */}
+          <button
+            onClick={handleCrearPartida}
+            disabled={loading || buscandoPartida || !nombre.trim() || (esRankeada && (monedas ?? 0) < 25)}
+            className="group w-full py-3 px-5 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-900/20 via-emerald-800/15 to-emerald-900/20 hover:from-emerald-800/30 hover:via-emerald-700/25 hover:to-emerald-800/30 hover:border-emerald-400/40 hover:shadow-lg hover:shadow-emerald-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2 text-emerald-300/60">
                 <div className="loading-dots">
                   <span></span>
                   <span></span>
@@ -1043,9 +1122,12 @@ function LobbyPageContent() {
                 </div>
               </span>
             ) : (
-              <span className="flex items-center justify-center gap-2">
-                {esRankeada ? `Crear Rankeada ${tamañoSala} (25 monedas)` : `Crear Partida ${tamañoSala}`}
-                <ArrowIcon className="w-5 h-5" />
+              <span className="flex items-center justify-center gap-2.5 text-emerald-300/80 group-hover:text-emerald-200 transition-colors">
+                <svg className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm font-semibold">Crear Partida Privada</span>
+                <ArrowIcon className="w-3.5 h-3.5 opacity-50 group-hover:opacity-80 group-hover:translate-x-0.5 transition-all" />
               </span>
             )}
           </button>
@@ -1568,6 +1650,43 @@ function LobbyPageContent() {
           </div>
         </div>
       )}
+      {/* Overlay Buscando Partida */}
+      {buscandoPartida && mesaBuscando && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center gap-6 animate-fade-in">
+            {/* Icono de búsqueda animado */}
+            <div className="relative">
+              <div className="w-24 h-24 rounded-full border-4 border-celeste-500/30 border-t-celeste-400 animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg className="w-10 h-10 text-celeste-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+                </svg>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <h3 className="text-2xl font-bold text-white mb-2">Buscando partida {tamañoSala}...</h3>
+              <p className="text-celeste-300/70 text-sm">Esperando que otro jugador se una</p>
+            </div>
+
+            {/* Puntos animados */}
+            <div className="flex gap-2">
+              <span className="w-2.5 h-2.5 bg-celeste-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2.5 h-2.5 bg-celeste-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2.5 h-2.5 bg-celeste-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+
+            {/* Botón cancelar */}
+            <button
+              onClick={handleCancelarBusqueda}
+              className="mt-4 px-6 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-sm font-medium hover:bg-red-500/20 hover:border-red-400/40 transition-all"
+            >
+              Cancelar búsqueda
+            </button>
+          </div>
+        </div>
+      )}
+
       <AlertModal {...alertState} onClose={closeAlert} />
     </div>
   );

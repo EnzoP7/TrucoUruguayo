@@ -1190,11 +1190,16 @@ async function reclamarRecompensaDiaria(userId) {
     return { success: false, error: 'Ya reclamaste tu recompensa hoy', diasConsecutivos: info.diasConsecutivos };
   }
 
+  // UPDATE atómico: solo actualiza si no se reclamó hoy (previene race condition / doble reclamo)
   const hoy = new Date().toISOString().slice(0, 10);
-  await db.execute({
-    sql: 'UPDATE usuarios SET ultimo_login_recompensa = ?, dias_consecutivos_login = ? WHERE id = ?',
-    args: [hoy, info.diasConsecutivos, userId],
+  const result = await db.execute({
+    sql: 'UPDATE usuarios SET ultimo_login_recompensa = ?, dias_consecutivos_login = ? WHERE id = ? AND (ultimo_login_recompensa IS NULL OR ultimo_login_recompensa != ?)',
+    args: [hoy, info.diasConsecutivos, userId, hoy],
   });
+
+  if (result.rowsAffected === 0) {
+    return { success: false, error: 'Ya reclamaste tu recompensa hoy', diasConsecutivos: info.diasConsecutivos };
+  }
 
   const nuevoBalance = await agregarMonedas(userId, info.monedas, `recompensa_diaria:dia${info.diasConsecutivos}`);
   return { success: true, monedas: info.monedas, balance: nuevoBalance, diasConsecutivos: info.diasConsecutivos };

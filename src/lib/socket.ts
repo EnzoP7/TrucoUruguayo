@@ -138,6 +138,15 @@ class SocketService {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async buscarPartida(nombre: string, tamañoSala: '1v1' | '2v2' | '3v3', esRankeada: boolean): Promise<{ success: boolean; mesaId?: string; accion?: string; error?: string }> {
+    if (!this.socket) return { success: false, error: 'Sin conexión' };
+    return new Promise((resolve) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.socket!.emit('buscar-partida' as any, { nombre, tamañoSala, esRankeada }, (result: any) => resolve(result));
+    });
+  }
+
   async unirsePartida(mesaId: string, nombre: string): Promise<boolean> {
     if (!this.socket) return false;
     return new Promise((resolve) => {
@@ -540,6 +549,14 @@ class SocketService {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   // === EVENT LISTENERS ===
   // Event data types are dynamic from server, using any for flexibility
+
+  onUsuariosOnline(callback: (count: number) => void): void {
+    this.socket?.on('usuarios-online' as any, callback);
+  }
+
+  offUsuariosOnline(): void {
+    this.socket?.off('usuarios-online' as any);
+  }
 
   onPartidasDisponibles(callback: (partidas: any[]) => void): void {
     this.socket?.on('partidas-disponibles', callback);
