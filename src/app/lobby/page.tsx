@@ -1090,6 +1090,17 @@ function LobbyPageContent() {
                           Invitar
                         </button>
                       )}
+                      {/* Botón eliminar partida (solo si está esperando) */}
+                      {partida.estado === 'esperando' && (
+                        <button
+                          onClick={() => handleEliminarPartida(partida.mesaId)}
+                          disabled={loading}
+                          className="px-3 py-3 rounded-xl font-bold transition-all duration-300 bg-red-900/30 text-red-400 hover:bg-red-800/50 hover:text-red-300 border border-red-700/40 disabled:opacity-50"
+                          title="Cancelar partida"
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleReconectarPartidaUsuario(partida.mesaId)}
                         disabled={loading}

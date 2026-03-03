@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import socketService from "@/lib/socket";
 import audioManager from "@/lib/audioManager";
@@ -872,6 +872,7 @@ export default function GamePageWrapper() {
 
 function GamePage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const mesaId = searchParams?.get("mesaId") ?? null;
   const { alertState, showAlert, showConfirm, closeAlert } = useAlertModal();
 
@@ -912,7 +913,7 @@ function GamePage() {
         jugadorNombre: string;
         carta: { palo: string; valor: number };
         esRey: boolean;
-        equipo: number;
+        equipoAsignado: number | null;
       }[]
     | null
   >(null);
@@ -1672,6 +1673,14 @@ function GamePage() {
           /* ignorar */
         }
 
+        // Handle game cancellation by host
+        socketService.onPartidaEliminada((data) => {
+          if (!mounted) return;
+          console.log("[Game] partida-eliminada received:", data);
+          showAlert("info", "Partida cancelada", data.mensaje || "La partida fue cancelada");
+          router.push("/lobby");
+        });
+
         // Register auto-reconnect: if socket drops and reconnects, re-join the game room
         socketService.onAutoReconnect(() => {
           if (!mounted) return;
@@ -1922,6 +1931,23 @@ function GamePage() {
     try {
       const success = await socketService.iniciarPartida();
       if (!success) showAlert("error", "Error", "Error al iniciar la partida");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelarPartida = async () => {
+    if (!mesa || !mesaId || !socketId) return;
+    const miJugador = mesa.jugadores.find((j) => j.id === socketId);
+    if (!miJugador) return;
+    setLoading(true);
+    try {
+      const success = await socketService.eliminarPartida(mesaId, miJugador.nombre);
+      if (success) {
+        router.push("/lobby");
+      } else {
+        showAlert("error", "Error", "No se pudo cancelar la partida");
+      }
     } finally {
       setLoading(false);
     }
@@ -2523,139 +2549,226 @@ function GamePage() {
     return (
       <div className="min-h-screen bg-table-wood p-4 sm:p-8">
         {/* Tirar Reyes Animation Overlay */}
-        {reyesAnimacion && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Tirando Reyes">
-            <div className="glass rounded-2xl p-6 sm:p-8 max-w-2xl w-full border border-gold-600/40 animate-slide-up">
-              <h2 className="text-2xl sm:text-3xl font-bold text-gold-400 text-center mb-2">
-                Tirando Reyes
-              </h2>
-              <p className="text-gold-500/60 text-center text-sm mb-6">
-                Los que sacan un Rey van al Equipo 1
-              </p>
+        {reyesAnimacion && mesa && (() => {
+          const paloArchivo: Record<string, string> = {
+            oro: "oros",
+            copa: "copas",
+            espada: "espadas",
+            basto: "bastos",
+          };
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-                {reyesAnimacion.map((item, i) => {
-                  const revealed = reyesAnimStep > i;
-                  const paloArchivo: Record<string, string> = {
-                    oro: "oros",
-                    copa: "copas",
-                    espada: "espadas",
-                    basto: "bastos",
-                  };
+          const jugadores = mesa.jugadores;
+          const numJugadores = jugadores.length;
+
+          // Determinar la "ronda" actual basada en reyesAnimStep
+          // La animación procesa una carta a la vez, identificamos qué jugadores ya tienen carta
+          const cartasVisibles = reyesAnimacion.slice(0, reyesAnimStep);
+
+          // Para cada jugador: guardar su carta actual (la última que recibió, o el rey si ya lo tiene)
+          const estadoJugador: Record<string, {
+            carta: { palo: string; valor: number } | null;
+            esRey: boolean;
+            equipoAsignado: number | null;
+            tieneCartaEstaRonda: boolean;
+            animando: boolean;
+          }> = {};
+
+          jugadores.forEach(j => {
+            estadoJugador[j.id] = { carta: null, esRey: false, equipoAsignado: null, tieneCartaEstaRonda: false, animando: false };
+          });
+
+          // Procesar cartas visibles
+          cartasVisibles.forEach((c, idx) => {
+            const estado = estadoJugador[c.jugadorId];
+            if (!estado) return;
+
+            // Si ya tiene rey, mantenerlo
+            if (estado.esRey) return;
+
+            estado.carta = c.carta;
+            estado.esRey = c.esRey;
+            estado.equipoAsignado = c.equipoAsignado;
+            estado.tieneCartaEstaRonda = true;
+            // La última carta es la que está animando
+            estado.animando = idx === cartasVisibles.length - 1 && !reyesAnimDone;
+          });
+
+          // Posiciones de los jugadores en la mesa (como en un círculo)
+          // 4 jugadores: arriba-izq, arriba-der, abajo-der, abajo-izq
+          // 6 jugadores: distribuidos en círculo
+          const getPosition = (index: number, total: number) => {
+            if (total === 4) {
+              const positions = [
+                { top: '15%', left: '20%' },   // arriba-izq
+                { top: '15%', left: '80%' },   // arriba-der
+                { top: '75%', left: '80%' },   // abajo-der
+                { top: '75%', left: '20%' },   // abajo-izq
+              ];
+              return positions[index];
+            } else {
+              // 6 jugadores en círculo
+              const positions = [
+                { top: '10%', left: '50%' },   // arriba-centro
+                { top: '25%', left: '85%' },   // der-arriba
+                { top: '65%', left: '85%' },   // der-abajo
+                { top: '85%', left: '50%' },   // abajo-centro
+                { top: '65%', left: '15%' },   // izq-abajo
+                { top: '25%', left: '15%' },   // izq-arriba
+              ];
+              return positions[index];
+            }
+          };
+
+          return (
+            <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-label="Tirando Reyes">
+              {/* Contenedor principal - simula mesa */}
+              <div className="relative w-full max-w-2xl aspect-square mx-4">
+
+                {/* Título flotante arriba */}
+                <div className="absolute -top-16 left-0 right-0 text-center">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-gold-400 mb-1">
+                    👑 Tirando Reyes
+                  </h2>
+                  <p className="text-gold-500/60 text-sm">
+                    El primero en sacar Rey (12) va al Equipo 1
+                  </p>
+                </div>
+
+                {/* Mesa verde (tapete) */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-900 to-green-950 border-8 border-amber-900/80 shadow-2xl shadow-black/50">
+                  {/* Textura del tapete */}
+                  <div className="absolute inset-0 rounded-full opacity-30 bg-[radial-gradient(circle_at_50%_50%,transparent_0%,rgba(0,0,0,0.3)_100%)]" />
+                </div>
+
+                {/* Mazo central */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                  <div className="relative w-16 h-24 sm:w-20 sm:h-28">
+                    {/* Stack de cartas del mazo */}
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="absolute inset-0 rounded-lg bg-gradient-to-br from-blue-900 to-blue-950 border-2 border-blue-700/50 shadow-lg"
+                        style={{ transform: `translate(${i * 2}px, ${i * -2}px)` }}
+                      >
+                        <div className="absolute inset-2 rounded border border-gold-600/30 flex items-center justify-center">
+                          <span className="text-gold-500/40 text-2xl">♠</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Posiciones de jugadores */}
+                {jugadores.map((jugador, index) => {
+                  const pos = getPosition(index, numJugadores);
+                  const estado = estadoJugador[jugador.id];
+                  const tieneRey = estado.esRey;
+                  const equipoAsignado = estado.equipoAsignado;
 
                   return (
                     <div
-                      key={item.jugadorId}
-                      className="flex flex-col items-center gap-2"
+                      key={jugador.id}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20"
+                      style={{ top: pos.top, left: pos.left }}
                     >
-                      <span
-                        className={`text-sm font-medium ${
-                          revealed
-                            ? item.esRey
-                              ? "text-celeste-300"
-                              : "text-red-300"
-                            : "text-gold-400/70"
-                        }`}
-                      >
-                        {item.jugadorNombre}
-                      </span>
-
-                      <div
-                        className={`relative w-16 h-24 sm:w-20 sm:h-[7.5rem] transition-all duration-700 ${
-                          revealed ? "scale-110" : ""
-                        }`}
-                        style={{ perspective: "600px" }}
-                      >
-                        <div
-                          className={`w-full h-full transition-all duration-700 relative`}
-                          style={{
-                            transformStyle: "preserve-3d",
-                            transform: revealed
-                              ? "rotateY(180deg)"
-                              : "rotateY(0deg)",
-                          }}
-                        >
-                          {/* Back of card */}
-                          <div
-                            className="absolute inset-0 card-back rounded-lg"
-                            style={{ backfaceVisibility: "hidden", ...getCardBackStyle() }}
-                          />
-                          {/* Front of card */}
-                          <div
-                            className="absolute inset-0 rounded-lg overflow-hidden"
-                            style={{
-                              backfaceVisibility: "hidden",
-                              transform: "rotateY(180deg)",
-                            }}
-                          >
-                            <Image
-                              src={`/Cartasimg/${item.carta.valor.toString().padStart(2, "0")}-${paloArchivo[item.carta.palo] || item.carta.palo}.png`}
-                              alt={`${item.carta.valor} de ${item.carta.palo}`}
-                              fill
-                              sizes="64px"
-                              className="object-cover"
-                            />
-                          </div>
-                        </div>
-
-                        {/* King crown indicator */}
-                        {revealed && item.esRey && (
-                          <div className="absolute -top-3 -right-2 text-xl animate-bounce">
-                            👑
-                          </div>
+                      {/* Nombre del jugador */}
+                      <div className={`mb-2 px-3 py-1 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 ${
+                        tieneRey
+                          ? equipoAsignado === 1
+                            ? 'bg-celeste-600/80 text-white shadow-lg shadow-celeste-500/30'
+                            : 'bg-red-600/80 text-white shadow-lg shadow-red-500/30'
+                          : 'bg-black/60 text-white/90'
+                      }`}>
+                        {tieneRey && <span className="mr-1">👑</span>}
+                        {jugador.nombre.split(' ')[0]}
+                        {tieneRey && equipoAsignado && (
+                          <span className="ml-1 text-[10px] opacity-80">Eq.{equipoAsignado}</span>
                         )}
                       </div>
 
-                      {revealed && (
-                        <span
-                          className={`text-xs font-bold px-2 py-0.5 rounded-full animate-slide-up ${
-                            item.esRey
-                              ? "bg-celeste-600/40 text-celeste-300 border border-celeste-500/40"
-                              : "bg-red-600/40 text-red-300 border border-red-500/40"
-                          }`}
-                        >
-                          Equipo {item.equipo}
-                        </span>
-                      )}
+                      {/* Zona de carta */}
+                      <div className={`relative w-14 h-20 sm:w-16 sm:h-24 transition-all duration-300 ${
+                        tieneRey ? 'scale-110' : ''
+                      }`}>
+                        {/* Sombra debajo de la carta */}
+                        <div className="absolute inset-0 rounded-lg bg-black/40 blur-md translate-y-2" />
+
+                        {!estado.carta ? (
+                          /* Espacio vacío esperando carta */
+                          <div className="relative w-full h-full rounded-lg border-2 border-dashed border-white/20 bg-black/20 flex items-center justify-center">
+                            <span className="text-white/30 text-lg">?</span>
+                          </div>
+                        ) : (
+                          /* Carta con animación */
+                          <div
+                            className={`relative w-full h-full transition-all ${
+                              estado.animando
+                                ? 'animate-[bounce_0.5s_ease-out]'
+                                : ''
+                            }`}
+                          >
+                            <Image
+                              src={`/Cartasimg/${estado.carta.valor.toString().padStart(2, "0")}-${paloArchivo[estado.carta.palo] || estado.carta.palo}.png`}
+                              alt={`${estado.carta.valor} de ${estado.carta.palo}`}
+                              fill
+                              sizes="64px"
+                              className={`object-cover rounded-lg shadow-xl transition-all duration-300 ${
+                                tieneRey
+                                  ? equipoAsignado === 1
+                                    ? 'ring-4 ring-celeste-400 shadow-celeste-500/50'
+                                    : 'ring-4 ring-red-400 shadow-red-500/50'
+                                  : 'ring-1 ring-white/20'
+                              }`}
+                            />
+                            {/* Corona animada si es rey */}
+                            {tieneRey && (
+                              <div className="absolute -top-4 -right-2 text-2xl animate-bounce drop-shadow-lg">
+                                👑
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
-              </div>
 
-              {reyesAnimDone && (
-                <div className="text-center animate-slide-up">
-                  <p className="text-gold-300 font-bold text-lg mb-2">
-                    ¡Equipos formados!
-                  </p>
-                  <div className="flex justify-center gap-6">
-                    <div>
-                      <span className="text-celeste-400 font-medium text-sm">
-                        Equipo 1:{" "}
-                      </span>
-                      <span className="text-white text-sm">
-                        {reyesAnimacion
-                          .filter((a) => a.equipo === 1)
-                          .map((a) => a.jugadorNombre)
-                          .join(", ")}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-red-400 font-medium text-sm">
-                        Equipo 2:{" "}
-                      </span>
-                      <span className="text-white text-sm">
-                        {reyesAnimacion
-                          .filter((a) => a.equipo === 2)
-                          .map((a) => a.jugadorNombre)
-                          .join(", ")}
-                      </span>
+                {/* Resultado final */}
+                {reyesAnimDone && (
+                  <div className="absolute -bottom-24 left-0 right-0 text-center animate-slide-up">
+                    <p className="text-gold-300 font-bold text-xl mb-3">
+                      ¡Equipos formados!
+                    </p>
+                    <div className="flex justify-center gap-8">
+                      <div className="px-4 py-2 rounded-xl bg-celeste-600/30 border border-celeste-400/50">
+                        <span className="block text-celeste-300 font-bold text-sm mb-1">
+                          Equipo 1
+                        </span>
+                        <span className="text-white text-sm">
+                          {mesa.jugadores
+                            .filter((j) => j.equipo === 1)
+                            .map((j) => j.nombre.split(' ')[0])
+                            .join(", ")}
+                        </span>
+                      </div>
+                      <div className="px-4 py-2 rounded-xl bg-red-600/30 border border-red-400/50">
+                        <span className="block text-red-300 font-bold text-sm mb-1">
+                          Equipo 2
+                        </span>
+                        <span className="text-white text-sm">
+                          {mesa.jugadores
+                            .filter((j) => j.equipo === 2)
+                            .map((j) => j.nombre.split(' ')[0])
+                            .join(", ")}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         <div className="max-w-2xl mx-auto">
           <div className="glass rounded-2xl p-6 sm:p-8 border border-gold-800/30">
@@ -2736,10 +2849,10 @@ function GamePage() {
                       <h2 className="text-gold-400/80 font-medium text-sm uppercase tracking-wider">
                         Configurar Equipos
                       </h2>
-                      {esAnfitrion() && (
+                      {esAnfitrion() && mesa.jugadores.length > 2 && (
                         <button
                           onClick={handleTirarReyes}
-                          disabled={loading || mesa.jugadores.length < 4}
+                          disabled={loading}
                           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-amber-700 to-amber-600 text-white text-sm font-bold hover:from-amber-600 hover:to-amber-500 transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-amber-800/30"
                           title="Asignar equipos al azar con animación de Reyes"
                         >
@@ -3262,19 +3375,28 @@ function GamePage() {
                 )}
 
                 {esAnfitrion() ? (
-                  <button
-                    onClick={handleIniciarPartida}
-                    disabled={
-                      loading ||
-                      mesa.jugadores.length < 2 ||
-                      (mesa.jugadores.length > 2 && !equiposBalanceados)
-                    }
-                    className="btn-primary w-full text-white py-4 rounded-xl text-lg disabled:opacity-40"
-                  >
-                    {loading
-                      ? "Iniciando..."
-                      : `Iniciar Partida (${mesa.jugadores.length} jugadores)`}
-                  </button>
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleIniciarPartida}
+                      disabled={
+                        loading ||
+                        mesa.jugadores.length < 2 ||
+                        (mesa.jugadores.length > 2 && !equiposBalanceados)
+                      }
+                      className="btn-primary w-full text-white py-4 rounded-xl text-lg disabled:opacity-40"
+                    >
+                      {loading
+                        ? "Iniciando..."
+                        : `Iniciar Partida (${mesa.jugadores.length} jugadores)`}
+                    </button>
+                    <button
+                      onClick={handleCancelarPartida}
+                      disabled={loading}
+                      className="w-full py-3 rounded-xl text-sm bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-500/30 transition-all disabled:opacity-40"
+                    >
+                      Cancelar Partida
+                    </button>
+                  </div>
                 ) : (
                   <p className="text-gold-500/50 text-center italic">
                     Esperando al anfitrión...
@@ -4017,13 +4139,15 @@ function GamePage() {
                   >
                     🔄 Revancha Directa
                   </button>
-                  <button
-                    onClick={handleTirarReyes}
-                    disabled={loading}
-                    className="flex items-center justify-center gap-2 py-3 px-8 rounded-xl font-bold bg-gradient-to-r from-amber-700 to-amber-600 text-white hover:from-amber-600 hover:to-amber-500 transition-all w-full btn-campo"
-                  >
-                    👑 Tirar Reyes (mezclar equipos)
-                  </button>
+                  {mesa.jugadores.length > 2 && (
+                    <button
+                      onClick={handleTirarReyes}
+                      disabled={loading}
+                      className="flex items-center justify-center gap-2 py-3 px-8 rounded-xl font-bold bg-gradient-to-r from-amber-700 to-amber-600 text-white hover:from-amber-600 hover:to-amber-500 transition-all w-full btn-campo"
+                    >
+                      👑 Tirar Reyes (mezclar equipos)
+                    </button>
+                  )}
                 </>
               )}
               {!esAnfitrion() && (

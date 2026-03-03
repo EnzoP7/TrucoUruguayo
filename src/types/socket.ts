@@ -135,12 +135,13 @@ export interface FlorResultadoFinal {
 }
 
 // Type for Tirar Reyes animation
+// Cada item representa una carta tirada en secuencia
 export interface TirarReyesAnimacion {
   jugadorId: string;
   jugadorNombre: string;
   carta: { palo: string; valor: number };
   esRey: boolean;
-  equipo: number;
+  equipoAsignado: number | null; // Solo tiene valor si esRey es true
 }
 
 // Tipos para datos de conexión
