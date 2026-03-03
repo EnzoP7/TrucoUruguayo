@@ -971,13 +971,58 @@ function GamePage() {
         </div>
       )}
 
-      {/* Resultado de FLOR - solo resultado, el anuncio individual sale como speech bubble sobre el avatar */}
+      {/* Resultado de FLOR - muestra declaraciones y resultado */}
       {florResultado && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-bounce-in">
-          <div className="bg-gradient-to-r from-pink-700/90 to-purple-600/90 backdrop-blur-md rounded-xl px-6 py-3 shadow-lg shadow-pink-500/30 border border-pink-400/40">
-            <div className="flex items-center gap-3">
+          <div className="bg-gradient-to-r from-pink-700/90 to-purple-600/90 backdrop-blur-md rounded-xl px-5 py-4 shadow-lg shadow-pink-500/30 border border-pink-400/40 min-w-[280px]">
+            {/* Tipo de contienda */}
+            {(florResultado.esContraFlor || florResultado.esConFlorEnvido) && (
+              <div className="text-center text-pink-200 text-xs font-medium mb-2 uppercase tracking-wider">
+                {florResultado.esContraFlor ? "🔥 Contra Flor al Resto" : "🌸 Con Flor Envido"}
+              </div>
+            )}
+            {/* Declaraciones de flores */}
+            {florResultado.floresCantadas && florResultado.floresCantadas.length > 0 && (
+              <div className="mb-3 space-y-1">
+                {florResultado.floresCantadas.map((flor, i) => (
+                  <div key={i} className={`text-sm py-1 px-2 rounded flex justify-between items-center ${flor.equipo === 1 ? "bg-celeste-900/40" : "bg-red-900/40"}`}>
+                    <span className={`font-medium ${flor.equipo === 1 ? "text-celeste-200" : "text-red-200"}`}>
+                      {flor.jugadorNombre}
+                    </span>
+                    <span className="text-white font-bold">
+                      {flor.puntos !== null ? flor.puntos : "??"} pts
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Resultado final */}
+            <div className="flex items-center justify-center gap-3 pt-2 border-t border-pink-400/30">
               <span className="text-2xl">🏆🌸</span>
-              <div className="text-lg font-bold text-white">¡Equipo {florResultado.ganador} gana +{florResultado.puntosGanados}!</div>
+              <div className="text-lg font-bold text-white">
+                ¡Equipo {florResultado.ganador} gana +{florResultado.puntosGanados}!
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de contienda de flores en progreso - visible para TODOS */}
+      {florPendiente && !florResultado && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-35 pointer-events-none animate-slide-down">
+          <div className="bg-gradient-to-r from-pink-700/90 to-purple-600/90 backdrop-blur-md rounded-xl px-5 py-3 shadow-lg shadow-pink-500/30 border border-pink-400/40">
+            <div className="flex items-center gap-3">
+              <span className="text-xl animate-pulse">🌸⚔️🌸</span>
+              <div className="text-center">
+                <div className="text-sm font-bold text-white">Contienda de Flores</div>
+                <div className="text-xs text-pink-200">
+                  {florPendiente.ultimoTipo === "contra_flor"
+                    ? `${florPendiente.jugadorNombre || "Equipo " + florPendiente.equipoQueCanta} cantó CONTRA FLOR AL RESTO`
+                    : florPendiente.ultimoTipo === "con_flor_envido"
+                      ? `${florPendiente.jugadorNombre || "Equipo " + florPendiente.equipoQueCanta} cantó CON FLOR ENVIDO`
+                      : "Esperando respuesta..."}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1116,6 +1161,11 @@ function GamePage() {
       )}
 
       <div className="relative z-10 max-w-5xl mx-auto h-[calc(100vh-1rem)] sm:h-[calc(100vh-1.5rem)] flex flex-col">
+        {/* Banner publicitario arriba del marcador */}
+        <div className="flex justify-center mb-1">
+          <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_GAME} size="banner" className="opacity-80 hover:opacity-100 transition-opacity" />
+        </div>
+
         {/* Header: Marcadores */}
         <div className="flex justify-between items-stretch gap-2 sm:gap-3 mb-1 sm:mb-2">
           <ScoreBoard equipo={1} puntos={mesa.equipos[0].puntaje} isMyTeam={miEquipo === 1} />
@@ -1486,6 +1536,15 @@ function GamePage() {
                   <button onClick={() => handleResponderTruco(false)} disabled={loading} className="btn-no-quiero text-white">NO QUIERO</button>
                   {mesa.gritoActivo.tipo === "truco" && <button onClick={() => handleResponderTruco(true, "retruco")} disabled={loading} className="btn-truco text-white">QUIERO RETRUCO</button>}
                   {mesa.gritoActivo.tipo === "retruco" && <button onClick={() => handleResponderTruco(true, "vale4")} disabled={loading} className="btn-truco text-white">QUIERO VALE 4</button>}
+                  {/* "Envido está primero": en primera mano, si no se cantó envido, se puede cantar antes de responder al truco */}
+                  {mesa.gritoActivo.tipo === "truco" && mesa.manoActual === 1 && !mesa.envidoYaCantado && !mesa.florYaCantada && (
+                    <>
+                      <span className="text-purple-300/60 text-xs self-center hidden sm:inline">|</span>
+                      <button onClick={() => handleCantarEnvido("envido")} disabled={loading} className="btn-envido text-white text-sm">Envido</button>
+                      <button onClick={() => handleCantarEnvido("real_envido")} disabled={loading} className="btn-envido text-white text-sm hidden sm:inline-flex">Real Envido</button>
+                      <button onClick={() => handleCantarEnvido("falta_envido")} disabled={loading} className="btn-envido text-white text-sm hidden sm:inline-flex">Falta Envido</button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -1505,6 +1564,12 @@ function GamePage() {
 
               return (
                 <div className="glass rounded-xl p-3 my-1.5 text-center border border-purple-600/40 animate-slide-up">
+                  {/* Indicador de truco pendiente */}
+                  {mesa.trucoPendiente && (
+                    <p className="text-xs text-gold-400/80 mb-2 flex items-center justify-center gap-1">
+                      <span>⏳</span> Truco pendiente - se resolverá después del envido
+                    </p>
+                  )}
                   <p className="text-base font-bold text-purple-300 mb-1">
                     {mesa.jugadores.find((j) => j.id === mesa.envidoActivo!.jugadorQueCanta)?.nombre} cantó {getNombreEnvido(mesa.envidoActivo.tipos[mesa.envidoActivo.tipos.length - 1])}
                   </p>
@@ -1674,13 +1739,6 @@ function GamePage() {
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Banner publicitario */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none">
-        <div className="pointer-events-auto">
-          <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_GAME} size="banner" className="opacity-80 hover:opacity-100 transition-opacity" />
         </div>
       </div>
 

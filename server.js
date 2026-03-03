@@ -7059,6 +7059,7 @@ app.prepare().then(async () => {
               equipoQueCanta: mesa.florPendiente.equipoQueCanta,
               equipoQueResponde: mesa.florPendiente.equipoQueResponde,
               ultimoTipo: mesa.florPendiente.ultimoTipo,
+              jugadorId: socket.id,
               jugadorNombre: result.jugadorNombre,
               audioCustomUrl: escalarAudioUrl,
               estado: getEstadoParaJugador(mesa, p.socketId),
@@ -7947,11 +7948,15 @@ app.prepare().then(async () => {
           let puntosGanados = 1;
 
           // Si el equipo que echó los perros tiene flor, suma 3 puntos por cada flor
-          const jugadoresEquipoEchador = mesa.jugadores.filter(j => j.equipo === equipoGanador);
-          const floresDelEquipoEchador = jugadoresEquipoEchador.filter(j =>
-            mesa.jugadoresConFlor && mesa.jugadoresConFlor.includes(j.id)
-          );
+          // Recalculamos directamente por si mesa.jugadoresConFlor no está actualizado
+          const jugadoresEquipoEchador = mesa.jugadores.filter(j => j.equipo === equipoGanador && j.participaRonda !== false);
+          const floresDelEquipoEchador = jugadoresEquipoEchador.filter(j => {
+            // Usar tieneFlor() directamente para asegurarnos de detectar correctamente
+            return tieneFlor(j, mesa.muestra);
+          });
 
+          // Construir info de flores para mostrar en la UI
+          let floresCantadas = [];
           if (floresDelEquipoEchador.length > 0) {
             // Sumar 3 puntos por cada flor del equipo que echó los perros
             puntosGanados += floresDelEquipoEchador.length * 3;
@@ -7962,6 +7967,13 @@ app.prepare().then(async () => {
                 ? j.cartasOriginales
                 : j.cartas).map(c => ({ ...c })),
             }));
+            // Construir declaraciones de flor para la UI
+            floresCantadas = floresDelEquipoEchador.map(j => ({
+              jugadorId: j.id,
+              jugadorNombre: j.nombre,
+              equipo: j.equipo,
+              puntos: calcularPuntosFlor(j, mesa.muestra),
+            }));
           }
 
           mesa.equipos.find(e => e.id === equipoGanador).puntaje += puntosGanados;
@@ -7969,15 +7981,34 @@ app.prepare().then(async () => {
           const equipoQueEchoPerrosTemp = mesa.perrosConfig.equipoQueEcha;
           mesa.perrosConfig = null;
 
+          // Emitir resultado con info de flores
           room.jugadores.forEach(p => {
             io.to(p.socketId).emit('perros-respondidos', {
               respuesta: 'mazo',
               equipoGanador,
               puntosGanados,
               floresDelEchador: floresDelEquipoEchador.length,
+              floresCantadas, // Info detallada de las flores
               estado: getEstadoParaJugador(mesa, p.socketId),
             });
           });
+
+          // Si hay flores, emitir evento de flor-resuelta para que la UI muestre las flores
+          if (floresDelEquipoEchador.length > 0) {
+            setTimeout(() => {
+              room.jugadores.forEach(p => {
+                io.to(p.socketId).emit('flor-resuelta', {
+                  resultado: {
+                    ganador: equipoGanador,
+                    puntosGanados: floresDelEquipoEchador.length * 3,
+                    floresCantadas,
+                    esPerrosRechazados: true,
+                  },
+                  estado: getEstadoParaJugador(mesa, p.socketId),
+                });
+              });
+            }, 500);
+          }
 
           // Check game end - delay to let players see the perros result
           const eqGanador = mesa.equipos.find(e => e.id === equipoGanador);

@@ -77,6 +77,7 @@ export interface Mesa {
   corteRealizado: boolean;
   posicionCorte: number | null;
   gritoActivo: GritoActivo | null;
+  trucoPendiente: GritoActivo | null; // truco suspendido mientras se resuelve envido ("envido está primero")
   nivelGritoAceptado: string | null;
   puntosEnJuego: number;
   envidoActivo: EnvidoActivo | null;
@@ -110,6 +111,7 @@ export interface Mesa {
   // Respuestas grupales envido
   respuestasEnvido?: Record<string, boolean>;
   esperandoRespuestasGrupales?: boolean;
+  tipoRespuestaGrupal?: "truco" | "envido" | null;
   // Pico a Pico y Modo Ayuda
   modoAlternadoHabilitado?: boolean;
   modoRondaActual?: "normal" | "1v1";

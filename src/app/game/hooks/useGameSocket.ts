@@ -475,41 +475,70 @@ export function useGameSocket(
           if (data.audioCustomUrl)
             audioManager.playWithCustom("quiero", data.audioCustomUrl);
           setFlorPendiente(null); // Limpiar flor pendiente cuando se resuelve
+          const esContraFlor = data.resultado.esContraFlor;
+          const esConFlorEnvido = data.resultado.esConFlorEnvido;
           setFlorResultado({
             ganador: data.resultado.ganador,
             puntosGanados: data.resultado.puntosGanados,
+            floresCantadas: data.resultado.floresCantadas,
+            esContraFlor,
+            esConFlorEnvido,
           });
-          const esContraFlor = data.resultado.esContraFlor;
-          const esConFlorEnvido = data.resultado.esConFlorEnvido;
           const tipoMensaje = esContraFlor
             ? "CONTRA FLOR AL RESTO"
             : esConFlorEnvido
               ? "CON FLOR ENVIDO"
               : "la FLOR";
           setMensaje(`¡Equipo ${data.resultado.ganador} gana ${tipoMensaje}!`);
+          // Dar más tiempo para ver el resultado con las declaraciones
+          const tiempoResultado = (esContraFlor || esConFlorEnvido) ? 4000 : 3000;
           setTimeout(() => {
             if (mounted) {
               setFlorResultado(null);
               setFlorAnuncio(null);
               setMensaje(null);
             }
-          }, 2000);
+          }, tiempoResultado);
         });
 
         // Flor pendiente - ambos equipos tienen flor, esperando respuesta
         socketService.onFlorPendiente((data) => {
           if (!mounted) return;
           setMesa(data.estado);
+          const ultimoTipo = (data as Record<string, unknown>).ultimoTipo as string | undefined;
+          const jugadorNombre = (data as Record<string, unknown>).jugadorNombre as string | undefined;
+          const jugadorId = (data as Record<string, unknown>).jugadorId as string | undefined;
+
           setFlorPendiente({
             equipoQueCanta: data.equipoQueCanta,
             equipoQueResponde: data.equipoQueResponde,
-            ultimoTipo: (data as Record<string, unknown>).ultimoTipo as
-              | string
-              | undefined,
-            jugadorNombre: (data as Record<string, unknown>).jugadorNombre as
-              | string
-              | undefined,
+            ultimoTipo,
+            jugadorNombre,
           });
+
+          // Mostrar bocadillo cuando alguien canta contraflor o con flor envido
+          if (ultimoTipo && jugadorId) {
+            const textoFlor = ultimoTipo === "contra_flor"
+              ? "🌸 ¡CONTRA FLOR!"
+              : ultimoTipo === "con_flor_envido"
+                ? "🌸 ¡CON FLOR ENVIDO!"
+                : "🌸 ¡FLOR!";
+            const bubbleId = `flor-${Date.now()}`;
+            setSpeechBubbles((prev) => [
+              ...prev,
+              {
+                id: bubbleId,
+                jugadorId,
+                tipo: "flor",
+                texto: textoFlor,
+              },
+            ]);
+            setTimeout(() => {
+              if (mounted) {
+                setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubbleId));
+              }
+            }, 3500);
+          }
         });
 
         // Tirar Reyes listener (rondas)

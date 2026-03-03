@@ -40,6 +40,9 @@ export function useGameState() {
   const [florResultado, setFlorResultado] = useState<{
     ganador: number;
     puntosGanados: number;
+    floresCantadas?: { jugadorNombre: string; equipo: number; puntos: number | null }[];
+    esContraFlor?: boolean;
+    esConFlorEnvido?: boolean;
   } | null>(null);
   const [reyesAnimacion, setReyesAnimacion] = useState<
     | {
