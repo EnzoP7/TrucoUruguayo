@@ -146,6 +146,7 @@ const botResponseTimeouts = new Map(); // mesaId -> timeoutId (timeout de seguri
 const lastBotAction = new Map(); // mesaId -> timestamp de última acción de bot
 const afkTimeouts = new Map(); // mesaId -> timeoutId (timeout AFK para jugadores humanos)
 const AFK_TIMEOUT_MS = 60000; // 60 segundos de inactividad
+const botProcesandoTurno = new Set(); // mesaId -> true si un bot está procesando turno (evita doble ejecución)
 
 // Iniciar timeout AFK para un jugador humano
 function iniciarAfkTimeout(io, room, mesa) {
@@ -158,131 +159,112 @@ function iniciarAfkTimeout(io, room, mesa) {
 
   const rondaAlIniciar = mesa.rondaNumero;
   const turnoAlIniciar = mesa.turnoActual;
+  const mesaId = mesa.id;
   const timeout = setTimeout(() => {
-    afkTimeouts.delete(mesa.id);
+    afkTimeouts.delete(mesaId);
+    const currentMesa = engines.get(mesaId);
+    const currentRoom = lobbyRooms.get(mesaId);
+    if (!currentMesa || !currentRoom) return;
     // Verificar que el estado no haya cambiado
-    if (mesa.rondaNumero !== rondaAlIniciar || mesa.turnoActual !== turnoAlIniciar) return;
-    if (mesa.estado !== 'jugando' || mesa.fase !== 'jugando') return;
-    // Auto irse al mazo
-    console.log(`[AFK] Jugador ${jugadorActual.nombre} se fue al mazo por inactividad (60s)`);
-    const resultado = irseAlMazo(mesa, jugadorActual.id);
-    // irseAlMazo retorna true, 'parcial', o false (no un objeto con .success)
-    if (resultado) {
-      incrementarStatJugador(mesa, jugadorActual.id, 'idasAlMazo');
-      room.jugadores.forEach(p => {
-        io.to(p.socketId).emit('jugador-al-mazo', {
-          jugadorId: jugadorActual.id,
-          equipoQueSeVa: jugadorActual.equipo || 0,
-          parcial: resultado === 'parcial',
-          audioCustomUrl: null,
-          estado: getEstadoParaJugador(mesa, p.socketId),
+    if (currentMesa.rondaNumero !== rondaAlIniciar || currentMesa.turnoActual !== turnoAlIniciar) return;
+    if (currentMesa.estado !== 'jugando' || currentMesa.fase !== 'jugando') return;
+    if (currentMesa.gritoActivo || currentMesa.envidoActivo || currentMesa.esperandoRespuestaFlor) return;
+
+    const jugador = currentMesa.jugadores[currentMesa.turnoActual];
+    if (!jugador || jugador.isBot) return;
+
+    // Jugar una carta aleatoria en vez de irse al mazo
+    const cartasValidas = jugador.cartas.filter(c => c.valor !== 0);
+    if (cartasValidas.length === 0) return;
+
+    const cartaRandom = cartasValidas[Math.floor(Math.random() * cartasValidas.length)];
+    console.log(`[AFK] Jugador ${jugador.nombre} inactivo (${AFK_TIMEOUT_MS / 1000}s), jugando carta aleatoria: ${cartaRandom.valor} de ${cartaRandom.palo}`);
+
+    const result = jugarCarta(currentMesa, jugador.id, cartaRandom);
+    if (!result) return;
+
+    // Emitir carta jugada
+    currentRoom.jugadores.forEach(p => {
+      io.to(p.socketId).emit('carta-jugada', {
+        jugadorId: jugador.id,
+        carta: cartaRandom,
+        estado: getEstadoParaJugador(currentMesa, p.socketId),
+      });
+    });
+
+    // Manejar mano terminada
+    if (currentMesa.manoTerminada) {
+      currentRoom.jugadores.forEach(p => {
+        io.to(p.socketId).emit('mano-finalizada', {
+          ganadorEquipo: currentMesa.manoGanadorEquipo,
+          manoNumero: currentMesa.manoActual,
+          estado: getEstadoParaJugador(currentMesa, p.socketId),
         });
       });
 
-      if (resultado === 'parcial') {
-        // Solo un jugador se fue, el equipo sigue jugando
-        // Verificar si al irse al mazo se completó la mano actual
-        if (mesa.manoTerminada) {
-          room.jugadores.forEach(p => {
-            io.to(p.socketId).emit('mano-finalizada', {
-              ganadorEquipo: mesa.manoGanadorEquipo,
-              manoNumero: mesa.manoActual,
-              estado: getEstadoParaJugador(mesa, p.socketId),
+      const DELAY_MANO = 2000;
+      setTimeout(() => {
+        const delayMesa = engines.get(mesaId);
+        const delayRoom = lobbyRooms.get(mesaId);
+        if (!delayMesa || !delayRoom) return;
+
+        const resultado = continuarDespuesDeDelay(delayMesa);
+        if (!resultado) return;
+
+        if (resultado.tipo === 'ronda') {
+          delayRoom.jugadores.forEach(p => {
+            io.to(p.socketId).emit('ronda-finalizada', {
+              ganadorEquipo: delayMesa.winnerRonda,
+              puntosGanados: delayMesa.puntosEnJuego,
+              cartasFlorReveladas: delayMesa.cartasFlorReveladas || [],
+              cartasEnvidoReveladas: delayMesa.cartasEnvidoReveladas || [],
+              muestra: delayMesa.muestra,
+              estado: getEstadoParaJugador(delayMesa, p.socketId),
             });
           });
-          const DELAY_MANO = 2000;
-          setTimeout(() => {
-            const currentMesa = engines.get(mesa.id);
-            const currentRoom = lobbyRooms.get(mesa.id);
-            if (!currentMesa || !currentRoom) return;
-            const resultadoContinuar = continuarDespuesDeDelay(currentMesa);
-            if (!resultadoContinuar) return;
-            if (resultadoContinuar.tipo === 'ronda') {
-              currentRoom.jugadores.forEach(p => {
-                io.to(p.socketId).emit('ronda-finalizada', {
-                  ganadorEquipo: currentMesa.winnerRonda,
-                  puntosGanados: currentMesa.puntosEnJuego,
-                  cartasFlorReveladas: currentMesa.cartasFlorReveladas || [],
-                  cartasEnvidoReveladas: currentMesa.cartasEnvidoReveladas || [],
-                  muestra: currentMesa.muestra,
-                  estado: getEstadoParaJugador(currentMesa, p.socketId),
-                });
+          if (delayMesa.winnerJuego !== null) {
+            delayRoom.estado = 'terminado';
+            guardarResultadoPartida(delayRoom, delayMesa);
+            delayRoom.jugadores.forEach(p => {
+              io.to(p.socketId).emit('juego-finalizado', {
+                ganadorEquipo: delayMesa.winnerJuego,
+                estado: getEstadoParaJugador(delayMesa, p.socketId),
               });
-              if (currentMesa.winnerJuego !== null) {
-                currentRoom.estado = 'terminado';
-                guardarResultadoPartida(currentRoom, currentMesa);
-                currentRoom.jugadores.forEach(p => {
-                  io.to(p.socketId).emit('juego-finalizado', {
-                    ganadorEquipo: currentMesa.winnerJuego,
-                    estado: getEstadoParaJugador(currentMesa, p.socketId),
-                  });
-                });
-                broadcastLobby(io);
-              } else {
-                scheduleNextRound(io, currentRoom);
-              }
-            } else if (resultadoContinuar.tipo === 'mano') {
-              currentRoom.jugadores.forEach(p => {
-                io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(currentMesa, p.socketId));
-              });
-              setTimeout(() => {
-                const botMesa = engines.get(mesa.id);
-                if (botMesa && botMesa.fase === 'jugando' && !botMesa.gritoActivo && !botMesa.envidoActivo) {
-                  const nextPlayer = botMesa.jugadores[botMesa.turnoActual];
-                  if (nextPlayer && nextPlayer.isBot) {
-                    procesarTurnoBot(mesa.id, io);
-                  } else if (nextPlayer) {
-                    iniciarAfkTimeout(io, room, botMesa);
-                  }
-                }
-              }, 500);
-            }
-          }, DELAY_MANO);
-        } else {
-          // La mano sigue en curso - procesar siguiente turno
+            });
+            broadcastLobby(io);
+          } else {
+            scheduleNextRound(io, delayRoom);
+          }
+        } else if (resultado.tipo === 'mano') {
+          delayRoom.jugadores.forEach(p => {
+            io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(delayMesa, p.socketId));
+          });
           setTimeout(() => {
-            const currentMesa = engines.get(mesa.id);
-            if (currentMesa && currentMesa.fase === 'jugando' && !currentMesa.gritoActivo && !currentMesa.envidoActivo && !currentMesa.manoTerminada) {
-              const nextPlayer = currentMesa.jugadores[currentMesa.turnoActual];
+            const botMesa = engines.get(mesaId);
+            if (botMesa && botMesa.fase === 'jugando' && !botMesa.gritoActivo && !botMesa.envidoActivo) {
+              const nextPlayer = botMesa.jugadores[botMesa.turnoActual];
               if (nextPlayer && nextPlayer.isBot) {
-                procesarTurnoBot(mesa.id, io);
+                procesarTurnoBot(mesaId, io);
               } else if (nextPlayer) {
-                iniciarAfkTimeout(io, room, currentMesa);
+                iniciarAfkTimeout(io, currentRoom, botMesa);
               }
             }
           }, 500);
         }
-      } else {
-        // Todo el equipo se fue al mazo (resultado === true) - emitir ronda-finalizada
-        if (mesa.winnerRonda !== null && mesa.fase === 'finalizada') {
-          const puntosGanados = mesa.puntosEnJuego || 1;
-          room.jugadores.forEach(p => {
-            io.to(p.socketId).emit('ronda-finalizada', {
-              ganadorEquipo: mesa.winnerRonda,
-              puntosGanados,
-              cartasFlorReveladas: mesa.cartasFlorReveladas || [],
-              cartasEnvidoReveladas: mesa.cartasEnvidoReveladas || [],
-              muestra: mesa.muestra || null,
-              estado: getEstadoParaJugador(mesa, p.socketId),
-            });
-          });
-          if (mesa.winnerJuego !== null) {
-            room.estado = 'terminado';
-            guardarResultadoPartida(room, mesa);
-            setTimeout(() => {
-              room.jugadores.forEach(p => {
-                io.to(p.socketId).emit('juego-finalizado', {
-                  ganadorEquipo: mesa.winnerJuego,
-                  estado: getEstadoParaJugador(mesa, p.socketId),
-                });
-              });
-              broadcastLobby(io);
-            }, 2000);
-          } else {
-            scheduleNextRound(io, room);
+      }, DELAY_MANO);
+    } else {
+      // La mano sigue - procesar siguiente turno
+      setTimeout(() => {
+        const nextMesa = engines.get(mesaId);
+        if (nextMesa && nextMesa.fase === 'jugando' && !nextMesa.gritoActivo && !nextMesa.envidoActivo && !nextMesa.manoTerminada) {
+          const nextPlayer = nextMesa.jugadores[nextMesa.turnoActual];
+          if (nextPlayer && nextPlayer.isBot) {
+            procesarTurnoBot(mesaId, io);
+          } else if (nextPlayer && !nextPlayer.isBot) {
+            iniciarAfkTimeout(io, currentRoom, nextMesa);
           }
         }
-      }
+      }, 1000);
     }
   }, AFK_TIMEOUT_MS);
   afkTimeouts.set(mesa.id, timeout);
@@ -335,6 +317,7 @@ function crearEstadoMesa(mesaId, jugadores, puntosLimite = 30, opciones = {}) {
     ganadoresManos: [],
     indiceMano: 0,
     gritoActivo: null,
+    trucoPendiente: null, // truco suspendido mientras se resuelve envido ("envido está primero")
     nivelGritoAceptado: null,
     puntosEnJuego: 1,
     envidoActivo: null,
@@ -424,6 +407,7 @@ function iniciarRondaFase1(mesa) {
   mesa.winnerRonda = null;
   mesa.mensajeRonda = null;
   mesa.gritoActivo = null;
+  mesa.trucoPendiente = null;
   mesa.nivelGritoAceptado = null;
   mesa.puntosEnJuego = 1;
   mesa.envidoActivo = null;
@@ -771,6 +755,13 @@ function getEstadoParaJugador(mesa, jugadorId) {
 
 async function procesarTurnoBot(mesaId, io, esReintento = false) {
   try {
+  // Guard contra ejecución concurrente (evita race condition con watchdog)
+  if (botProcesandoTurno.has(mesaId)) {
+    console.log(`[Bot] procesarTurnoBot ya en ejecución para mesa ${mesaId}, ignorando llamada duplicada`);
+    return;
+  }
+  botProcesandoTurno.add(mesaId);
+
   const mesa = engines.get(mesaId);
   const room = lobbyRooms.get(mesaId);
   const bots = activeBots.get(mesaId) || [];
@@ -781,9 +772,9 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
     botTurnTimeouts.delete(mesaId);
   }
 
-  if (!mesa || !room || bots.length === 0) return;
-  if (mesa.fase !== 'jugando') return;
-  if (mesa.gritoActivo || mesa.envidoActivo) return;
+  if (!mesa || !room || bots.length === 0) { botProcesandoTurno.delete(mesaId); return; }
+  if (mesa.fase !== 'jugando') { botProcesandoTurno.delete(mesaId); return; }
+  if (mesa.gritoActivo || mesa.envidoActivo) { botProcesandoTurno.delete(mesaId); return; }
 
   // Si hay flor pendiente de respuesta, hacer que el bot responda
   if (mesa.esperandoRespuestaFlor && mesa.florPendiente) {
@@ -792,6 +783,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
     if (hayBotQueDebeResponder) {
       botResponderFlor(mesaId, io);
     }
+    botProcesandoTurno.delete(mesaId);
     return;
   }
 
@@ -888,15 +880,16 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
         }
       }, delayTotal);
 
+      botProcesandoTurno.delete(mesaId);
       return;
     }
   }
 
   const jugadorActual = mesa.jugadores[mesa.turnoActual];
-  if (!jugadorActual || !jugadorActual.isBot) return;
+  if (!jugadorActual || !jugadorActual.isBot) { botProcesandoTurno.delete(mesaId); return; }
 
   const bot = bots.find(b => b.id === jugadorActual.id);
-  if (!bot) return;
+  if (!bot) { botProcesandoTurno.delete(mesaId); return; }
 
   // Timeout de seguridad: si el bot no juega en 4 segundos, forzar carta aleatoria
   const timeoutId = setTimeout(() => {
@@ -981,6 +974,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
 
           // Si hay bots en el otro equipo, hacer que respondan
           setTimeout(() => botResponderEnvido(mesaId, io), 800);
+          botProcesandoTurno.delete(mesaId);
           return; // Esperar respuesta antes de jugar carta
         }
       }
@@ -1003,6 +997,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
         const success = cantarTruco(mesa, bot.id, decisionTruco.tipo);
         if (success) {
           incrementarStatJugador(mesa, bot.id, 'trucosCantados');
+          console.log(`[Envido primero] Bot cantó truco. manoActual=${mesa.manoActual}, envidoYaCantado=${mesa.envidoYaCantado}, florYaCantada=${mesa.florYaCantada}, jugadoresConFlor=${mesa.jugadoresConFlor?.length || 0}`);
           // Notificar a todos
           const equipoQueResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
           room.jugadores.forEach(p => {
@@ -1022,6 +1017,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
 
           // Si hay bots en el otro equipo, hacer que respondan
           setTimeout(() => botResponderTruco(mesaId, io), 800);
+          botProcesandoTurno.delete(mesaId);
           return; // Esperar respuesta
         }
       }
@@ -1050,6 +1046,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
 
   if (!carta) {
     console.log(`[Bot] ${bot.nombre} no tiene cartas para jugar`);
+    botProcesandoTurno.delete(mesaId);
     return;
   }
 
@@ -1064,6 +1061,7 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
   const success = jugarCarta(mesa, bot.id, carta);
   if (!success) {
     console.log(`[Bot] ${bot.nombre} no pudo jugar carta`);
+    botProcesandoTurno.delete(mesaId);
     return;
   }
 
@@ -1077,6 +1075,9 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
       });
     }
   });
+
+  // Liberar guard - el bot ya jugó su carta, el resto es manejo asíncrono
+  botProcesandoTurno.delete(mesaId);
 
   // Manejar fin de mano/ronda (misma lógica que en jugar-carta del socket)
   if (mesa.manoTerminada) {
@@ -1140,20 +1141,38 @@ async function procesarTurnoBot(mesaId, io, esReintento = false) {
           }
         });
 
-        // Si es turno de un bot, procesar
-        setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+        // Si es turno de un bot, procesar; si es humano, iniciar AFK
+        setTimeout(() => {
+          const nextMesa = engines.get(mesaId);
+          const nextRoom = lobbyRooms.get(mesaId);
+          if (nextMesa && nextMesa.fase === 'jugando' && !nextMesa.gritoActivo && !nextMesa.envidoActivo) {
+            const nextPlayer = nextMesa.jugadores[nextMesa.turnoActual];
+            if (nextPlayer && nextPlayer.isBot) {
+              procesarTurnoBot(mesaId, io);
+            } else if (nextPlayer && nextRoom) {
+              iniciarAfkTimeout(io, nextRoom, nextMesa);
+            }
+          }
+        }, 500);
       }
     }, DELAY_MANO);
   } else {
-    // No terminó la mano, verificar si es turno de otro bot
+    // No terminó la mano, verificar si es turno de otro bot o iniciar AFK humano
     setTimeout(() => {
       const currentMesa = engines.get(mesaId);
+      const currentRoom = lobbyRooms.get(mesaId);
       if (currentMesa && currentMesa.fase === 'jugando' && !currentMesa.gritoActivo && !currentMesa.envidoActivo) {
-        procesarTurnoBot(mesaId, io);
+        const nextPlayer = currentMesa.jugadores[currentMesa.turnoActual];
+        if (nextPlayer && nextPlayer.isBot) {
+          procesarTurnoBot(mesaId, io);
+        } else if (nextPlayer && currentRoom) {
+          iniciarAfkTimeout(io, currentRoom, currentMesa);
+        }
       }
     }, 500);
   }
   } catch (err) {
+    botProcesandoTurno.delete(mesaId);
     console.error(`[Bot] Error en procesarTurnoBot para mesa ${mesaId}:`, err);
   }
 }
@@ -1198,7 +1217,24 @@ async function botResponderTruco(mesaId, io) {
 
     // Forzar respuesta "no quiero"
     const result = responderTruco(currentMesa, bot.id, false, null);
-    if (result.success && !result.parcial) {
+    if (result.success && result.parcial) {
+      // Respuesta parcial en timeout: notificar y agendar siguiente bot si hay
+      currentRoom.jugadores.forEach(p => {
+        if (!p.isBot) {
+          io.to(p.socketId).emit('truco-respuesta-parcial', {
+            jugadorId: bot.id,
+            acepta: false,
+            faltanResponder: result.faltanResponder,
+            estado: getEstadoParaJugador(currentMesa, p.socketId),
+          });
+        }
+      });
+      const botsActivos = activeBots.get(mesaId) || [];
+      const faltanBots = (result.faltanResponder || []).some(id => botsActivos.some(b => b.id === id));
+      if (faltanBots) {
+        setTimeout(() => botResponderTruco(mesaId, io), 800);
+      }
+    } else if (result.success && !result.parcial) {
       currentRoom.jugadores.forEach(p => {
         if (!p.isBot) {
           io.to(p.socketId).emit('truco-respondido', {
@@ -1275,7 +1311,7 @@ async function botResponderTruco(mesaId, io) {
       return;
     }
 
-    // Si es respuesta parcial (esperando más compañeros humanos)
+    // Si es respuesta parcial (esperando más compañeros)
     if (result.parcial) {
       room.jugadores.forEach(p => {
         if (!p.isBot) {
@@ -1287,7 +1323,11 @@ async function botResponderTruco(mesaId, io) {
           });
         }
       });
-      // Hay compañeros humanos que deben responder, esperar
+      // Si hay más bots en el mismo equipo que faltan responder, agendarlos
+      const faltanBots = (result.faltanResponder || []).some(id => bots.some(b => b.id === id));
+      if (faltanBots) {
+        setTimeout(() => botResponderTruco(mesaId, io), 800);
+      }
       return;
     }
 
@@ -1408,7 +1448,24 @@ async function botResponderEnvido(mesaId, io) {
 
     // Forzar respuesta "no quiero"
     const result = responderEnvido(currentMesa, bot.id, false);
-    if (result.success && !result.parcial) {
+    if (result.success && result.parcial) {
+      // Respuesta parcial en timeout: notificar y agendar siguiente bot si hay
+      currentRoom.jugadores.forEach(p => {
+        if (!p.isBot) {
+          io.to(p.socketId).emit('envido-respuesta-parcial', {
+            jugadorId: bot.id,
+            acepta: false,
+            faltanResponder: result.faltanResponder,
+            estado: getEstadoParaJugador(currentMesa, p.socketId),
+          });
+        }
+      });
+      const botsActivos = activeBots.get(mesaId) || [];
+      const faltanBots = (result.faltanResponder || []).some(id => botsActivos.some(b => b.id === id));
+      if (faltanBots) {
+        setTimeout(() => botResponderEnvido(mesaId, io), 800);
+      }
+    } else if (result.success && !result.parcial) {
       currentRoom.jugadores.forEach(p => {
         if (!p.isBot) {
           io.to(p.socketId).emit('envido-respondido', {
@@ -1419,8 +1476,14 @@ async function botResponderEnvido(mesaId, io) {
           });
         }
       });
-      // Continuar el juego
-      setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+      // Verificar truco pendiente
+      const mesaTimeout = engines.get(mesaId);
+      const roomTimeout = lobbyRooms.get(mesaId);
+      if (mesaTimeout && mesaTimeout.trucoPendiente && roomTimeout) {
+        restaurarTrucoPendiente(mesaTimeout, roomTimeout, io);
+      } else {
+        setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+      }
     }
   }, 6000);
 
@@ -1461,7 +1524,7 @@ async function botResponderEnvido(mesaId, io) {
       return;
     }
 
-    // Si es respuesta parcial (esperando más compañeros humanos)
+    // Si es respuesta parcial (esperando más compañeros)
     if (result.parcial) {
       room.jugadores.forEach(p => {
         if (!p.isBot) {
@@ -1473,7 +1536,11 @@ async function botResponderEnvido(mesaId, io) {
           });
         }
       });
-      // Hay compañeros humanos que deben responder, esperar
+      // Si hay más bots en el mismo equipo que faltan responder, agendarlos
+      const faltanBots = (result.faltanResponder || []).some(id => bots.some(b => b.id === id));
+      if (faltanBots) {
+        setTimeout(() => botResponderEnvido(mesaId, io), 800);
+      }
       return;
     }
 
@@ -1549,13 +1616,25 @@ async function botResponderEnvido(mesaId, io) {
           });
           broadcastLobby(io);
         } else {
-          // Continuar el juego
-          setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+          // Verificar truco pendiente ("envido está primero")
+          const mesaPost = engines.get(mesaId);
+          const roomPost = lobbyRooms.get(mesaId);
+          if (mesaPost && mesaPost.trucoPendiente && roomPost) {
+            restaurarTrucoPendiente(mesaPost, roomPost, io);
+          } else {
+            setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+          }
         }
       }, (declaraciones.length + 1) * 1000);
     } else {
-      // No quiso o no hay resultado automático - continuar el juego
-      setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+      // No quiso o no hay resultado automático - verificar truco pendiente
+      const mesaNoQ = engines.get(mesaId);
+      const roomNoQ = lobbyRooms.get(mesaId);
+      if (mesaNoQ && mesaNoQ.trucoPendiente && roomNoQ) {
+        restaurarTrucoPendiente(mesaNoQ, roomNoQ, io);
+      } else {
+        setTimeout(() => procesarTurnoBot(mesaId, io), 500);
+      }
     }
   } catch (err) {
     console.error(`[Bot] Error en botResponderEnvido: ${err}`);
@@ -2552,7 +2631,25 @@ function cantarEnvido(mesa, jugadorId, tipo, puntosCustom = null) {
   if (yaJugueSuCarta) return false;
 
   if (mesa.envidoYaCantado && !mesa.envidoActivo) return false;
-  if (mesa.gritoActivo) return false;
+
+  // "Envido está primero": en mano 1, si el otro equipo cantó truco,
+  // se puede cantar envido antes de responder al truco
+  if (mesa.gritoActivo) {
+    if (mesa.manoActual === 1 && !mesa.envidoYaCantado &&
+        jugador.equipo !== mesa.gritoActivo.equipoQueGrita &&
+        mesa.gritoActivo.tipo === 'truco') {
+      // Suspender el truco mientras se resuelve el envido
+      mesa.trucoPendiente = { ...mesa.gritoActivo };
+      mesa.gritoActivo = null;
+      mesa.respuestasTruco = {};
+      mesa.esperandoRespuestasGrupales = false;
+      mesa.tipoRespuestaGrupal = null;
+      console.log(`[Envido primero] Truco suspendido por envido de ${jugador.nombre}`);
+    } else {
+      return false;
+    }
+  }
+
   // Si ya se cantó flor, no se puede cantar envido
   if (mesa.florYaCantada) return false;
 
@@ -3570,6 +3667,51 @@ function responderEnvido(mesa, jugadorId, acepta) {
   }
 }
 
+// Restaurar truco suspendido después de resolver envido ("envido está primero")
+function restaurarTrucoPendiente(mesa, room, io) {
+  if (!mesa.trucoPendiente) return;
+
+  // Si el juego terminó por envido, no restaurar
+  if (mesa.estado === 'terminado' || mesa.winnerJuego !== null) {
+    mesa.trucoPendiente = null;
+    return;
+  }
+
+  // Restaurar gritoActivo
+  mesa.gritoActivo = { ...mesa.trucoPendiente };
+  mesa.trucoPendiente = null;
+
+  const equipoQueResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
+  const mesaId = room.mesaId;
+
+  console.log(`[Envido primero] Restaurando truco pendiente en mesa ${mesaId}`);
+
+  // Emitir truco-cantado con delay para que la UI procese el resultado del envido primero
+  setTimeout(() => {
+    const currentMesa = engines.get(mesaId);
+    if (!currentMesa || !currentMesa.gritoActivo) return;
+
+    room.jugadores.forEach(p => {
+      if (!p.isBot) {
+        const pJugador = currentMesa.jugadores.find(j => j.id === p.socketId);
+        const debeResponder = pJugador &&
+          pJugador.equipo === equipoQueResponde &&
+          pJugador.participaRonda !== false;
+        io.to(p.socketId).emit('truco-cantado', {
+          jugadorId: currentMesa.gritoActivo.jugadorQueGrita,
+          tipo: currentMesa.gritoActivo.tipo,
+          audioCustomUrl: null,
+          debeResponder,
+          estado: getEstadoParaJugador(currentMesa, p.socketId),
+        });
+      }
+    });
+
+    // Si hay bots en el equipo que responde, hacerlos responder
+    setTimeout(() => botResponderTruco(mesaId, io), 1500);
+  }, 1000);
+}
+
 // Resolver envido automáticamente generando declaraciones en orden correcto
 // Flujo: Los jugadores declaran en orden de rotación (hacia la derecha), empezando por el mano.
 // Cada jugador solo declara si puede superar el mejor puntaje actual, si no dice "son buenas".
@@ -4389,7 +4531,7 @@ app.prepare().then(async () => {
       // Verificar si es turno de un bot y no está jugando
       if (mesa.fase === 'jugando' && !mesa.gritoActivo && !mesa.envidoActivo && !mesa.esperandoRespuestaFlor) {
         const jugadorActual = mesa.jugadores[mesa.turnoActual];
-        if (jugadorActual && jugadorActual.isBot) {
+        if (jugadorActual && jugadorActual.isBot && !botProcesandoTurno.has(mesaId)) {
           const lastAction = lastBotAction.get(mesaId) || 0;
           const tiempoSinAccion = Date.now() - lastAction;
 
@@ -5459,6 +5601,7 @@ app.prepare().then(async () => {
 
         // Eliminar la partida
         limpiarAfkTimeout(mesaId);
+        botProcesandoTurno.delete(mesaId);
         lobbyRooms.delete(mesaId);
         engines.delete(mesaId);
 
@@ -5470,6 +5613,71 @@ app.prepare().then(async () => {
       } catch (err) {
         console.error('Error deleting game:', err);
         callback(false, 'Error al eliminar la partida');
+      }
+    });
+
+    // === SALIR DE PARTIDA (no-anfitrión) ===
+    socket.on('salir-partida', async (data, callback) => {
+      console.log(`[Socket.IO] ${socket.id} salir-partida:`, data);
+      try {
+        const { mesaId } = data;
+        const room = lobbyRooms.get(mesaId);
+
+        if (!room) {
+          callback({ success: false, error: 'Partida no encontrada' });
+          return;
+        }
+
+        if (room.estado !== 'esperando') {
+          callback({ success: false, error: 'No se puede salir de una partida en curso' });
+          return;
+        }
+
+        // No permitir que el creador use este evento (debe usar eliminar-partida)
+        if (room.creadorSocketId === socket.id) {
+          callback({ success: false, error: 'El creador debe cancelar la partida, no salir' });
+          return;
+        }
+
+        // Buscar al jugador en la room
+        const idx = room.jugadores.findIndex(j => j.socketId === socket.id);
+        if (idx === -1) {
+          callback({ success: false, error: 'No estás en esta partida' });
+          return;
+        }
+
+        const jugadorNombre = room.jugadores[idx].nombre;
+
+        // Remover de room.jugadores
+        room.jugadores.splice(idx, 1);
+
+        // Remover de mesa.jugadores y equipos
+        const mesa = engines.get(mesaId);
+        if (mesa) {
+          mesa.jugadores = mesa.jugadores.filter(j => j.id !== socket.id);
+          mesa.equipos.forEach(eq => {
+            eq.jugadores = eq.jugadores.filter(j => j.id !== socket.id);
+          });
+        }
+
+        // Mover socket de vuelta al lobby
+        socket.leave(mesaId);
+        socket.join('lobby');
+
+        // Notificar a los jugadores restantes
+        if (mesa) {
+          room.jugadores.forEach(p => {
+            io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(mesa, p.socketId));
+          });
+        }
+
+        broadcastLobby(io);
+
+        console.log(`[Socket.IO] ${jugadorNombre} salió de partida ${mesaId}`);
+        callback({ success: true });
+      } catch (err) {
+        console.error('Error salir-partida:', err);
+        callback({ success: false, error: 'Error interno' });
       }
     });
 
@@ -6223,6 +6431,7 @@ app.prepare().then(async () => {
         if (!success) { callback(false, 'No se puede cantar'); return; }
 
         incrementarStatJugador(mesa, socket.id, 'trucosCantados');
+        console.log(`[Envido primero] Humano cantó truco. manoActual=${mesa.manoActual}, envidoYaCantado=${mesa.envidoYaCantado}, florYaCantada=${mesa.florYaCantada}, jugadoresConFlor=${mesa.jugadoresConFlor?.length || 0}`);
 
         const audioTipo = tipo === 'vale_cuatro' ? 'vale4' : tipo;
         const equipoQueResponde = mesa.gritoActivo.equipoQueGrita === 1 ? 2 : 1;
@@ -6655,13 +6864,19 @@ app.prepare().then(async () => {
               });
               broadcastLobby(io);
             } else {
-              // Continuar el juego - si es turno de un bot, procesar
-              setTimeout(() => {
-                const currentMesa = engines.get(room.mesaId);
-                if (currentMesa && currentMesa.fase === 'jugando' && !currentMesa.gritoActivo && !currentMesa.envidoActivo) {
-                  procesarTurnoBot(room.mesaId, io);
-                }
-              }, 500);
+              // Verificar truco pendiente ("envido está primero")
+              const currentMesaPost = engines.get(room.mesaId);
+              if (currentMesaPost && currentMesaPost.trucoPendiente) {
+                restaurarTrucoPendiente(currentMesaPost, room, io);
+              } else {
+                // Continuar el juego - si es turno de un bot, procesar
+                setTimeout(() => {
+                  const currentMesa = engines.get(room.mesaId);
+                  if (currentMesa && currentMesa.fase === 'jugando' && !currentMesa.gritoActivo && !currentMesa.envidoActivo) {
+                    procesarTurnoBot(room.mesaId, io);
+                  }
+                }, 500);
+              }
             }
           }, (declaraciones.length + 1) * 1500);
         } else if (!result.acepta) {
@@ -6676,13 +6891,19 @@ app.prepare().then(async () => {
             });
             broadcastLobby(io);
           } else {
-            // Continuar el juego - si es turno de un bot, procesar
-            setTimeout(() => {
-              const currentMesa = engines.get(room.mesaId);
-              if (currentMesa && currentMesa.fase === 'jugando' && !currentMesa.gritoActivo && !currentMesa.envidoActivo) {
-                procesarTurnoBot(room.mesaId, io);
-              }
-            }, 500);
+            // Verificar truco pendiente ("envido está primero")
+            const mesaNoQuiso = engines.get(room.mesaId);
+            if (mesaNoQuiso && mesaNoQuiso.trucoPendiente) {
+              restaurarTrucoPendiente(mesaNoQuiso, room, io);
+            } else {
+              // Continuar el juego - si es turno de un bot, procesar
+              setTimeout(() => {
+                const currentMesa = engines.get(room.mesaId);
+                if (currentMesa && currentMesa.fase === 'jugando' && !currentMesa.gritoActivo && !currentMesa.envidoActivo) {
+                  procesarTurnoBot(room.mesaId, io);
+                }
+              }, 500);
+            }
           }
         }
 
@@ -6724,6 +6945,9 @@ app.prepare().then(async () => {
               });
             });
             broadcastLobby(io);
+          } else if (mesa.trucoPendiente) {
+            // Restaurar truco pendiente después de envido manual
+            restaurarTrucoPendiente(mesa, room, io);
           }
         } else {
           // More declarations needed - notify about the declaration
@@ -7224,11 +7448,17 @@ app.prepare().then(async () => {
                   }
                   // === FIN FLOR POR TURNO AL INICIAR RONDA ===
 
-                  // Procesar turno del bot si es el primero
+                  // Procesar turno del bot si es el primero, o iniciar AFK si es humano
                   setTimeout(() => {
                     const botMesa = engines.get(mesaId);
+                    const botRoom = lobbyRooms.get(mesaId);
                     if (botMesa && botMesa.fase === 'jugando' && !botMesa.gritoActivo && !botMesa.envidoActivo) {
-                      procesarTurnoBot(mesaId, io);
+                      const firstPlayer = botMesa.jugadores[botMesa.turnoActual];
+                      if (firstPlayer && firstPlayer.isBot) {
+                        procesarTurnoBot(mesaId, io);
+                      } else if (firstPlayer && botRoom) {
+                        iniciarAfkTimeout(io, botRoom, botMesa);
+                      }
                     }
                   }, 2000);
                 }

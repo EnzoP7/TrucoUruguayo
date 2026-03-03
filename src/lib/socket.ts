@@ -184,6 +184,13 @@ class SocketService {
     });
   }
 
+  async salirPartida(mesaId: string): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('salir-partida', { mesaId }, (res: { success: boolean }) => resolve(res.success));
+    });
+  }
+
   // === JUEGO ===
 
   async iniciarPartida(): Promise<boolean> {

@@ -11,6 +11,7 @@ export interface ClientToServerEvents {
   'iniciar-partida': (callback: (success: boolean, message?: string) => void) => void;
   'reconectar-partida': (data: { mesaId: string; nombre: string; userId?: number }, callback: (success: boolean, message?: string) => void) => void;
   'eliminar-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
+  'salir-partida': (data: { mesaId: string }, callback: (res: { success: boolean; error?: string }) => void) => void;
 
   // Juego
   'jugar-carta': (data: { carta: Carta }, callback: (success: boolean, message?: string) => void) => void;

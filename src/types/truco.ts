@@ -83,6 +83,7 @@ export interface Mesa {
   posicionCorte: number | null; // posición donde se cortó el mazo
   // Gritos (Truco/Retruco/Vale4)
   gritoActivo: GritoActivo | null;
+  trucoPendiente: GritoActivo | null; // truco suspendido mientras se resuelve envido ("envido está primero")
   nivelGritoAceptado: GritoTipo | null; // último grito aceptado
   equipoQueCantoUltimo: number | null; // equipo que cantó el último grito aceptado (la palabra la tiene el contrario)
   puntosEnJuego: number; // puntos que vale ganar esta ronda (default 1)

@@ -1871,7 +1871,16 @@ function GamePage() {
     );
     if (yaJugueMiCarta) return false;
     if (mesa.envidoYaCantado && !mesa.envidoActivo) return false;
-    if (mesa.gritoActivo) return false;
+    // "Envido está primero": permitir envido en mano 1 cuando el otro equipo cantó truco
+    if (mesa.gritoActivo) {
+      if (mesa.manoActual === 1 && !mesa.envidoYaCantado &&
+          mesa.gritoActivo.equipoQueGrita !== miEquipo &&
+          mesa.gritoActivo.tipo === "truco") {
+        // Permitido - envido está primero
+      } else {
+        return false;
+      }
+    }
     if (mesa.envidoActivo && mesa.envidoActivo.equipoQueCanta === miEquipo)
       return false;
     // No se puede cantar si hay flor pendiente de respuesta
@@ -2753,10 +2762,35 @@ function GamePage() {
 
             {mesa && (
               <>
-                <p className="text-gold-300/60 text-center mb-6">
+                <p className="text-gold-300/60 text-center mb-4">
                   {mesa.jugadores.length} jugador
                   {mesa.jugadores.length !== 1 ? "es" : ""} en la mesa
                 </p>
+
+                {/* Botón salir/cancelar - siempre visible arriba */}
+                <div className="mb-6 flex justify-center">
+                  {esAnfitrion() ? (
+                    <button
+                      onClick={handleCancelarPartida}
+                      disabled={loading}
+                      className="px-6 py-2 rounded-xl text-sm bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-500/30 transition-all disabled:opacity-40"
+                    >
+                      Cancelar Partida
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        if (mesaId) {
+                          await socketService.salirPartida(mesaId);
+                          router.push('/lobby');
+                        }
+                      }}
+                      className="px-6 py-2 rounded-xl text-sm bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-500/30 transition-all"
+                    >
+                      Salir de la partida
+                    </button>
+                  )}
+                </div>
 
                 {/* Point Limit Selector */}
                 {esAnfitrion() && (
@@ -3363,13 +3397,6 @@ function GamePage() {
                       {loading
                         ? "Iniciando..."
                         : `Iniciar Partida (${mesa.jugadores.length} jugadores)`}
-                    </button>
-                    <button
-                      onClick={handleCancelarPartida}
-                      disabled={loading}
-                      className="w-full py-3 rounded-xl text-sm bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-500/30 transition-all disabled:opacity-40"
-                    >
-                      Cancelar Partida
                     </button>
                   </div>
                 ) : (
@@ -4838,6 +4865,34 @@ function GamePage() {
                     </button>
                   )}
                 </div>
+                {/* "Envido está primero" - opciones de envido cuando truco es en mano 1 */}
+                {mesa.manoActual === 1 && !mesa.envidoYaCantado && !mesa.envidoActivo &&
+                 mesa.gritoActivo.tipo === "truco" && (
+                  <div className="flex justify-center gap-2 flex-wrap mt-2 pt-2 border-t border-gold-600/20">
+                    <span className="w-full text-xs text-purple-300/70 text-center mb-1">Envido está primero:</span>
+                    <button
+                      onClick={() => handleCantarEnvido("envido")}
+                      disabled={loading}
+                      className="btn-envido text-white text-xs sm:text-sm"
+                    >
+                      ENVIDO
+                    </button>
+                    <button
+                      onClick={() => handleCantarEnvido("real_envido")}
+                      disabled={loading}
+                      className="btn-envido text-white text-xs sm:text-sm"
+                    >
+                      REAL ENVIDO
+                    </button>
+                    <button
+                      onClick={() => handleCantarEnvido("falta_envido")}
+                      disabled={loading}
+                      className="btn-envido text-white text-xs sm:text-sm"
+                    >
+                      FALTA ENVIDO
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
