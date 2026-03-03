@@ -512,29 +512,37 @@ export function useGameSocket(
           });
         });
 
-        // Tirar Reyes listener
+        // Tirar Reyes listener (rondas)
         socketService.onTirarReyesResultado((data) => {
           if (!mounted) return;
-          const anim = data.animacion;
-          setReyesAnimacion(anim);
+          const rondas = data.rondas;
+          setReyesAnimacion(rondas);
           setReyesAnimStep(0);
           setReyesAnimDone(false);
-          anim.forEach((_: unknown, i: number) => {
-            setTimeout(() => { if (mounted) setReyesAnimStep(i + 1); }, (i + 1) * 700);
-          });
-          const revealTime = (anim.length + 1) * 700 + 800;
+          const numRondas = rondas.length;
+          const DEAL_TIME = 150;
+          const FLIP_TIME = 250;
+          let elapsed = 0;
+          for (let r = 0; r < numRondas; r++) {
+            const dealStep = r * 2;
+            const flipStep = r * 2 + 1;
+            setTimeout(() => { if (mounted) setReyesAnimStep(dealStep + 1); }, elapsed);
+            elapsed += DEAL_TIME;
+            setTimeout(() => { if (mounted) setReyesAnimStep(flipStep + 1); }, elapsed);
+            elapsed += FLIP_TIME;
+          }
           setTimeout(() => {
             if (!mounted) return;
             setReyesAnimDone(true);
             setMesa(data.estado);
             if (data.estado.estado === "esperando") setEsperandoInicio(true);
-          }, revealTime);
+          }, elapsed);
           setTimeout(() => {
             if (!mounted) return;
             setReyesAnimacion(null);
             setReyesAnimStep(0);
             setReyesAnimDone(false);
-          }, revealTime + 4000);
+          }, elapsed + 4000);
         });
 
         // Echar los Perros listeners

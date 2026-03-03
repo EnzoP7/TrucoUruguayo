@@ -907,6 +907,7 @@ function GamePage() {
     ganador: number;
     puntosGanados: number;
   } | null>(null);
+  // Tirar Reyes: rondas[i] = array de cartas de la ronda i (una por jugador activo)
   const [reyesAnimacion, setReyesAnimacion] = useState<
     | {
         jugadorId: string;
@@ -914,9 +915,10 @@ function GamePage() {
         carta: { palo: string; valor: number };
         esRey: boolean;
         equipoAsignado: number | null;
-      }[]
+      }[][]
     | null
   >(null);
+  // reyesAnimStep: 0,2,4...=deal face-down ronda N/2 | 1,3,5...=flip ronda (N-1)/2
   const [reyesAnimStep, setReyesAnimStep] = useState(0);
   const [reyesAnimDone, setReyesAnimDone] = useState(false);
   const [rondaBanner, setRondaBanner] = useState<{
@@ -1545,33 +1547,46 @@ function GamePage() {
         });
 
         // Tirar Reyes listener
-        // Server sends exactly ONE card per player (animacion.length === numJugadores)
+        // Server sends rondas: array of rounds, each round has one card per active player.
+        // Animation: for each round → deal face-down → flip → pause → next round
+        // reyesAnimStep: even=deal, odd=flip. Step 0=deal round 0, step 1=flip round 0, etc.
         socketService.onTirarReyesResultado((data) => {
           if (!mounted) return;
-          const anim = data.animacion; // length === numJugadores
-          setReyesAnimacion(anim);
+          const rondas = data.rondas; // array of arrays
+          setReyesAnimacion(rondas);
           setReyesAnimStep(0);
           setReyesAnimDone(false);
 
-          // Step 1: Deal cards one by one face-down (800ms between each)
-          anim.forEach((_: unknown, i: number) => {
-            setTimeout(() => { if (mounted) setReyesAnimStep(i + 1); }, (i + 1) * 800);
-          });
-          // Step 2: After all placed, flip to reveal (600ms pause after last card)
-          const flipTime = (anim.length + 1) * 800;
+          const numRondas = rondas.length;
+          const DEAL_TIME = 150;   // boca abajo brevísimo
+          const FLIP_TIME = 250;   // ver carta girada
+          let elapsed = 0;
+
+          for (let r = 0; r < numRondas; r++) {
+            const dealStep = r * 2;
+            const flipStep = r * 2 + 1;
+            // Deal phase (cards appear face-down)
+            setTimeout(() => { if (mounted) setReyesAnimStep(dealStep + 1); }, elapsed);
+            elapsed += DEAL_TIME;
+            // Flip phase (cards turn face-up)
+            setTimeout(() => { if (mounted) setReyesAnimStep(flipStep + 1); }, elapsed);
+            elapsed += FLIP_TIME;
+          }
+
+          // All rounds done - show final result
           setTimeout(() => {
             if (!mounted) return;
             setReyesAnimDone(true);
             setMesa(data.estado);
             if (data.estado.estado === "esperando") setEsperandoInicio(true);
-          }, flipTime);
-          // Step 3: Clear overlay after showing results
+          }, elapsed);
+          // Clear overlay
           setTimeout(() => {
             if (!mounted) return;
             setReyesAnimacion(null);
             setReyesAnimStep(0);
             setReyesAnimDone(false);
-          }, flipTime + 4500);
+          }, elapsed + 4000);
         });
 
         // Echar los Perros listeners
@@ -2539,15 +2554,47 @@ function GamePage() {
         {/* Tirar Reyes Animation Overlay */}
         {reyesAnimacion && mesa && (() => {
           const paloArchivo: Record<string, string> = { oro: "oros", copa: "copas", espada: "espadas", basto: "bastos" };
-          // reyesAnimacion tiene EXACTAMENTE una entrada por jugador (en orden de mesa.jugadores)
-          // reyesAnimStep va de 0 a reyesAnimacion.length
-          // reyesAnimDone = true cuando todas las cartas se dan vuelta
+          // reyesAnimacion = array de rondas. Cada ronda = array de cartas (una por jugador activo).
+          // reyesAnimStep: step par=deal boca abajo, step impar=flip dada vuelta.
+          //   Ronda actual = Math.floor((step-1) / 2), fase = step par ? 'deal' : 'flip'
 
-          // Posiciones fijas: 4 para 2v2, 6 para 3v3
-          const n = reyesAnimacion.length;
-          const positions = n <= 4
+          const numJugadores = mesa.jugadores.length;
+          const positions = numJugadores <= 4
             ? [{ top: 18, left: 25 }, { top: 18, left: 75 }, { top: 72, left: 75 }, { top: 72, left: 25 }]
             : [{ top: 10, left: 50 }, { top: 30, left: 85 }, { top: 65, left: 85 }, { top: 82, left: 50 }, { top: 65, left: 15 }, { top: 30, left: 15 }];
+
+          // Compute current state: which round, deal or flip phase
+          const currentRound = reyesAnimStep === 0 ? -1 : Math.floor((reyesAnimStep - 1) / 2);
+          const isFlipPhase = reyesAnimStep > 0 && reyesAnimStep % 2 === 0;
+
+          // Build per-player state: latest card and whether it's been revealed
+          // Players who got king in previous rounds keep that king (locked + revealed)
+          const playerState: Record<string, {
+            carta: { palo: string; valor: number };
+            esRey: boolean;
+            equipoAsignado: number | null;
+            revealed: boolean; // card is face-up
+            isNewThisRound: boolean; // just arrived this round (for bounce animation)
+          }> = {};
+
+          for (let r = 0; r <= currentRound && r < reyesAnimacion.length; r++) {
+            const ronda = reyesAnimacion[r];
+            const isThisRound = r === currentRound;
+            const roundRevealed = r < currentRound || (isThisRound && isFlipPhase);
+
+            for (const entry of ronda) {
+              // If player already has a king from a previous round, keep it
+              if (playerState[entry.jugadorId]?.esRey) continue;
+
+              playerState[entry.jugadorId] = {
+                carta: entry.carta,
+                esRey: entry.esRey,
+                equipoAsignado: entry.equipoAsignado,
+                revealed: roundRevealed,
+                isNewThisRound: isThisRound,
+              };
+            }
+          }
 
           return (
             <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50">
@@ -2582,67 +2629,79 @@ function GamePage() {
                   ))}
                 </div>
 
-                {/* Exactamente N slots - uno por jugador */}
-                {reyesAnimacion.map((entry, idx) => {
+                {/* N slots fijos - uno por jugador */}
+                {mesa.jugadores.map((jugador, idx) => {
                   const p = positions[idx] || positions[0];
-                  const dealt = idx < reyesAnimStep;       // carta ya llegó a la posición
-                  const justArrived = idx === reyesAnimStep - 1 && !reyesAnimDone; // la que acaba de llegar
-                  const revealed = reyesAnimDone;           // todas se dan vuelta
-                  const isKing = entry.esRey;
-                  const eq = entry.equipoAsignado;
+                  const ps = playerState[jugador.id];
+                  const hasCarta = !!ps;
+                  const isKing = ps?.esRey || false;
+                  const isRevealed = ps?.revealed || false;
+                  const isNew = ps?.isNewThisRound || false;
+                  const eq = ps?.equipoAsignado;
 
                   return (
-                    <div key={entry.jugadorId}
+                    <div key={jugador.id}
                       className="absolute flex flex-col items-center"
                       style={{
                         top: `${p.top}%`, left: `${p.left}%`,
                         transform: 'translate(-50%, -50%)',
-                        zIndex: dealt ? 20 + idx : 5,
+                        zIndex: hasCarta ? 20 + idx : 5,
                       }}>
 
                       {/* Nombre del jugador */}
                       <div className={`mb-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-colors duration-500 ${
-                        revealed && isKing
-                          ? eq === 1 ? 'bg-celeste-600/80 text-white' : 'bg-red-600/80 text-white'
+                        isRevealed && isKing
+                          ? 'bg-celeste-600/80 text-white shadow-lg shadow-celeste-500/30'
                           : 'bg-black/60 text-white/80'
                       }`}>
-                        {revealed && isKing && '👑 '}
-                        {entry.jugadorNombre.split(' ')[0]}
-                        {revealed && isKing && eq != null && <span className="ml-1 opacity-70 text-[9px]">Eq.{eq}</span>}
+                        {isRevealed && isKing && '👑 '}
+                        {jugador.nombre.split(' ')[0]}
+                        {isRevealed && isKing && eq != null && <span className="ml-1 opacity-70 text-[9px]">Eq.{eq}</span>}
                       </div>
 
-                      {/* Zona de carta - tamaño fijo */}
-                      <div className="relative" style={{ width: 56, height: 80 }}>
-                        {dealt && <div className="absolute inset-x-1 bottom-0 h-3 bg-black/30 rounded-full blur-md" />}
+                      {/* Zona de carta con flip 3D */}
+                      <div className="relative" style={{ width: 56, height: 80, perspective: 400 }}>
+                        {hasCarta && <div className="absolute inset-x-1 bottom-0 h-3 bg-black/30 rounded-full blur-md" />}
 
-                        {!dealt ? (
+                        {!hasCarta ? (
                           /* Slot vacío */
                           <div className="w-full h-full rounded-md border-2 border-dashed border-white/15 bg-white/5 flex items-center justify-center">
                             <span className="text-white/20 text-sm">?</span>
                           </div>
-                        ) : !revealed ? (
-                          /* Carta boca abajo - ya llegó a la posición */
-                          <div className="w-full h-full rounded-md bg-gradient-to-br from-blue-800 to-blue-950 border border-blue-600/40 shadow-lg"
-                            style={justArrived ? { animation: 'reyesCardArrive 0.5s ease-out forwards' } : undefined}>
-                            <div className="absolute inset-1.5 rounded-sm border border-gold-600/20 flex items-center justify-center">
-                              <span className="text-gold-500/30 text-lg">♠</span>
-                            </div>
-                          </div>
                         ) : (
-                          /* Carta dada vuelta - revelada */
-                          <div className={`w-full h-full rounded-md overflow-hidden shadow-lg transition-all duration-300 ${
-                            isKing
-                              ? eq === 1 ? 'ring-3 ring-celeste-400 shadow-celeste-400/40' : 'ring-3 ring-red-400 shadow-red-400/40'
-                              : 'ring-1 ring-white/20'
-                          }`}>
-                            <Image
-                              src={`/Cartasimg/${entry.carta.valor.toString().padStart(2, "0")}-${paloArchivo[entry.carta.palo] || entry.carta.palo}.png`}
-                              alt={`${entry.carta.valor} de ${entry.carta.palo}`}
-                              fill sizes="56px"
-                              className="object-cover"
-                            />
-                            {isKing && (
-                              <div className="absolute -top-2 -right-1 text-lg animate-bounce drop-shadow-md">👑</div>
+                          /* Carta con flip 3D real */
+                          <div className="w-full h-full"
+                            style={isNew && !isRevealed ? { animation: 'reyesCardArrive 0.2s ease-out forwards' } : undefined}
+                            key={`card-${jugador.id}-${currentRound}`}>
+                            <div className="w-full h-full relative"
+                              style={{
+                                transformStyle: 'preserve-3d',
+                                transition: 'transform 0.25s ease-in-out',
+                                transform: isRevealed ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                              }}>
+                              {/* Dorso */}
+                              <div className="absolute inset-0 rounded-md bg-gradient-to-br from-blue-800 to-blue-950 border border-blue-600/40 shadow-lg"
+                                style={{ backfaceVisibility: 'hidden' }}>
+                                <div className="absolute inset-1.5 rounded-sm border border-gold-600/20 flex items-center justify-center">
+                                  <span className="text-gold-500/30 text-lg">♠</span>
+                                </div>
+                              </div>
+                              {/* Frente */}
+                              <div className={`absolute inset-0 rounded-md overflow-hidden shadow-lg ${
+                                isKing ? 'ring-3 ring-celeste-400 shadow-celeste-400/40' : 'ring-1 ring-white/20'
+                              }`}
+                                style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                                <Image
+                                  src={`/Cartasimg/${ps.carta.valor.toString().padStart(2, "0")}-${paloArchivo[ps.carta.palo] || ps.carta.palo}.png`}
+                                  alt={`${ps.carta.valor} de ${ps.carta.palo}`}
+                                  fill sizes="56px"
+                                  className="object-cover"
+                                />
+                              </div>
+                            </div>
+                            {/* Corona sobre la carta */}
+                            {isRevealed && isKing && (
+                              <div className="absolute -top-2 -right-1 text-lg animate-bounce drop-shadow-md z-10">👑</div>
                             )}
                           </div>
                         )}
@@ -2650,6 +2709,15 @@ function GamePage() {
                     </div>
                   );
                 })}
+
+                {/* Indicador de ronda (si hay más de 1) */}
+                {reyesAnimacion.length > 1 && currentRound >= 0 && !reyesAnimDone && (
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
+                    <div className="bg-black/60 px-3 py-1 rounded-full text-gold-400/80 text-xs font-bold">
+                      Ronda {currentRound + 1}
+                    </div>
+                  </div>
+                )}
 
                 {/* Resultado final */}
                 {reyesAnimDone && (

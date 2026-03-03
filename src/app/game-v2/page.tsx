@@ -51,7 +51,7 @@ function GamePage() {
     envidoDeclaraciones, envidoResultado,
     dealingCards, isDealing,
     florResultado,
-    reyesAnimacion, reyesAnimStep, reyesAnimDone,
+    reyesAnimacion, reyesAnimDone,
     rondaBanner,
     mostrarEnvidoCargado, setMostrarEnvidoCargado,
     puntosEnvidoCargado, setPuntosEnvidoCargado,
@@ -156,7 +156,17 @@ function GamePage() {
     return (
       <div className="min-h-screen bg-table-wood p-4 sm:p-8">
         {/* Tirar Reyes Animation Overlay */}
-        {reyesAnimacion && (
+        {reyesAnimacion && (() => {
+          // Flatten rounds into a single array of final cards (one per player, keep king if found)
+          const flatCards: Record<string, { jugadorId: string; jugadorNombre: string; carta: { palo: string; valor: number }; esRey: boolean; equipoAsignado: number | null; equipo: number }> = {};
+          reyesAnimacion.forEach(ronda => {
+            ronda.forEach(entry => {
+              if (flatCards[entry.jugadorId]?.esRey) return;
+              flatCards[entry.jugadorId] = { ...entry, equipo: entry.esRey ? 1 : 2 };
+            });
+          });
+          const items = Object.values(flatCards);
+          return (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Tirando Reyes">
             <div className="glass rounded-2xl p-6 sm:p-8 max-w-2xl w-full border border-gold-600/40 animate-slide-up">
               <h2 className="text-2xl sm:text-3xl font-bold text-gold-400 text-center mb-2">
@@ -167,8 +177,8 @@ function GamePage() {
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-                {reyesAnimacion.map((item, i) => {
-                  const revealed = reyesAnimStep > i;
+                {items.map((item) => {
+                  const revealed = reyesAnimDone;
                   const paloArch: Record<string, string> = {
                     oro: "oros", copa: "copas", espada: "espadas", basto: "bastos",
                   };
@@ -246,13 +256,13 @@ function GamePage() {
                     <div>
                       <span className="text-celeste-400 font-medium text-sm">Equipo 1: </span>
                       <span className="text-white text-sm">
-                        {reyesAnimacion.filter((a) => a.equipo === 1).map((a) => a.jugadorNombre).join(", ")}
+                        {items.filter((a) => a.equipo === 1).map((a) => a.jugadorNombre).join(", ")}
                       </span>
                     </div>
                     <div>
                       <span className="text-red-400 font-medium text-sm">Equipo 2: </span>
                       <span className="text-white text-sm">
-                        {reyesAnimacion.filter((a) => a.equipo === 2).map((a) => a.jugadorNombre).join(", ")}
+                        {items.filter((a) => a.equipo === 2).map((a) => a.jugadorNombre).join(", ")}
                       </span>
                     </div>
                   </div>
@@ -260,7 +270,8 @@ function GamePage() {
               )}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         <div className="max-w-2xl mx-auto">
           <div className="glass rounded-2xl p-6 sm:p-8 border border-gold-800/30">

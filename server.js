@@ -7344,60 +7344,46 @@ app.prepare().then(async () => {
         // Cuántos reyes necesitamos para armar el equipo 1
         const reyesNecesarios = Math.ceil(numJugadores / 2);
 
-        // Tirar cartas round-robin internamente hasta encontrar los reyes necesarios.
-        // Guardamos solo la ÚLTIMA carta de cada jugador para enviar al cliente.
-        const cartaFinal = {}; // jugadorId -> { carta, esRey }
+        // Repartir cartas por RONDAS. Cada ronda: una carta a cada jugador que no tiene rey.
+        // Se sigue hasta encontrar reyesNecesarios reyes.
+        // Enviamos TODAS las rondas al cliente para que las anime una por una.
+        const rondas = []; // array de rondas, cada ronda = array de cartas
         const jugadoresConRey = new Set();
         let reyesEncontrados = 0;
         let indiceCarta = 0;
-        let turnoJugador = 0;
 
         while (reyesEncontrados < reyesNecesarios && indiceCarta < mazoCompleto.length) {
-          const jugadorActual = mesa.jugadores[turnoJugador % numJugadores];
+          const ronda = [];
+          // Repartir una carta a cada jugador que no tiene rey todavía
+          for (let i = 0; i < numJugadores; i++) {
+            const jugador = mesa.jugadores[i];
+            if (jugadoresConRey.has(jugador.id)) continue;
+            if (indiceCarta >= mazoCompleto.length) break;
 
-          if (jugadoresConRey.has(jugadorActual.id)) {
-            turnoJugador++;
-            continue;
-          }
+            const carta = mazoCompleto[indiceCarta++];
+            const esRey = carta.valor === 12;
 
-          const carta = mazoCompleto[indiceCarta];
-          indiceCarta++;
-          const esRey = carta.valor === 12;
+            ronda.push({
+              jugadorId: jugador.id,
+              jugadorNombre: jugador.nombre,
+              carta,
+              esRey,
+              equipoAsignado: esRey ? 1 : null,
+            });
 
-          if (esRey) {
-            reyesEncontrados++;
-            cartaFinal[jugadorActual.id] = { carta, esRey: true };
-            jugadoresConRey.add(jugadorActual.id);
-          } else {
-            // Solo guardar si no tiene rey ya
-            if (!cartaFinal[jugadorActual.id] || !cartaFinal[jugadorActual.id].esRey) {
-              cartaFinal[jugadorActual.id] = { carta, esRey: false };
+            if (esRey) {
+              reyesEncontrados++;
+              jugadoresConRey.add(jugador.id);
+              if (reyesEncontrados >= reyesNecesarios) break;
             }
           }
-
-          turnoJugador++;
+          if (ronda.length > 0) rondas.push(ronda);
         }
-
-        // Construir animacion: EXACTAMENTE una entrada por jugador, en orden de mesa
-        const animacion = mesa.jugadores.map(j => ({
-          jugadorId: j.id,
-          jugadorNombre: j.nombre,
-          carta: cartaFinal[j.id]?.carta || mazoCompleto[indiceCarta] || mazoCompleto[0],
-          esRey: cartaFinal[j.id]?.esRey || false,
-          equipoAsignado: jugadoresConRey.has(j.id) ? 1 : 2,
-        }));
 
         // Asignar equipos: los que sacaron rey → equipo 1, el resto → equipo 2
         mesa.jugadores.forEach(j => {
           j.equipo = jugadoresConRey.has(j.id) ? 1 : 2;
         });
-
-        const equipo1Jugadores = mesa.jugadores.filter(j => j.equipo === 1);
-        const equipo2Jugadores = mesa.jugadores.filter(j => j.equipo === 2);
-
-        // Actually assign teams
-        equipo1Jugadores.forEach(j => { j.equipo = 1; });
-        equipo2Jugadores.forEach(j => { j.equipo = 2; });
         mesa.equipos[0].jugadores = mesa.jugadores.filter(j => j.equipo === 1);
         mesa.equipos[1].jugadores = mesa.jugadores.filter(j => j.equipo === 2);
 
@@ -7418,7 +7404,7 @@ app.prepare().then(async () => {
         // Emit animation event to all players
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('tirar-reyes-resultado', {
-            animacion,
+            rondas,
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
         });

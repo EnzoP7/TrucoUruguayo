@@ -47,8 +47,8 @@ export function useGameState() {
         jugadorNombre: string;
         carta: { palo: string; valor: number };
         esRey: boolean;
-        equipo: number;
-      }[]
+        equipoAsignado: number | null;
+      }[][]
     | null
   >(null);
   const [reyesAnimStep, setReyesAnimStep] = useState(0);
