@@ -515,43 +515,26 @@ export function useGameSocket(
         // Tirar Reyes listener
         socketService.onTirarReyesResultado((data) => {
           if (!mounted) return;
-          setReyesAnimacion(data.animacion);
+          const anim = data.animacion;
+          setReyesAnimacion(anim);
           setReyesAnimStep(0);
           setReyesAnimDone(false);
-          // Animate step by step
-          data.animacion.forEach((_: unknown, index: number) => {
-            setTimeout(
-              () => {
-                if (mounted) setReyesAnimStep(index + 1);
-              },
-              (index + 1) * 1200,
-            );
+          anim.forEach((_: unknown, i: number) => {
+            setTimeout(() => { if (mounted) setReyesAnimStep(i + 1); }, (i + 1) * 700);
           });
-          // After all reveals, show final state and update mesa
-          setTimeout(
-            () => {
-              if (mounted) {
-                setReyesAnimDone(true);
-                setMesa(data.estado);
-                // If the game was reset to waiting (post-game tirar reyes), show waiting room
-                if (data.estado.estado === "esperando") {
-                  setEsperandoInicio(true);
-                }
-              }
-            },
-            (data.animacion.length + 1) * 1200,
-          );
-          // Clear animation after a bit
-          setTimeout(
-            () => {
-              if (mounted) {
-                setReyesAnimacion(null);
-                setReyesAnimStep(0);
-                setReyesAnimDone(false);
-              }
-            },
-            (data.animacion.length + 3) * 1200,
-          );
+          const revealTime = (anim.length + 1) * 700 + 800;
+          setTimeout(() => {
+            if (!mounted) return;
+            setReyesAnimDone(true);
+            setMesa(data.estado);
+            if (data.estado.estado === "esperando") setEsperandoInicio(true);
+          }, revealTime);
+          setTimeout(() => {
+            if (!mounted) return;
+            setReyesAnimacion(null);
+            setReyesAnimStep(0);
+            setReyesAnimDone(false);
+          }, revealTime + 4000);
         });
 
         // Echar los Perros listeners

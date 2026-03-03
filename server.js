@@ -7341,76 +7341,55 @@ app.prepare().then(async () => {
           [mazoCompleto[i], mazoCompleto[j]] = [mazoCompleto[j], mazoCompleto[i]];
         }
 
-        // Cuántos reyes necesitamos encontrar para el equipo 1
+        // Cuántos reyes necesitamos para armar el equipo 1
         const reyesNecesarios = Math.ceil(numJugadores / 2);
 
-        // Generar la secuencia de animación: cartas que se tiran hasta encontrar los reyes
-        // Cada carta tiene: { carta, jugadorId (quien la sacó), esRey, equipoAsignado (si es rey) }
-        const animacion = [];
-        const jugadoresQueYaTienenEquipo = new Set();
+        // Tirar cartas round-robin internamente hasta encontrar los reyes necesarios.
+        // Guardamos solo la ÚLTIMA carta de cada jugador para enviar al cliente.
+        const cartaFinal = {}; // jugadorId -> { carta, esRey }
+        const jugadoresConRey = new Set();
         let reyesEncontrados = 0;
         let indiceCarta = 0;
-        let turnoJugador = 0; // Los jugadores van tirando en orden
+        let turnoJugador = 0;
 
-        // Seguir tirando cartas hasta que se asignen todos los equipos
-        while (jugadoresQueYaTienenEquipo.size < numJugadores && indiceCarta < mazoCompleto.length) {
+        while (reyesEncontrados < reyesNecesarios && indiceCarta < mazoCompleto.length) {
           const jugadorActual = mesa.jugadores[turnoJugador % numJugadores];
 
-          // Si este jugador ya tiene equipo asignado, saltar al siguiente
-          if (jugadoresQueYaTienenEquipo.has(jugadorActual.id)) {
+          if (jugadoresConRey.has(jugadorActual.id)) {
             turnoJugador++;
             continue;
           }
 
           const carta = mazoCompleto[indiceCarta];
           indiceCarta++;
-
           const esRey = carta.valor === 12;
 
           if (esRey) {
             reyesEncontrados++;
-            const equipoAsignado = reyesEncontrados <= reyesNecesarios ? 1 : 2;
-            animacion.push({
-              jugadorId: jugadorActual.id,
-              jugadorNombre: jugadorActual.nombre,
-              carta,
-              esRey: true,
-              equipoAsignado,
-            });
-            jugadoresQueYaTienenEquipo.add(jugadorActual.id);
+            cartaFinal[jugadorActual.id] = { carta, esRey: true };
+            jugadoresConRey.add(jugadorActual.id);
           } else {
-            // No es rey, solo mostrar la carta
-            animacion.push({
-              jugadorId: jugadorActual.id,
-              jugadorNombre: jugadorActual.nombre,
-              carta,
-              esRey: false,
-              equipoAsignado: null,
-            });
+            // Solo guardar si no tiene rey ya
+            if (!cartaFinal[jugadorActual.id] || !cartaFinal[jugadorActual.id].esRey) {
+              cartaFinal[jugadorActual.id] = { carta, esRey: false };
+            }
           }
 
           turnoJugador++;
         }
 
-        // Si no se encontraron suficientes reyes (muy raro), asignar los restantes al equipo 2
-        mesa.jugadores.forEach(j => {
-          if (!jugadoresQueYaTienenEquipo.has(j.id)) {
-            j.equipo = 2;
-            jugadoresQueYaTienenEquipo.add(j.id);
-          }
-        });
+        // Construir animacion: EXACTAMENTE una entrada por jugador, en orden de mesa
+        const animacion = mesa.jugadores.map(j => ({
+          jugadorId: j.id,
+          jugadorNombre: j.nombre,
+          carta: cartaFinal[j.id]?.carta || mazoCompleto[indiceCarta] || mazoCompleto[0],
+          esRey: cartaFinal[j.id]?.esRey || false,
+          equipoAsignado: jugadoresConRey.has(j.id) ? 1 : 2,
+        }));
 
-        // Asignar equipos basados en la animación
-        animacion.forEach(a => {
-          if (a.esRey && a.equipoAsignado) {
-            const jugador = mesa.jugadores.find(j => j.id === a.jugadorId);
-            if (jugador) jugador.equipo = a.equipoAsignado;
-          }
-        });
-
-        // Los que no sacaron rey van al equipo 2
+        // Asignar equipos: los que sacaron rey → equipo 1, el resto → equipo 2
         mesa.jugadores.forEach(j => {
-          if (j.equipo !== 1) j.equipo = 2;
+          j.equipo = jugadoresConRey.has(j.id) ? 1 : 2;
         });
 
         const equipo1Jugadores = mesa.jugadores.filter(j => j.equipo === 1);
