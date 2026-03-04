@@ -15,6 +15,7 @@ export interface ClientToServerEvents {
   'reconectar-partida': (data: { mesaId: string; nombre: string; userId?: number }, callback: (success: boolean, message?: string) => void) => void;
   'eliminar-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
   'salir-partida': (data: { mesaId: string }, callback: (res: { success: boolean; error?: string }) => void) => void;
+  'expulsar-jugador': (data: { mesaId: string; jugadorId: string }, callback: (res: { success: boolean; error?: string }) => void) => void;
 
   // Partidas privadas
   'crear-partida-privada': (data: {
@@ -118,6 +119,7 @@ export interface ServerToClientEvents {
   'partidas-disponibles': (partidas: PartidaLobby[]) => void;
   'partida-nueva': (data: PartidaLobby) => void;
   'partida-eliminada': (data: { mesaId: string; mensaje: string }) => void;
+  'expulsado-de-partida': (data: { mesaId: string; mensaje: string }) => void;
   'partida-actualizada': (data: PartidaLobby) => void;
 
   // Partidas

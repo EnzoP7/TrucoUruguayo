@@ -973,6 +973,10 @@ function GamePage() {
   const [inputChat, setInputChat] = useState("");
   const [enviadoChat, setEnviadoChat] = useState(false);
   const [mensajesNoLeidos, setMensajesNoLeidos] = useState(0);
+  // Partida privada info
+  const [codigoSala, setCodigoSala] = useState<string | null>(null);
+  const [passwordSala, setPasswordSala] = useState<string | null>(null);
+  const [tipoPartida, setTipoPartida] = useState<string | null>(null);
   // Bots
   const [agregandoBot, setAgregandoBot] = useState(false);
   // Amigos (para invitaciones)
@@ -1684,6 +1688,23 @@ function GamePage() {
           router.push("/lobby");
         });
 
+        // Partida privada - recibir código y contraseña (solo para host)
+        socketService.onPartidaPrivadaCreada((data) => {
+          if (!mounted) return;
+          console.log("[Game] partida-privada-creada received, código:", data.codigoSala);
+          setCodigoSala(data.codigoSala);
+          if (data.tipoPartida) setTipoPartida(data.tipoPartida);
+          if (data.password) setPasswordSala(data.password);
+        });
+
+        // Expulsado de la partida
+        socketService.onExpulsadoDePartida((data) => {
+          if (!mounted) return;
+          console.log("[Game] expulsado-de-partida received:", data);
+          showAlert("info", "Expulsado", data.mensaje || "Fuiste expulsado de la partida");
+          router.push("/lobby");
+        });
+
         // Register auto-reconnect: if socket drops and reconnects, re-join the game room
         socketService.onAutoReconnect(() => {
           if (!mounted) return;
@@ -1959,6 +1980,19 @@ function GamePage() {
         router.push("/lobby");
       } else {
         showAlert("error", "Error", "No se pudo cancelar la partida");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExpulsarJugador = async (jugadorId: string) => {
+    if (!mesaId) return;
+    setLoading(true);
+    try {
+      const success = await socketService.expulsarJugador(mesaId, jugadorId);
+      if (!success) {
+        showAlert("error", "Error", "No se pudo expulsar al jugador");
       }
     } finally {
       setLoading(false);
@@ -2754,15 +2788,15 @@ function GamePage() {
           );
         })()}
 
-        <div className="max-w-2xl mx-auto">
-          <div className="glass rounded-2xl p-6 sm:p-8 border border-gold-800/30">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gold-400 text-center mb-2">
+        <div className="max-w-3xl mx-auto">
+          <div className="glass rounded-2xl p-6 sm:p-10 border border-gold-800/30">
+            <h1 className="text-3xl sm:text-4xl font-bold text-gold-400 text-center mb-3">
               Mesa de Truco
             </h1>
 
             {mesa && (
               <>
-                <p className="text-gold-300/60 text-center mb-4">
+                <p className="text-gold-300/60 text-center text-lg mb-6">
                   {mesa.jugadores.length} jugador
                   {mesa.jugadores.length !== 1 ? "es" : ""} en la mesa
                 </p>
@@ -2791,6 +2825,37 @@ function GamePage() {
                     </button>
                   )}
                 </div>
+
+                {/* Info sala privada (solo host) */}
+                {esAnfitrion() && codigoSala && (
+                  <div className="mb-6 glass rounded-xl p-4 border border-purple-700/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-purple-400 text-sm font-bold uppercase tracking-wider">Sala Privada</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-purple-600/30 text-purple-300">
+                        {tipoPartida === 'privada_password' ? 'Con contraseña' : 'Con aprobación'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <span className="text-gold-500/60 text-xs block">Código de sala</span>
+                        <span className="text-white font-mono font-bold text-lg tracking-widest">{codigoSala}</span>
+                      </div>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(codigoSala)}
+                        className="text-xs px-2 py-1 rounded bg-purple-900/30 text-purple-300 hover:bg-purple-800/40 transition-all"
+                        title="Copiar código"
+                      >
+                        Copiar
+                      </button>
+                    </div>
+                    {passwordSala && (
+                      <div className="mt-2">
+                        <span className="text-gold-500/60 text-xs block">Contraseña</span>
+                        <span className="text-white font-mono font-bold tracking-wider">{passwordSala}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Point Limit Selector */}
                 {esAnfitrion() && (
@@ -2871,9 +2936,9 @@ function GamePage() {
                     </div>
 
                     {/* Two-column team layout */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-5">
                       {/* Equipo 1 */}
-                      <div className="rounded-xl border-2 border-celeste-600/40 bg-celeste-950/20 p-3 sm:p-4">
+                      <div className="rounded-xl border-2 border-celeste-600/40 bg-celeste-950/20 p-4 sm:p-5">
                         <div className="flex items-center gap-2 mb-3">
                           <div className="w-3 h-3 rounded-full bg-celeste-500" />
                           <span className="text-celeste-400 font-bold text-sm uppercase tracking-wider">
@@ -2924,22 +2989,16 @@ function GamePage() {
                                       ✕
                                     </button>
                                   )}
-                                  {j.id === socketId ? (
+                                  {/* Botón expulsar jugador (solo anfitrión, no a sí mismo ni bots) */}
+                                  {esAnfitrion() && !j.isBot && j.id !== socketId && (
                                     <button
-                                      onClick={() =>
-                                        socketService.toggleAyuda(!j.modoAyuda)
-                                      }
-                                      className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? "bg-celeste-600/40 text-celeste-300" : "bg-gray-700/30 text-gray-500 hover:text-gray-400"}`}
-                                      title="Activar/desactivar modo ayuda"
+                                      onClick={() => handleExpulsarJugador(j.id)}
+                                      disabled={loading}
+                                      className="text-red-400 hover:text-red-300 text-[10px] px-2 py-1 rounded bg-red-900/30 hover:bg-red-800/40 transition-all"
+                                      title="Expulsar jugador"
                                     >
-                                      📚 Ayuda
+                                      Expulsar
                                     </button>
-                                  ) : (
-                                    j.modoAyuda && (
-                                      <span className="text-[10px] bg-celeste-600/20 text-celeste-400/60 px-1.5 py-0.5 rounded">
-                                        📚
-                                      </span>
-                                    )
                                   )}
                                   {esAnfitrion() && !j.isBot && (
                                     <button
@@ -2966,7 +3025,7 @@ function GamePage() {
                       </div>
 
                       {/* Equipo 2 */}
-                      <div className="rounded-xl border-2 border-red-600/40 bg-red-950/20 p-3 sm:p-4">
+                      <div className="rounded-xl border-2 border-red-600/40 bg-red-950/20 p-4 sm:p-5">
                         <div className="flex items-center gap-2 mb-3">
                           <div className="w-3 h-3 rounded-full bg-red-500" />
                           <span className="text-red-400 font-bold text-sm uppercase tracking-wider">
@@ -3017,22 +3076,16 @@ function GamePage() {
                                       ✕
                                     </button>
                                   )}
-                                  {j.id === socketId ? (
+                                  {/* Botón expulsar jugador (solo anfitrión, no a sí mismo ni bots) */}
+                                  {esAnfitrion() && !j.isBot && j.id !== socketId && (
                                     <button
-                                      onClick={() =>
-                                        socketService.toggleAyuda(!j.modoAyuda)
-                                      }
-                                      className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? "bg-celeste-600/40 text-celeste-300" : "bg-gray-700/30 text-gray-500 hover:text-gray-400"}`}
-                                      title="Activar/desactivar modo ayuda"
+                                      onClick={() => handleExpulsarJugador(j.id)}
+                                      disabled={loading}
+                                      className="text-red-400 hover:text-red-300 text-[10px] px-2 py-1 rounded bg-red-900/30 hover:bg-red-800/40 transition-all"
+                                      title="Expulsar jugador"
                                     >
-                                      📚 Ayuda
+                                      Expulsar
                                     </button>
-                                  ) : (
-                                    j.modoAyuda && (
-                                      <span className="text-[10px] bg-celeste-600/20 text-celeste-400/60 px-1.5 py-0.5 rounded">
-                                        📚
-                                      </span>
-                                    )
                                   )}
                                   {esAnfitrion() && !j.isBot && (
                                     <button
@@ -3098,22 +3151,16 @@ function GamePage() {
                               ✕
                             </button>
                           )}
-                          {j.id === socketId ? (
+                          {/* Botón expulsar jugador (solo anfitrión, no a sí mismo ni bots) */}
+                          {esAnfitrion() && !j.isBot && j.id !== socketId && (
                             <button
-                              onClick={() =>
-                                socketService.toggleAyuda(!j.modoAyuda)
-                              }
-                              className={`text-[10px] px-1.5 py-0.5 rounded transition-all ${j.modoAyuda ? "bg-celeste-600/40 text-celeste-300" : "bg-gray-700/30 text-gray-500 hover:text-gray-400"}`}
-                              title="Activar/desactivar modo ayuda"
+                              onClick={() => handleExpulsarJugador(j.id)}
+                              disabled={loading}
+                              className="text-red-400 hover:text-red-300 text-[10px] px-2 py-1 rounded bg-red-900/30 hover:bg-red-800/40 transition-all"
+                              title="Expulsar jugador"
                             >
-                              📚 Ayuda
+                              Expulsar
                             </button>
-                          ) : (
-                            j.modoAyuda && (
-                              <span className="text-[10px] bg-celeste-600/20 text-celeste-400/60 px-1.5 py-0.5 rounded">
-                                📚
-                              </span>
-                            )
                           )}
                           {i === 0 && (
                             <span className="text-xs bg-gold-600/30 text-gold-400 px-2 py-1 rounded">

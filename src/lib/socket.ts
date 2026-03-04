@@ -191,6 +191,13 @@ class SocketService {
     });
   }
 
+  async expulsarJugador(mesaId: string, jugadorId: string): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('expulsar-jugador', { mesaId, jugadorId }, (res: { success: boolean }) => resolve(res.success));
+    });
+  }
+
   // === PARTIDAS PRIVADAS ===
 
   async crearPartidaPrivada(
@@ -218,11 +225,15 @@ class SocketService {
     codigo: string,
     nombre: string,
     password?: string
-  ): Promise<{ success: boolean; message?: string }> {
+  ): Promise<{ success: boolean; message?: string; mesaId?: string }> {
     if (!this.socket) return { success: false, message: 'Sin conexión' };
     return new Promise((resolve) => {
-      this.socket!.emit('unirse-con-codigo', { codigo, nombre, password }, (success, message) => {
-        resolve({ success, message });
+      this.socket!.emit('unirse-con-codigo', { codigo, nombre, password }, (success, messageOrMesaId) => {
+        if (success && messageOrMesaId?.startsWith('mesa_')) {
+          resolve({ success, mesaId: messageOrMesaId });
+        } else {
+          resolve({ success, message: messageOrMesaId });
+        }
       });
     });
   }
@@ -276,8 +287,12 @@ class SocketService {
 
   // Listeners para partidas privadas
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onPartidaPrivadaCreada(callback: (data: { mesaId: string; codigoSala: string; jugador: any }) => void): void {
+  onPartidaPrivadaCreada(callback: (data: { mesaId: string; codigoSala: string; jugador: any; tipoPartida?: string; password?: string | null }) => void): void {
     this.socket?.on('partida-privada-creada', callback);
+  }
+
+  onExpulsadoDePartida(callback: (data: { mesaId: string; mensaje: string }) => void): void {
+    this.socket?.on('expulsado-de-partida', callback);
   }
 
   onSolicitudRecibida(callback: (data: { socketId: string; nombre: string; timestamp: number }) => void): void {
@@ -887,6 +902,7 @@ class SocketService {
       'solicitud-recibida',
       'solicitudes-pendientes',
       'solicitud-respondida',
+      'expulsado-de-partida',
       // Matchmaking
       'en-cola',
       'match-encontrado',

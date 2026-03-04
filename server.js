@@ -310,6 +310,9 @@ const colaMatchmaking = new Map(); // tamañoSala -> Array<{ socketId, nombre, u
 // Solicitudes pendientes para partidas con aprobación
 const solicitudesPendientes = new Map(); // mesaId -> Array<{ socketId, nombre, timestamp }>
 
+// Map socketId → userId para saber qué usuario está detrás de cada socket
+const socketUsuarios = new Map();
+
 // Función auxiliar para unir jugador a partida (reutilizable)
 async function unirJugadorAPartida(socket, room, mesaId, nombre, io) {
   const mesa = engines.get(mesaId);
@@ -385,12 +388,16 @@ async function intentarMatchmaking(tamañoSala, io) {
   const jugadoresNecesarios = getMaxJugadores(tamañoSala);
 
   if (cola.length < jugadoresNecesarios) {
-    // Actualizar posición de todos en cola
-    cola.forEach((jugador, index) => {
+    // Actualizar a todos en cola con cuántos jugadores faltan
+    const faltan = jugadoresNecesarios - cola.length;
+    cola.forEach((jugador) => {
       const playerSocket = io.sockets.sockets.get(jugador.socketId);
       if (playerSocket) {
         playerSocket.emit('en-cola', {
-          posicion: index + 1,
+          posicion: cola.length,
+          jugadoresEnCola: cola.length,
+          jugadoresNecesarios,
+          faltan,
           tiempoEspera: Math.floor((Date.now() - jugador.timestamp) / 1000),
           tamañoSala
         });
@@ -466,15 +473,31 @@ async function intentarMatchmaking(tamañoSala, io) {
 
   lobbyRooms.set(mesaId, room);
 
-  const mesa = crearEstadoMesa(mesaId, jugadoresMesa, 30, {
+  const mesa = crearEstadoMesa(mesaId, jugadoresMesa, 40, {
     modoAlternado: true,
     modoAyuda: false,
     tamañoSala
   });
   engines.set(mesaId, mesa);
 
-  // Notificar a todos los jugadores del match
+  // Notificar a todos que el match está listo antes de iniciar
   const oponentes = jugadoresMatch.map(j => j.nombre);
+
+  // Notificar que se encontraron todos los jugadores
+  for (const jm of jugadoresMatch) {
+    const playerSocket = io.sockets.sockets.get(jm.socketId);
+    if (playerSocket) {
+      playerSocket.emit('en-cola', {
+        posicion: jugadoresNecesarios,
+        jugadoresEnCola: jugadoresNecesarios,
+        jugadoresNecesarios,
+        faltan: 0,
+        tiempoEspera: Math.floor((Date.now() - jm.timestamp) / 1000),
+        tamañoSala,
+        matchListo: true
+      });
+    }
+  }
 
   for (const jm of jugadoresMatch) {
     const playerSocket = io.sockets.sockets.get(jm.socketId);
@@ -4338,8 +4361,8 @@ function irseAlMazo(mesa, jugadorId) {
       });
 
       if (florDelEquipoQueQueda.length > 0) {
-        // El equipo que queda tiene flor: recibe 3 pts por flor (achicarse - no hay respuesta)
-        const puntosFlor = 3;
+        // El equipo que queda tiene flor: recibe 3 pts por CADA flor (achicarse - no hay respuesta)
+        const puntosFlor = 3 * florDelEquipoQueQueda.length;
         const equipo = mesa.equipos.find(e => e.id === equipoQueQueda);
         if (equipo) equipo.puntaje += puntosFlor;
         mesa.florYaCantada = true;
@@ -4549,8 +4572,6 @@ app.prepare().then(async () => {
     },
   });
 
-  // Map socketId → userId para saber qué usuario está detrás de cada socket
-  const socketUsuarios = new Map();
 
   // Helper: guardar partida en BD cuando termina el juego
   async function guardarResultadoPartida(room, mesa) {
@@ -5721,8 +5742,8 @@ app.prepare().then(async () => {
         socket.leave('lobby');
         socket.join(mesaId);
 
-        // Emitir evento específico para partida privada con el código
-        socket.emit('partida-privada-creada', { mesaId, codigoSala, jugador });
+        // Emitir evento específico para partida privada con el código (incluir password para el host)
+        socket.emit('partida-privada-creada', { mesaId, codigoSala, jugador, tipoPartida: room.tipoPartida, password: room.passwordHash || null });
         socket.emit('unido-partida', { mesaId, jugador, estado: getEstadoParaJugador(mesa, socket.id) });
 
         // Las partidas privadas NO se muestran en el lobby público
@@ -5781,7 +5802,7 @@ app.prepare().then(async () => {
           }
           // Contraseña correcta, unir directamente
           await unirJugadorAPartida(socket, room, mesaId, nombre, io);
-          callback(true);
+          callback(true, mesaId);
         } else if (room.tipoPartida === 'privada_aprobacion') {
           // Agregar a solicitudes pendientes
           const solicitudes = solicitudesPendientes.get(mesaId) || [];
@@ -6245,6 +6266,86 @@ app.prepare().then(async () => {
       }
     });
 
+    // === EXPULSAR JUGADOR (solo anfitrión) ===
+    socket.on('expulsar-jugador', async (data, callback) => {
+      console.log(`[Socket.IO] ${socket.id} expulsar-jugador:`, data);
+      try {
+        const { mesaId, jugadorId } = data;
+        const room = lobbyRooms.get(mesaId);
+
+        if (!room) {
+          callback({ success: false, error: 'Partida no encontrada' });
+          return;
+        }
+
+        // Solo el creador puede expulsar
+        if (room.creadorSocketId !== socket.id) {
+          callback({ success: false, error: 'Solo el anfitrión puede expulsar jugadores' });
+          return;
+        }
+
+        // Solo en estado esperando
+        if (room.estado !== 'esperando') {
+          callback({ success: false, error: 'No se puede expulsar durante una partida en curso' });
+          return;
+        }
+
+        // No puede expulsarse a sí mismo
+        if (jugadorId === socket.id) {
+          callback({ success: false, error: 'No podés expulsarte a vos mismo' });
+          return;
+        }
+
+        // Buscar al jugador en la room
+        const idx = room.jugadores.findIndex(j => j.socketId === jugadorId);
+        if (idx === -1) {
+          callback({ success: false, error: 'Jugador no encontrado en la partida' });
+          return;
+        }
+
+        const jugadorNombre = room.jugadores[idx].nombre;
+
+        // Remover de room.jugadores
+        room.jugadores.splice(idx, 1);
+
+        // Remover de mesa.jugadores y equipos
+        const mesa = engines.get(mesaId);
+        if (mesa) {
+          mesa.jugadores = mesa.jugadores.filter(j => j.id !== jugadorId);
+          mesa.equipos.forEach(eq => {
+            eq.jugadores = eq.jugadores.filter(j => j.id !== jugadorId);
+          });
+        }
+
+        // Mover socket del expulsado de vuelta al lobby
+        const expulsadoSocket = io.sockets.sockets.get(jugadorId);
+        if (expulsadoSocket) {
+          expulsadoSocket.leave(mesaId);
+          expulsadoSocket.join('lobby');
+          // Notificar al expulsado
+          expulsadoSocket.emit('expulsado-de-partida', {
+            mesaId,
+            mensaje: 'El anfitrión te expulsó de la partida'
+          });
+        }
+
+        // Notificar a los jugadores restantes
+        if (mesa) {
+          room.jugadores.forEach(p => {
+            io.to(p.socketId).emit('estado-actualizado', getEstadoParaJugador(mesa, p.socketId));
+          });
+        }
+
+        broadcastLobby(io);
+
+        console.log(`[Socket.IO] ${jugadorNombre} fue expulsado de partida ${mesaId} por el anfitrión`);
+        callback({ success: true });
+      } catch (err) {
+        console.error('Error expulsar-jugador:', err);
+        callback({ success: false, error: 'Error interno' });
+      }
+    });
+
     // === UNIRSE A PARTIDA ===
     socket.on('unirse-partida', async (data, callback) => {
       try {
@@ -6440,9 +6541,9 @@ app.prepare().then(async () => {
           if (room.creadorSocketId === oldSocketId) {
             room.creadorSocketId = socket.id;
             console.log(`[Socket.IO] Updated creadorSocketId for room ${mesaId}: ${oldSocketId} -> ${socket.id}`);
-            // Si es una partida privada, enviar el código de sala al host
+            // Si es una partida privada, enviar el código de sala al host (incluir password)
             if (room.codigoSala && (room.tipoPartida === 'privada_aprobacion' || room.tipoPartida === 'privada_password')) {
-              socket.emit('partida-privada-creada', { mesaId, codigoSala: room.codigoSala, jugador: null });
+              socket.emit('partida-privada-creada', { mesaId, codigoSala: room.codigoSala, jugador: null, tipoPartida: room.tipoPartida, password: room.passwordHash || null });
             }
             // Si hay solicitudes pendientes (solo para aprobación), enviarlas al host
             if (room.tipoPartida === 'privada_aprobacion') {
@@ -9014,6 +9115,17 @@ app.prepare().then(async () => {
       socketUsuarios.delete(socket.id);
       broadcastUsuariosOnline();
       socket.leave('lobby');
+
+      // Limpiar de cola de matchmaking si estaba buscando
+      for (const [tamañoSala, cola] of colaMatchmaking) {
+        const idx = cola.findIndex(j => j.socketId === socket.id);
+        if (idx !== -1) {
+          cola.splice(idx, 1);
+          colaMatchmaking.set(tamañoSala, cola);
+          console.log(`[Matchmaking] Jugador ${socket.id} removido de cola ${tamañoSala} por desconexión`);
+          break;
+        }
+      }
 
       // Buscar si el jugador estaba en una partida
       const room = findRoomBySocket(socket.id);

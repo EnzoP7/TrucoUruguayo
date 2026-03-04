@@ -126,6 +126,7 @@ function LobbyPageContent() {
   const [tipoPrivada, setTipoPrivada] = useState<'password' | 'aprobacion'>('password');
   const [passwordPrivada, setPasswordPrivada] = useState('');
   const [codigoSalaCreada, setCodigoSalaCreada] = useState<string | null>(null);
+  const [mesaIdSalaCreada, setMesaIdSalaCreada] = useState<string | null>(null);
 
   // Estado para unirse con código
   const [mostrarModalCodigo, setMostrarModalCodigo] = useState(false);
@@ -135,8 +136,13 @@ function LobbyPageContent() {
 
   // Estado para matchmaking rankeado
   const [buscandoRankeada, setBuscandoRankeada] = useState(false);
-  const [posicionCola, setPosicionCola] = useState(0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_posicionCola, setPosicionCola] = useState(0);
   const [tiempoEspera, setTiempoEspera] = useState(0);
+  const [jugadoresEnCola, setJugadoresEnCola] = useState(0);
+  const [jugadoresNecesarios, setJugadoresNecesarios] = useState(0);
+  const [faltanJugadores, setFaltanJugadores] = useState(0);
+  const [matchListo, setMatchListo] = useState(false);
 
   // Solicitudes pendientes (para host de partida con aprobación)
   const [solicitudesPendientes, setSolicitudesPendientes] = useState<Array<{ socketId: string; nombre: string; timestamp: number }>>([]);
@@ -198,13 +204,18 @@ function LobbyPageContent() {
         });
 
         // Listeners para matchmaking rankeado
-        socketService.onEnCola((data) => {
+        socketService.onEnCola((data: { posicion: number; tiempoEspera: number; jugadoresEnCola?: number; jugadoresNecesarios?: number; faltan?: number; matchListo?: boolean }) => {
           setPosicionCola(data.posicion);
           setTiempoEspera(data.tiempoEspera);
+          if (data.jugadoresEnCola !== undefined) setJugadoresEnCola(data.jugadoresEnCola);
+          if (data.jugadoresNecesarios !== undefined) setJugadoresNecesarios(data.jugadoresNecesarios);
+          if (data.faltan !== undefined) setFaltanJugadores(data.faltan);
+          if (data.matchListo) setMatchListo(true);
         });
 
         socketService.onMatchEncontrado((data) => {
           setBuscandoRankeada(false);
+          setMatchListo(false);
           if (monedas !== null) setMonedas(monedas - 25);
           navigateToGame(data.mesaId);
         });
@@ -213,6 +224,10 @@ function LobbyPageContent() {
           setBuscandoRankeada(false);
           setPosicionCola(0);
           setTiempoEspera(0);
+          setJugadoresEnCola(0);
+          setJugadoresNecesarios(0);
+          setFaltanJugadores(0);
+          setMatchListo(false);
         });
 
         // Listeners para partidas privadas
@@ -580,9 +595,8 @@ function LobbyPageContent() {
 
       if (result.success && result.data) {
         setCodigoSalaCreada(result.data.codigoSala);
+        setMesaIdSalaCreada(result.data.mesaId);
         setMostrarModalPrivada(false);
-        // Navegar al juego
-        navigateToGame(result.data.mesaId);
       } else {
         showAlert('error', 'Error', 'Error al crear la partida privada');
       }
@@ -619,8 +633,11 @@ function LobbyPageContent() {
           setEsperandoAprobacion(true);
           showAlert('info', 'Solicitud enviada', result.message);
         } else {
-          // Unión directa
+          // Unión directa - navegar a la sala
           setMostrarModalCodigo(false);
+          if (result.mesaId) {
+            navigateToGame(result.mesaId);
+          }
         }
       } else {
         showAlert('error', 'Error', result.message || 'Error al unirse');
@@ -666,6 +683,11 @@ function LobbyPageContent() {
 
     setBuscandoRankeada(true);
     setTiempoEspera(0);
+    const maxJ = tamañoSala === '1v1' ? 2 : tamañoSala === '3v3' ? 6 : 4;
+    setJugadoresEnCola(1);
+    setJugadoresNecesarios(maxJ);
+    setFaltanJugadores(maxJ - 1);
+    setMatchListo(false);
 
     try {
       const result = await socketService.buscarRankeada(nombre.trim(), tamañoSala);
@@ -2359,35 +2381,63 @@ function LobbyPageContent() {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass rounded-2xl p-6 sm:p-8 max-w-md w-full border border-gold-500/40 bg-gradient-to-b from-gold-900/30 to-transparent text-center">
             <h3 className="font-[var(--font-cinzel)] text-2xl font-bold text-gold-400 mb-4">
-              🏆 Buscando Partida Rankeada
+              Buscando Partida Rankeada
             </h3>
 
-            <div className="w-20 h-20 mx-auto mb-6 border-4 border-gold-500/30 border-t-gold-500 rounded-full animate-spin" />
+            {matchListo ? (
+              <>
+                <div className="w-20 h-20 mx-auto mb-6 flex items-center justify-center rounded-full bg-emerald-600/20 border-4 border-emerald-500">
+                  <span className="text-4xl">&#10003;</span>
+                </div>
+                <p className="text-emerald-400 font-bold text-xl mb-2">Todos los jugadores listos</p>
+                <p className="text-white/70 mb-6">La partida comenzara en instantes...</p>
+              </>
+            ) : (
+              <>
+                <div className="w-20 h-20 mx-auto mb-6 border-4 border-gold-500/30 border-t-gold-500 rounded-full animate-spin" />
 
-            <p className="text-white/70 mb-2">Modo: <span className="text-gold-400 font-bold">{tamañoSala}</span></p>
+                <p className="text-white/70 mb-3">Modo: <span className="text-gold-400 font-bold">{tamañoSala}</span> &middot; <span className="text-gold-400 font-bold">40 pts</span></p>
 
-            {posicionCola > 0 && (
-              <p className="text-white/50 text-sm mb-2">
-                Posición en cola: #{posicionCola}
-              </p>
+                {/* Indicador de jugadores */}
+                <div className="mb-4">
+                  <div className="flex justify-center gap-2 mb-3">
+                    {Array.from({ length: jugadoresNecesarios || (tamañoSala === '1v1' ? 2 : tamañoSala === '3v3' ? 6 : 4) }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 ${
+                          idx < jugadoresEnCola
+                            ? 'bg-emerald-600/40 border-2 border-emerald-400 text-emerald-300 scale-110'
+                            : 'bg-white/5 border-2 border-white/20 text-white/30'
+                        }`}
+                      >
+                        {idx < jugadoresEnCola ? '&#10003;' : '?'}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-gold-400 font-bold text-lg">
+                    {faltanJugadores > 0
+                      ? `Faltan ${faltanJugadores} jugador${faltanJugadores !== 1 ? 'es' : ''}`
+                      : 'Todos listos'}
+                  </p>
+                  <p className="text-white/40 text-sm mt-1">
+                    {jugadoresEnCola}/{jugadoresNecesarios || (tamañoSala === '1v1' ? 2 : tamañoSala === '3v3' ? 6 : 4)} jugadores encontrados
+                  </p>
+                </div>
+
+                {tiempoEspera > 0 && (
+                  <p className="text-white/40 text-xs mb-4">
+                    Tiempo de espera: {tiempoEspera}s
+                  </p>
+                )}
+
+                <button
+                  onClick={handleCancelarBusquedaRankeada}
+                  className="px-6 py-3 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-all"
+                >
+                  Cancelar búsqueda
+                </button>
+              </>
             )}
-
-            {tiempoEspera > 0 && (
-              <p className="text-white/50 text-sm mb-4">
-                Tiempo de espera: {tiempoEspera}s
-              </p>
-            )}
-
-            <p className="text-white/50 text-sm mb-6">
-              Buscando oponentes de nivel similar...
-            </p>
-
-            <button
-              onClick={handleCancelarBusquedaRankeada}
-              className="px-6 py-3 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-all"
-            >
-              Cancelar búsqueda
-            </button>
           </div>
         </div>
       )}
@@ -2421,24 +2471,36 @@ function LobbyPageContent() {
 
       {/* Modal Código de Sala Creada */}
       {codigoSalaCreada && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setCodigoSalaCreada(null)}>
-          <div className="glass rounded-2xl p-6 sm:p-8 max-w-md w-full border border-emerald-500/40 bg-gradient-to-b from-emerald-900/30 to-transparent text-center" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl p-6 sm:p-8 max-w-md w-full border border-emerald-500/40 bg-gradient-to-b from-emerald-900/30 to-transparent text-center">
             <h3 className="font-[var(--font-cinzel)] text-2xl font-bold text-emerald-400 mb-4">
-              ✅ Sala Creada
+              Sala Creada
             </h3>
             <p className="text-white/70 mb-4">Compartí este código con tus amigos:</p>
             <div className="bg-black/30 rounded-xl p-4 mb-4">
               <p className="text-3xl font-mono font-bold text-white tracking-widest">{codigoSalaCreada}</p>
             </div>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(codigoSalaCreada);
-                showAlert('success', 'Copiado', 'Código copiado al portapapeles');
-              }}
-              className="px-6 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition-all"
-            >
-              📋 Copiar Código
-            </button>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(codigoSalaCreada);
+                  showAlert('success', 'Copiado', 'Código copiado al portapapeles');
+                }}
+                className="px-6 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition-all"
+              >
+                Copiar Código
+              </button>
+              <button
+                onClick={() => {
+                  if (mesaIdSalaCreada) {
+                    navigateToGame(mesaIdSalaCreada);
+                  }
+                }}
+                className="px-6 py-3 rounded-xl bg-gradient-to-r from-gold-600 to-gold-700 text-wood-950 font-bold hover:from-gold-500 hover:to-gold-600 transition-all shadow-lg shadow-gold-600/20"
+              >
+                Ir a la Sala
+              </button>
+            </div>
           </div>
         </div>
       )}
