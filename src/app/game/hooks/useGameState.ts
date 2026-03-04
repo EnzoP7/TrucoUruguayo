@@ -137,6 +137,15 @@ export function useGameState() {
   // Confirmación de mazo
   const [mostrarConfirmMazo, setMostrarConfirmMazo] = useState(false);
 
+  // Partidas privadas
+  const [codigoSala, setCodigoSala] = useState<string | null>(null);
+  const [tipoPartida, setTipoPartida] = useState<'publica' | 'privada_password' | 'privada_aprobacion' | 'rankeada' | null>(null);
+  const [solicitudesPendientes, setSolicitudesPendientes] = useState<Array<{
+    socketId: string;
+    nombre: string;
+    timestamp: number;
+  }>>([]);
+
   const mensajeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mostrarMensaje = useCallback((msg: string, duracion = 3000) => {
     setMensaje(msg);
@@ -193,6 +202,9 @@ export function useGameState() {
     logrosDesbloqueados, setLogrosDesbloqueados,
     reconectando, setReconectando,
     mostrarConfirmMazo, setMostrarConfirmMazo,
+    codigoSala, setCodigoSala,
+    tipoPartida, setTipoPartida,
+    solicitudesPendientes, setSolicitudesPendientes,
     mensajeTimerRef,
     mostrarMensaje,
   };

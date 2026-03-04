@@ -6436,6 +6436,22 @@ app.prepare().then(async () => {
               if (fc.jugadorId === oldSocketId) fc.jugadorId = socket.id;
             });
           }
+          // Update creadorSocketId if this is the host reconnecting
+          if (room.creadorSocketId === oldSocketId) {
+            room.creadorSocketId = socket.id;
+            console.log(`[Socket.IO] Updated creadorSocketId for room ${mesaId}: ${oldSocketId} -> ${socket.id}`);
+            // Si es una partida privada, enviar el código de sala al host
+            if (room.codigoSala && (room.tipoPartida === 'privada_aprobacion' || room.tipoPartida === 'privada_password')) {
+              socket.emit('partida-privada-creada', { mesaId, codigoSala: room.codigoSala, jugador: null });
+            }
+            // Si hay solicitudes pendientes (solo para aprobación), enviarlas al host
+            if (room.tipoPartida === 'privada_aprobacion') {
+              const solicitudes = solicitudesPendientes.get(mesaId) || [];
+              if (solicitudes.length > 0) {
+                socket.emit('solicitudes-pendientes', solicitudes);
+              }
+            }
+          }
         } else {
           if (room.estado === 'esperando' && room.jugadores.length < room.maxJugadores) {
             isNewPlayer = true;

@@ -106,12 +106,12 @@ export function useGameHelpers(
     // Usar inicioManoActual para obtener las cartas de la mano actual correctamente
     const inicioMano = mesa.inicioManoActual ?? 0;
     const cartasManoActual = mesa.cartasMesa.slice(inicioMano);
+    // Solo verificar si YO ya jugué mi carta (no importa si otros jugaron)
+    // El envido se puede cantar mientras no hayas jugado tu propia carta en la mano 1
     const yaJugueMiCarta = cartasManoActual.some(
       (c) => c.jugadorId === socketId,
     );
     if (yaJugueMiCarta) return false;
-    // Verificar si se jugó alguna carta en esta mano (no basarse solo en primeraCartaJugada que puede estar desactualizado)
-    if (cartasManoActual.length > 0) return false;
     return true;
   };
 

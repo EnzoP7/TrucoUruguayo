@@ -78,6 +78,9 @@ function GamePage() {
     reconectando,
     mostrarConfirmMazo, setMostrarConfirmMazo,
     mostrarMensaje, setLoading,
+    // Partidas privadas
+    codigoSala,
+    solicitudesPendientes, setSolicitudesPendientes,
   } = state;
 
   // === COSMETICS ===
@@ -278,6 +281,71 @@ function GamePage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-gold-400 text-center mb-2">
               Mesa de Truco
             </h1>
+
+            {/* Código de sala para partidas privadas */}
+            {codigoSala && esAnfitrion() && (
+              <div className="mb-4 p-3 glass rounded-xl border border-purple-500/30 bg-purple-950/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-400/80 text-xs uppercase tracking-wider mb-1">Código de sala</p>
+                    <p className="text-purple-200 text-xl font-mono font-bold tracking-widest">{codigoSala}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(codigoSala);
+                      mostrarMensaje("¡Código copiado!");
+                    }}
+                    className="px-4 py-2 rounded-lg bg-purple-600/40 text-purple-200 hover:bg-purple-600/60 border border-purple-500/30 transition-all text-sm font-medium flex items-center gap-2"
+                  >
+                    <span>📋</span> Copiar
+                  </button>
+                </div>
+                <p className="text-purple-400/50 text-xs mt-2">Comparte este código con tus amigos para que puedan unirse</p>
+              </div>
+            )}
+
+            {/* Solicitudes pendientes de aprobación */}
+            {esAnfitrion() && solicitudesPendientes.length > 0 && (
+              <div className="mb-4 p-3 glass rounded-xl border border-amber-500/30 bg-amber-950/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">🔔</span>
+                  <span className="text-amber-300 font-medium text-sm">Solicitudes para unirse ({solicitudesPendientes.length})</span>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {solicitudesPendientes.map((sol) => (
+                    <div key={sol.socketId} className="flex items-center justify-between p-2 rounded-lg bg-amber-900/20 border border-amber-700/20">
+                      <span className="text-white text-sm font-medium">{sol.nombre}</span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            const result = await socketService.responderSolicitud(mesaId!, sol.socketId, true);
+                            if (result.success) {
+                              setSolicitudesPendientes(prev => prev.filter(s => s.socketId !== sol.socketId));
+                              mostrarMensaje(`${sol.nombre} aceptado`);
+                            }
+                          }}
+                          className="px-3 py-1 text-xs font-medium rounded-lg bg-green-600/40 text-green-200 hover:bg-green-600/60 border border-green-500/30 transition-all"
+                        >
+                          ✓ Aceptar
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const result = await socketService.responderSolicitud(mesaId!, sol.socketId, false);
+                            if (result.success) {
+                              setSolicitudesPendientes(prev => prev.filter(s => s.socketId !== sol.socketId));
+                              mostrarMensaje(`${sol.nombre} rechazado`);
+                            }
+                          }}
+                          className="px-3 py-1 text-xs font-medium rounded-lg bg-red-600/40 text-red-200 hover:bg-red-600/60 border border-red-500/30 transition-all"
+                        >
+                          ✕ Rechazar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {mesa && (
               <>

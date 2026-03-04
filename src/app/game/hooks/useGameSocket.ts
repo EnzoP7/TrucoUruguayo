@@ -25,6 +25,8 @@ export function useGameSocket(
     setAfkSecondsLeft, afkIntervalRef,
     prevTurno, setPrevTurno,
     mesa, socketId, esperandoInicio, conectado,
+    // Partidas privadas
+    setCodigoSala, setSolicitudesPendientes,
   } = state;
 
   // Main socket connection and listeners
@@ -91,6 +93,28 @@ export function useGameSocket(
           setTimeout(() => {
             if (mounted) setMensaje(null);
           }, 3000);
+        });
+
+        // Partidas privadas - recibir código de sala al crear
+        socketService.onPartidaPrivadaCreada((data) => {
+          if (!mounted) return;
+          console.log("[Game] partida-privada-creada received, código:", data.codigoSala);
+          setCodigoSala(data.codigoSala);
+        });
+
+        // Partidas privadas con aprobación - recibir solicitudes
+        socketService.onSolicitudRecibida((data) => {
+          if (!mounted) return;
+          console.log("[Game] solicitud-recibida:", data.nombre);
+          audioManager.play("notification");
+          setSolicitudesPendientes(prev => [...prev, data]);
+        });
+
+        // Recibir todas las solicitudes pendientes (al reconectar)
+        socketService.onSolicitudesPendientes((solicitudes) => {
+          if (!mounted) return;
+          console.log("[Game] solicitudes-pendientes received:", solicitudes.length);
+          setSolicitudesPendientes(solicitudes);
         });
 
         socketService.onPartidaIniciada((estado) => {

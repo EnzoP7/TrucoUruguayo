@@ -275,12 +275,21 @@ class SocketService {
   }
 
   // Listeners para partidas privadas
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onPartidaPrivadaCreada(callback: (data: { mesaId: string; codigoSala: string; jugador: any }) => void): void {
+    this.socket?.on('partida-privada-creada', callback);
+  }
+
   onSolicitudRecibida(callback: (data: { socketId: string; nombre: string; timestamp: number }) => void): void {
     this.socket?.on('solicitud-recibida', callback);
   }
 
   onSolicitudRespondida(callback: (data: { aceptado: boolean; mensaje: string; mesaId?: string }) => void): void {
     this.socket?.on('solicitud-respondida', callback);
+  }
+
+  onSolicitudesPendientes(callback: (solicitudes: { socketId: string; nombre: string; timestamp: number }[]) => void): void {
+    this.socket?.on('solicitudes-pendientes', callback);
   }
 
   // === JUEGO ===
@@ -873,6 +882,15 @@ class SocketService {
       'monedas-ganadas',
       'logros-desbloqueados',
       'invitacion-recibida',
+      // Partidas privadas
+      'partida-privada-creada',
+      'solicitud-recibida',
+      'solicitudes-pendientes',
+      'solicitud-respondida',
+      // Matchmaking
+      'en-cola',
+      'match-encontrado',
+      'busqueda-cancelada',
     ];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     events.forEach(e => this.socket?.off(e as any));
