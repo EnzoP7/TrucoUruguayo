@@ -191,6 +191,98 @@ class SocketService {
     });
   }
 
+  // === PARTIDAS PRIVADAS ===
+
+  async crearPartidaPrivada(
+    nombre: string,
+    tamañoSala: '1v1' | '2v2' | '3v3',
+    tipoPrivada: 'password' | 'aprobacion',
+    password?: string,
+    modoAlternado?: boolean
+  ): Promise<{ success: boolean; data?: { mesaId: string; codigoSala: string } }> {
+    if (!this.socket) return { success: false };
+    return new Promise((resolve) => {
+      this.socket!.emit('crear-partida-privada', {
+        nombre,
+        tamañoSala,
+        tipoPrivada,
+        password,
+        modoAlternado
+      }, (success, data) => {
+        resolve({ success, data: data as { mesaId: string; codigoSala: string } | undefined });
+      });
+    });
+  }
+
+  async unirseConCodigo(
+    codigo: string,
+    nombre: string,
+    password?: string
+  ): Promise<{ success: boolean; message?: string }> {
+    if (!this.socket) return { success: false, message: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('unirse-con-codigo', { codigo, nombre, password }, (success, message) => {
+        resolve({ success, message });
+      });
+    });
+  }
+
+  async responderSolicitud(
+    mesaId: string,
+    solicitanteId: string,
+    aceptar: boolean
+  ): Promise<{ success: boolean; message?: string }> {
+    if (!this.socket) return { success: false, message: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('responder-solicitud', { mesaId, solicitanteId, aceptar }, (success, message) => {
+        resolve({ success, message });
+      });
+    });
+  }
+
+  // === MATCHMAKING RANKEADO ===
+
+  async buscarRankeada(
+    nombre: string,
+    tamañoSala: '1v1' | '2v2' | '3v3'
+  ): Promise<{ success: boolean; message?: string }> {
+    if (!this.socket) return { success: false, message: 'Sin conexión' };
+    return new Promise((resolve) => {
+      this.socket!.emit('buscar-rankeada', { nombre, tamañoSala }, (success, message) => {
+        resolve({ success, message });
+      });
+    });
+  }
+
+  async cancelarBusqueda(): Promise<boolean> {
+    if (!this.socket) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit('cancelar-busqueda', (success) => resolve(success));
+    });
+  }
+
+  // Listeners para matchmaking
+  onEnCola(callback: (data: { posicion: number; tiempoEspera: number; tamañoSala: string }) => void): void {
+    this.socket?.on('en-cola', callback);
+  }
+
+  onMatchEncontrado(callback: (data: { mesaId: string; oponentes: string[] }) => void): void {
+    this.socket?.on('match-encontrado', callback);
+  }
+
+  onBusquedaCancelada(callback: () => void): void {
+    this.socket?.on('busqueda-cancelada', callback);
+  }
+
+  // Listeners para partidas privadas
+  onSolicitudRecibida(callback: (data: { socketId: string; nombre: string; timestamp: number }) => void): void {
+    this.socket?.on('solicitud-recibida', callback);
+  }
+
+  onSolicitudRespondida(callback: (data: { aceptado: boolean; mensaje: string; mesaId?: string }) => void): void {
+    this.socket?.on('solicitud-respondida', callback);
+  }
+
   // === JUEGO ===
 
   async iniciarPartida(): Promise<boolean> {

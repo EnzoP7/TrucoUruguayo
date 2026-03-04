@@ -1,17 +1,61 @@
 import { Jugador, Carta, Mesa, GritoTipo, EnvidoTipo, EnvidoResultado } from '@/types/truco';
 
+// Tipos de partida
+export type TipoPartida = 'publica' | 'privada_password' | 'privada_aprobacion' | 'rankeada';
+
 // Eventos del cliente al servidor
 export interface ClientToServerEvents {
   // Lobby
   'join-lobby': (callback: (success: boolean, message?: string) => void) => void;
 
-  // Partidas
+  // Partidas públicas (existente)
   'crear-partida': (data: { nombre: string; tamañoSala?: '1v1' | '2v2' | '3v3'; modoAlternado?: boolean; modoAyuda?: boolean; esPractica?: boolean; esRankeada?: boolean }, callback: (success: boolean, mesaId?: string) => void) => void;
-  'unirse-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
+  'unirse-partida': (data: { mesaId: string; nombre: string; password?: string }, callback: (success: boolean, message?: string) => void) => void;
   'iniciar-partida': (callback: (success: boolean, message?: string) => void) => void;
   'reconectar-partida': (data: { mesaId: string; nombre: string; userId?: number }, callback: (success: boolean, message?: string) => void) => void;
   'eliminar-partida': (data: { mesaId: string; nombre: string }, callback: (success: boolean, message?: string) => void) => void;
   'salir-partida': (data: { mesaId: string }, callback: (res: { success: boolean; error?: string }) => void) => void;
+
+  // Partidas privadas
+  'crear-partida-privada': (data: {
+    nombre: string;
+    tamañoSala?: '1v1' | '2v2' | '3v3';
+    tipoPrivada: 'password' | 'aprobacion';
+    password?: string;
+    modoAlternado?: boolean;
+    modoAyuda?: boolean;
+  }, callback: (success: boolean, data?: { mesaId: string; codigoSala: string }) => void) => void;
+
+  'unirse-con-codigo': (data: {
+    codigo: string;
+    nombre: string;
+    password?: string;
+  }, callback: (success: boolean, message?: string) => void) => void;
+
+  'solicitar-unirse': (data: {
+    mesaId: string;
+    nombre: string;
+  }, callback: (success: boolean, message?: string) => void) => void;
+
+  'responder-solicitud': (data: {
+    mesaId: string;
+    solicitanteId: string;
+    aceptar: boolean;
+  }, callback: (success: boolean, message?: string) => void) => void;
+
+  // Matchmaking rankeado
+  'buscar-partida': (data: {
+    nombre: string;
+    tamañoSala?: '1v1' | '2v2' | '3v3';
+    esRankeada?: boolean;
+  }, callback: (success: boolean, message?: string) => void) => void;
+
+  'buscar-rankeada': (data: {
+    nombre: string;
+    tamañoSala: '1v1' | '2v2' | '3v3';
+  }, callback: (success: boolean, message?: string) => void) => void;
+
+  'cancelar-busqueda': (callback: (success: boolean) => void) => void;
 
   // Juego
   'jugar-carta': (data: { carta: Carta }, callback: (success: boolean, message?: string) => void) => void;
@@ -43,19 +87,56 @@ export interface ClientToServerEvents {
   'enviar-mensaje': (data: { mensaje: string; tipo: 'general' | 'equipo' }, callback: (success: boolean) => void) => void;
 }
 
+// Interfaz para partidas en el lobby
+export interface PartidaLobby {
+  mesaId: string;
+  jugadores: number;
+  maxJugadores: number;
+  tamañoSala: '1v1' | '2v2' | '3v3';
+  estado: string;
+  creadorNombre?: string;
+  creadorPremium?: boolean;
+  jugadoresNombres?: string[];
+  modoAlternado?: boolean;
+  modoAyuda?: boolean;
+  esRankeada?: boolean;
+  tipoPartida?: TipoPartida;
+  requierePassword?: boolean;
+  codigoSala?: string;
+}
+
+// Solicitud de unirse a partida privada
+export interface SolicitudUnirse {
+  socketId: string;
+  nombre: string;
+  timestamp: number;
+}
+
 // Eventos del servidor al cliente
 export interface ServerToClientEvents {
   // Lobby
-  'partidas-disponibles': (partidas: Array<{ mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string; creadorNombre?: string; jugadoresNombres?: string[]; modoAlternado?: boolean; modoAyuda?: boolean }>) => void;
-  'partida-nueva': (data: { mesaId: string; jugadores: number; maxJugadores: number; tamañoSala: '1v1' | '2v2' | '3v3'; estado: string; creadorNombre?: string; jugadoresNombres?: string[]; modoAlternado?: boolean; modoAyuda?: boolean }) => void;
+  'partidas-disponibles': (partidas: PartidaLobby[]) => void;
+  'partida-nueva': (data: PartidaLobby) => void;
   'partida-eliminada': (data: { mesaId: string; mensaje: string }) => void;
+  'partida-actualizada': (data: PartidaLobby) => void;
 
   // Partidas
   'partida-creada': (data: { mesaId: string; jugador: Jugador }) => void;
+  'partida-privada-creada': (data: { mesaId: string; codigoSala: string; jugador: Jugador }) => void;
   'unido-partida': (data: { mesaId: string; jugador: Jugador; estado: Mesa }) => void;
   'jugador-unido': (data: { jugador: Jugador; totalJugadores: number }) => void;
   'partida-iniciada': (estado: Mesa) => void;
   'reconectado': (data: { jugador: Jugador; estado: Mesa }) => void;
+
+  // Partidas privadas con aprobación
+  'solicitud-recibida': (data: { socketId: string; nombre: string; timestamp: number }) => void;
+  'solicitud-respondida': (data: { aceptado: boolean; mensaje: string; mesaId?: string }) => void;
+  'solicitudes-pendientes': (solicitudes: SolicitudUnirse[]) => void;
+
+  // Matchmaking rankeado
+  'en-cola': (data: { posicion: number; tiempoEspera: number; tamañoSala: string }) => void;
+  'match-encontrado': (data: { mesaId: string; oponentes: string[] }) => void;
+  'busqueda-cancelada': () => void;
 
   // Juego
   'estado-actualizado': (estado: Mesa) => void;

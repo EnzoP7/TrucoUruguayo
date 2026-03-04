@@ -61,15 +61,6 @@ function TableIcon({ className }: { className?: string }) {
   );
 }
 
-// Icono de flecha
-function ArrowIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-    </svg>
-  );
-}
-
 interface Usuario {
   id: number;
   apodo: string;
@@ -130,6 +121,26 @@ function LobbyPageContent() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Estado para partidas privadas
+  const [mostrarModalPrivada, setMostrarModalPrivada] = useState(false);
+  const [tipoPrivada, setTipoPrivada] = useState<'password' | 'aprobacion'>('password');
+  const [passwordPrivada, setPasswordPrivada] = useState('');
+  const [codigoSalaCreada, setCodigoSalaCreada] = useState<string | null>(null);
+
+  // Estado para unirse con código
+  const [mostrarModalCodigo, setMostrarModalCodigo] = useState(false);
+  const [codigoIngresado, setCodigoIngresado] = useState('');
+  const [passwordIngresada, setPasswordIngresada] = useState('');
+  const [esperandoAprobacion, setEsperandoAprobacion] = useState(false);
+
+  // Estado para matchmaking rankeado
+  const [buscandoRankeada, setBuscandoRankeada] = useState(false);
+  const [posicionCola, setPosicionCola] = useState(0);
+  const [tiempoEspera, setTiempoEspera] = useState(0);
+
+  // Solicitudes pendientes (para host de partida con aprobación)
+  const [solicitudesPendientes, setSolicitudesPendientes] = useState<Array<{ socketId: string; nombre: string; timestamp: number }>>([]);
+
   useEffect(() => {
     // Restaurar sesión guardada
     const savedUsuario = sessionStorage.getItem('truco_usuario');
@@ -184,6 +195,40 @@ function LobbyPageContent() {
             });
           }
           setTimeout(() => setInvitacion(null), 20000);
+        });
+
+        // Listeners para matchmaking rankeado
+        socketService.onEnCola((data) => {
+          setPosicionCola(data.posicion);
+          setTiempoEspera(data.tiempoEspera);
+        });
+
+        socketService.onMatchEncontrado((data) => {
+          setBuscandoRankeada(false);
+          if (monedas !== null) setMonedas(monedas - 25);
+          navigateToGame(data.mesaId);
+        });
+
+        socketService.onBusquedaCancelada(() => {
+          setBuscandoRankeada(false);
+          setPosicionCola(0);
+          setTiempoEspera(0);
+        });
+
+        // Listeners para partidas privadas
+        socketService.onSolicitudRecibida((data) => {
+          setSolicitudesPendientes(prev => [...prev, data]);
+          audioManager.play('notification');
+        });
+
+        socketService.onSolicitudRespondida((data) => {
+          setEsperandoAprobacion(false);
+          setMostrarModalCodigo(false);
+          if (data.aceptado && data.mesaId) {
+            navigateToGame(data.mesaId);
+          } else {
+            showAlert('info', 'Solicitud rechazada', data.mensaje);
+          }
         });
 
         await socketService.joinLobby();
@@ -509,6 +554,142 @@ function LobbyPageContent() {
     }
     setMesaBuscando(null);
     setBuscandoPartida(false);
+  };
+
+  // === PARTIDAS PRIVADAS ===
+  const handleCrearPartidaPrivada = async () => {
+    if (!nombre.trim()) {
+      showAlert('warning', 'Nombre requerido', 'Por favor ingresa tu nombre');
+      return;
+    }
+
+    if (tipoPrivada === 'password' && passwordPrivada.length < 4) {
+      showAlert('warning', 'Contraseña muy corta', 'La contraseña debe tener al menos 4 caracteres');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await socketService.crearPartidaPrivada(
+        nombre.trim(),
+        tamañoSala,
+        tipoPrivada,
+        tipoPrivada === 'password' ? passwordPrivada : undefined,
+        modoAlternado
+      );
+
+      if (result.success && result.data) {
+        setCodigoSalaCreada(result.data.codigoSala);
+        setMostrarModalPrivada(false);
+        // Navegar al juego
+        navigateToGame(result.data.mesaId);
+      } else {
+        showAlert('error', 'Error', 'Error al crear la partida privada');
+      }
+    } catch (error) {
+      console.error('Error creating private game:', error);
+      showAlert('error', 'Error', 'Error al crear la partida privada');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnirseConCodigo = async () => {
+    if (!nombre.trim()) {
+      showAlert('warning', 'Nombre requerido', 'Por favor ingresa tu nombre');
+      return;
+    }
+
+    if (!codigoIngresado.trim()) {
+      showAlert('warning', 'Código requerido', 'Por favor ingresa el código de la sala');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await socketService.unirseConCodigo(
+        codigoIngresado.trim().toUpperCase(),
+        nombre.trim(),
+        passwordIngresada || undefined
+      );
+
+      if (result.success) {
+        if (result.message?.includes('Esperando')) {
+          // Partida con aprobación, esperando al host
+          setEsperandoAprobacion(true);
+          showAlert('info', 'Solicitud enviada', result.message);
+        } else {
+          // Unión directa
+          setMostrarModalCodigo(false);
+        }
+      } else {
+        showAlert('error', 'Error', result.message || 'Error al unirse');
+      }
+    } catch (error) {
+      console.error('Error joining with code:', error);
+      showAlert('error', 'Error', 'Error al unirse con código');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResponderSolicitud = async (solicitanteId: string, aceptar: boolean) => {
+    try {
+      const mesaId = sessionStorage.getItem('truco_mesaId');
+      if (!mesaId) return;
+
+      const result = await socketService.responderSolicitud(mesaId, solicitanteId, aceptar);
+      if (result.success) {
+        setSolicitudesPendientes(prev => prev.filter(s => s.socketId !== solicitanteId));
+      }
+    } catch (error) {
+      console.error('Error responding to request:', error);
+    }
+  };
+
+  // === MATCHMAKING RANKEADO ===
+  const handleBuscarRankeada = async () => {
+    if (!nombre.trim()) {
+      showAlert('warning', 'Nombre requerido', 'Por favor ingresa tu nombre');
+      return;
+    }
+
+    if (!usuario) {
+      showAlert('warning', 'Cuenta requerida', 'Necesitás una cuenta para jugar partidas rankeadas');
+      return;
+    }
+
+    if ((monedas ?? 0) < 25) {
+      showAlert('warning', 'Monedas insuficientes', 'Necesitás al menos 25 monedas para jugar rankeada');
+      return;
+    }
+
+    setBuscandoRankeada(true);
+    setTiempoEspera(0);
+
+    try {
+      const result = await socketService.buscarRankeada(nombre.trim(), tamañoSala);
+      if (!result.success) {
+        setBuscandoRankeada(false);
+        showAlert('error', 'Error', result.message || 'Error al buscar partida rankeada');
+      }
+      // Si es exitoso, esperamos los eventos de socket
+    } catch (error) {
+      console.error('Error searching ranked:', error);
+      setBuscandoRankeada(false);
+      showAlert('error', 'Error', 'Error al buscar partida rankeada');
+    }
+  };
+
+  const handleCancelarBusquedaRankeada = async () => {
+    try {
+      await socketService.cancelarBusqueda();
+    } catch (error) {
+      console.error('Error canceling search:', error);
+    }
+    setBuscandoRankeada(false);
+    setPosicionCola(0);
+    setTiempoEspera(0);
   };
 
   const handleUnirsePartida = async (mesaId: string) => {
@@ -1224,15 +1405,15 @@ function LobbyPageContent() {
 
           {/* Botón Buscar Partida (principal) */}
           <button
-            onClick={handleBuscarPartida}
-            disabled={buscandoPartida || loading || !nombre.trim() || (esRankeada && (monedas ?? 0) < 25)}
+            onClick={esRankeada && usuario ? handleBuscarRankeada : handleBuscarPartida}
+            disabled={buscandoPartida || buscandoRankeada || loading || !nombre.trim() || (esRankeada && (monedas ?? 0) < 25)}
             className={`w-full text-white text-lg py-4 px-6 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg font-bold ${
               esRankeada
                 ? 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 shadow-gold-500/30'
                 : 'bg-gradient-to-r from-celeste-500 to-celeste-600 hover:from-celeste-400 hover:to-celeste-500 shadow-celeste-600/30'
             }`}
           >
-            {buscandoPartida ? (
+            {buscandoPartida || buscandoRankeada ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="loading-dots">
                   <span></span>
@@ -1244,34 +1425,54 @@ function LobbyPageContent() {
             ) : (
               <span className="flex items-center justify-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" /></svg>
-                {esRankeada ? `Buscar Rankeada ${tamañoSala} (25 monedas)` : `Buscar Partida ${tamañoSala}`}
+                {esRankeada ? `🏆 Buscar Rankeada ${tamañoSala} (25 monedas)` : `Buscar Partida ${tamañoSala}`}
               </span>
             )}
           </button>
 
-          {/* Botón Crear Partida Privada (secundario) */}
+          {/* Botones secundarios */}
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            {/* Botón Crear Partida Privada */}
+            <button
+              onClick={() => setMostrarModalPrivada(true)}
+              disabled={loading || buscandoPartida || !nombre.trim()}
+              className="group py-3 px-4 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-900/20 to-emerald-800/15 hover:from-emerald-800/30 hover:to-emerald-700/25 hover:border-emerald-400/40 hover:shadow-lg hover:shadow-emerald-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="flex items-center justify-center gap-2 text-emerald-300/80 group-hover:text-emerald-200 transition-colors">
+                <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span className="text-sm font-semibold">Crear Privada</span>
+              </span>
+            </button>
+
+            {/* Botón Unirse con Código */}
+            <button
+              onClick={() => setMostrarModalCodigo(true)}
+              disabled={loading || buscandoPartida || !nombre.trim()}
+              className="group py-3 px-4 rounded-xl border border-purple-500/30 bg-gradient-to-r from-purple-900/20 to-purple-800/15 hover:from-purple-800/30 hover:to-purple-700/25 hover:border-purple-400/40 hover:shadow-lg hover:shadow-purple-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="flex items-center justify-center gap-2 text-purple-300/80 group-hover:text-purple-200 transition-colors">
+                <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                <span className="text-sm font-semibold">Unirse con Código</span>
+              </span>
+            </button>
+          </div>
+
+          {/* Botón Crear Partida Pública (terciario) */}
           <button
             onClick={handleCrearPartida}
-            disabled={loading || buscandoPartida || !nombre.trim() || (esRankeada && (monedas ?? 0) < 25)}
-            className="group w-full mt-3 py-3 px-5 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-900/20 via-emerald-800/15 to-emerald-900/20 hover:from-emerald-800/30 hover:via-emerald-700/25 hover:to-emerald-800/30 hover:border-emerald-400/40 hover:shadow-lg hover:shadow-emerald-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={loading || buscandoPartida || !nombre.trim()}
+            className="group w-full mt-3 py-2.5 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2 text-emerald-300/60">
-                <div className="loading-dots">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-2.5 text-emerald-300/80 group-hover:text-emerald-200 transition-colors">
-                <svg className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm font-semibold">Crear Partida Privada</span>
-                <ArrowIcon className="w-3.5 h-3.5 opacity-50 group-hover:opacity-80 group-hover:translate-x-0.5 transition-all" />
-              </span>
-            )}
+            <span className="flex items-center justify-center gap-2 text-white/50 group-hover:text-white/70 transition-colors text-sm">
+              <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Crear Partida Pública
+            </span>
           </button>
         </section>
 
@@ -1983,6 +2184,261 @@ function LobbyPageContent() {
                 Cerrar Sesion
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Crear Partida Privada */}
+      {mostrarModalPrivada && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setMostrarModalPrivada(false)}>
+          <div className="glass rounded-2xl p-6 sm:p-8 max-w-md w-full border border-emerald-500/40 bg-gradient-to-b from-emerald-900/30 to-transparent" onClick={e => e.stopPropagation()}>
+            <h3 className="font-[var(--font-cinzel)] text-2xl font-bold text-emerald-400 mb-4 text-center">
+              🔒 Crear Partida Privada
+            </h3>
+
+            {/* Tipo de partida privada */}
+            <div className="mb-4">
+              <label className="text-white/70 text-sm mb-2 block">Tipo de acceso:</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTipoPrivada('password')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                    tipoPrivada === 'password'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white/10 text-white/60 hover:bg-white/20'
+                  }`}
+                >
+                  🔑 Con Contraseña
+                </button>
+                <button
+                  onClick={() => setTipoPrivada('aprobacion')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                    tipoPrivada === 'aprobacion'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white/10 text-white/60 hover:bg-white/20'
+                  }`}
+                >
+                  ✋ Con Aprobación
+                </button>
+              </div>
+            </div>
+
+            {/* Contraseña (solo si es tipo password) */}
+            {tipoPrivada === 'password' && (
+              <div className="mb-4">
+                <label className="text-white/70 text-sm mb-2 block">Contraseña:</label>
+                <input
+                  type="password"
+                  value={passwordPrivada}
+                  onChange={(e) => setPasswordPrivada(e.target.value)}
+                  placeholder="Mínimo 4 caracteres"
+                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-emerald-500/50"
+                />
+              </div>
+            )}
+
+            {tipoPrivada === 'aprobacion' && (
+              <p className="text-white/50 text-sm mb-4 text-center">
+                Vos aprobarás o rechazarás cada solicitud de unión
+              </p>
+            )}
+
+            {/* Tamaño de sala */}
+            <div className="mb-4">
+              <label className="text-white/70 text-sm mb-2 block">Tamaño de sala:</label>
+              <div className="flex gap-2">
+                {(['1v1', '2v2', '3v3'] as const).map(size => (
+                  <button
+                    key={size}
+                    onClick={() => setTamañoSala(size)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                      tamañoSala === size
+                        ? 'bg-celeste-600 text-white'
+                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Botones */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setMostrarModalPrivada(false)}
+                className="flex-1 py-3 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCrearPartidaPrivada}
+                disabled={loading || (tipoPrivada === 'password' && passwordPrivada.length < 4)}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold hover:from-emerald-500 hover:to-emerald-400 transition-all disabled:opacity-50"
+              >
+                {loading ? 'Creando...' : 'Crear Sala'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Unirse con Código */}
+      {mostrarModalCodigo && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !esperandoAprobacion && setMostrarModalCodigo(false)}>
+          <div className="glass rounded-2xl p-6 sm:p-8 max-w-md w-full border border-purple-500/40 bg-gradient-to-b from-purple-900/30 to-transparent" onClick={e => e.stopPropagation()}>
+            <h3 className="font-[var(--font-cinzel)] text-2xl font-bold text-purple-400 mb-4 text-center">
+              🎟️ Unirse con Código
+            </h3>
+
+            {esperandoAprobacion ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 mx-auto mb-4 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                <p className="text-white/70">Esperando aprobación del anfitrión...</p>
+                <button
+                  onClick={() => {
+                    setEsperandoAprobacion(false);
+                    setMostrarModalCodigo(false);
+                  }}
+                  className="mt-4 px-6 py-2 rounded-lg bg-white/10 text-white/70 hover:bg-white/20 transition-all"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Código de sala */}
+                <div className="mb-4">
+                  <label className="text-white/70 text-sm mb-2 block">Código de sala:</label>
+                  <input
+                    type="text"
+                    value={codigoIngresado}
+                    onChange={(e) => setCodigoIngresado(e.target.value.toUpperCase())}
+                    placeholder="TRUCO-XXXXXX"
+                    className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white text-center text-xl font-mono tracking-wider placeholder-white/40 focus:outline-none focus:border-purple-500/50 uppercase"
+                    maxLength={12}
+                  />
+                </div>
+
+                {/* Contraseña (opcional) */}
+                <div className="mb-4">
+                  <label className="text-white/70 text-sm mb-2 block">Contraseña (si la sala tiene):</label>
+                  <input
+                    type="password"
+                    value={passwordIngresada}
+                    onChange={(e) => setPasswordIngresada(e.target.value)}
+                    placeholder="Dejá vacío si no tiene"
+                    className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-purple-500/50"
+                  />
+                </div>
+
+                {/* Botones */}
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setMostrarModalCodigo(false)}
+                    className="flex-1 py-3 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleUnirseConCodigo}
+                    disabled={loading || !codigoIngresado.trim()}
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 text-white font-bold hover:from-purple-500 hover:to-purple-400 transition-all disabled:opacity-50"
+                  >
+                    {loading ? 'Uniéndose...' : 'Unirse'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Buscando Rankeada */}
+      {buscandoRankeada && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl p-6 sm:p-8 max-w-md w-full border border-gold-500/40 bg-gradient-to-b from-gold-900/30 to-transparent text-center">
+            <h3 className="font-[var(--font-cinzel)] text-2xl font-bold text-gold-400 mb-4">
+              🏆 Buscando Partida Rankeada
+            </h3>
+
+            <div className="w-20 h-20 mx-auto mb-6 border-4 border-gold-500/30 border-t-gold-500 rounded-full animate-spin" />
+
+            <p className="text-white/70 mb-2">Modo: <span className="text-gold-400 font-bold">{tamañoSala}</span></p>
+
+            {posicionCola > 0 && (
+              <p className="text-white/50 text-sm mb-2">
+                Posición en cola: #{posicionCola}
+              </p>
+            )}
+
+            {tiempoEspera > 0 && (
+              <p className="text-white/50 text-sm mb-4">
+                Tiempo de espera: {tiempoEspera}s
+              </p>
+            )}
+
+            <p className="text-white/50 text-sm mb-6">
+              Buscando oponentes de nivel similar...
+            </p>
+
+            <button
+              onClick={handleCancelarBusquedaRankeada}
+              className="px-6 py-3 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-all"
+            >
+              Cancelar búsqueda
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Solicitudes Pendientes (para host) */}
+      {solicitudesPendientes.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-40 space-y-2">
+          {solicitudesPendientes.map(solicitud => (
+            <div key={solicitud.socketId} className="glass rounded-xl p-4 border border-emerald-500/40 bg-gradient-to-r from-emerald-900/50 to-transparent animate-slide-up">
+              <p className="text-white text-sm mb-2">
+                <span className="text-emerald-400 font-bold">{solicitud.nombre}</span> quiere unirse
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleResponderSolicitud(solicitud.socketId, true)}
+                  className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-500 transition-all"
+                >
+                  Aceptar
+                </button>
+                <button
+                  onClick={() => handleResponderSolicitud(solicitud.socketId, false)}
+                  className="flex-1 py-1.5 px-3 rounded-lg bg-red-600/50 text-white text-sm hover:bg-red-500/50 transition-all"
+                >
+                  Rechazar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal Código de Sala Creada */}
+      {codigoSalaCreada && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setCodigoSalaCreada(null)}>
+          <div className="glass rounded-2xl p-6 sm:p-8 max-w-md w-full border border-emerald-500/40 bg-gradient-to-b from-emerald-900/30 to-transparent text-center" onClick={e => e.stopPropagation()}>
+            <h3 className="font-[var(--font-cinzel)] text-2xl font-bold text-emerald-400 mb-4">
+              ✅ Sala Creada
+            </h3>
+            <p className="text-white/70 mb-4">Compartí este código con tus amigos:</p>
+            <div className="bg-black/30 rounded-xl p-4 mb-4">
+              <p className="text-3xl font-mono font-bold text-white tracking-widest">{codigoSalaCreada}</p>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(codigoSalaCreada);
+                showAlert('success', 'Copiado', 'Código copiado al portapapeles');
+              }}
+              className="px-6 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition-all"
+            >
+              📋 Copiar Código
+            </button>
           </div>
         </div>
       )}
