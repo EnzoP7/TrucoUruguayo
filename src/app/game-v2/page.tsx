@@ -1738,8 +1738,12 @@ function GamePage() {
                         : bubble.tipo === "quiero" ? "speech-bubble-quiero"
                           : bubble.tipo === "no-quiero" ? "speech-bubble-no-quiero" : ""
                 }`}>
-                  {bubble.puntos !== undefined && bubble.puntos !== null && bubble.tipo !== "flor" ? (
-                    <span className="bubble-number text-2xl font-bold">{bubble.puntos}</span>
+                  {bubble.puntos !== undefined && bubble.puntos !== null ? (
+                    bubble.tipo === "flor" ? (
+                      <span className="font-bold text-sm whitespace-nowrap">🌸 {bubble.puntos}</span>
+                    ) : (
+                      <span className="bubble-number text-2xl font-bold">{bubble.puntos}</span>
+                    )
                   ) : (
                     <span className="font-bold text-sm whitespace-nowrap">{bubble.texto}</span>
                   )}
