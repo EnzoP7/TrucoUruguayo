@@ -1,5 +1,6 @@
 import { createClient } from '@libsql/client'
 import { NextResponse } from 'next/server'
+import { enviarEmailSugerencia } from '@/lib/email'
 
 const db = createClient({
   url: process.env.TURSO_DATABASE_URL!,
@@ -50,6 +51,18 @@ export async function POST(request: Request) {
       sql: `INSERT INTO sugerencias (nombre, email, tipo, mensaje)
             VALUES (?, ?, ?, ?)`,
       args: [nombre.trim(), email?.trim() || null, tipoFinal, mensaje.trim()],
+    })
+
+    // Enviar email de notificacion (no bloqueante, si falla no afecta la respuesta)
+    const tipoEmail = tipoFinal === 'error' ? 'bug' : tipoFinal === 'mejora' ? 'sugerencia' : tipoFinal as 'sugerencia' | 'bug' | 'otro'
+    enviarEmailSugerencia({
+      tipo: tipoEmail,
+      mensaje: mensaje.trim(),
+      email: email?.trim(),
+      usuario: nombre.trim(),
+      pagina: 'Modal de Sugerencias',
+    }).catch((err) => {
+      console.error('[API Sugerencias] Error al enviar email:', err)
     })
 
     return NextResponse.json({

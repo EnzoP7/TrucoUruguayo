@@ -6,7 +6,6 @@ import Image from "next/image";
 import socketService from "@/lib/socket";
 import audioManager from "@/lib/audioManager";
 import TrucoLoader from "@/components/TrucoLoader";
-import { RewardedAd, AdBanner } from "@/components/ads";
 import AlertModal, { useAlertModal } from "@/components/AlertModal";
 
 // Extracted modules
@@ -44,9 +43,7 @@ function GamePage() {
   const state = useGameState();
   const {
     mesa, socketId, conectado, loading, mensaje,
-    monedasGanadas, setMonedasGanadas,
-    mostrarRewardedPostGame, setMostrarRewardedPostGame,
-    yaDuplico, setYaDuplico,
+    monedasGanadas,
     esperandoInicio,
     envidoDeclaraciones, envidoResultado,
     dealingCards, isDealing,
@@ -861,32 +858,8 @@ function GamePage() {
               <span className="text-black font-bold text-lg">+{monedasGanadas.cantidad} monedas</span>
               <span className="text-black/60 text-sm ml-2">Balance: {monedasGanadas.balance}</span>
             </div>
-            {!yaDuplico && (
-              <button
-                onClick={() => setMostrarRewardedPostGame(true)}
-                className="ml-2 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-bold transition-colors whitespace-nowrap"
-              >
-                &#x1F4FA; Duplicar
-              </button>
-            )}
           </div>
         </div>
-      )}
-
-      {/* Rewarded Ad post-game */}
-      {mostrarRewardedPostGame && monedasGanadas && (
-        <RewardedAd
-          rewardAmount={monedasGanadas.cantidad}
-          onRewardEarned={async () => {
-            const result = await socketService.reclamarRecompensaVideo();
-            if (result.success && result.balance) {
-              setMonedasGanadas({ ...monedasGanadas, cantidad: monedasGanadas.cantidad * 2, balance: result.balance });
-            }
-            setMostrarRewardedPostGame(false);
-            setYaDuplico(true);
-          }}
-          onCancel={() => setMostrarRewardedPostGame(false)}
-        />
       )}
 
       {/* Notificación de jugador desconectado */}
@@ -1229,11 +1202,6 @@ function GamePage() {
       )}
 
       <div className="relative z-10 max-w-5xl mx-auto h-[calc(100vh-1rem)] sm:h-[calc(100vh-1.5rem)] flex flex-col">
-        {/* Banner publicitario arriba del marcador */}
-        <div className="flex justify-center mb-1">
-          <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_GAME} size="banner" className="opacity-80 hover:opacity-100 transition-opacity" />
-        </div>
-
         {/* Header: Marcadores */}
         <div className="flex justify-between items-stretch gap-2 sm:gap-3 mb-1 sm:mb-2">
           <ScoreBoard equipo={1} puntos={mesa.equipos[0].puntaje} isMyTeam={miEquipo === 1} puntosLimite={mesa.puntosLimite} />

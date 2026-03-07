@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import socketService from '@/lib/socket';
-import { AdBanner } from '@/components/ads';
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'registro'>('login');
@@ -230,13 +229,6 @@ export default function LoginPage() {
           Con una cuenta guardás tus estadísticas, ranking y amigos
         </p>
 
-        {/* Publicidad */}
-        <div className="flex justify-center mt-6">
-          <AdBanner
-            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
-            size="banner"
-          />
-        </div>
       </div>
     </div>
   );

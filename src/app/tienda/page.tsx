@@ -5,7 +5,6 @@ import Link from 'next/link';
 import socketService from '@/lib/socket';
 import { TEMAS_MESA, REVERSOS_CARTAS, MARCOS_AVATAR } from '@/app/game/constants';
 import audioManager from '@/lib/audioManager';
-import { RewardedAd } from '@/components/ads';
 import AlertModal, { useAlertModal } from '@/components/AlertModal';
 import TrucoLoader from '@/components/TrucoLoader';
 
@@ -44,10 +43,6 @@ export default function TiendaPage() {
   const [equipando, setEquipando] = useState<string | null>(null);
   const [comprandoPack, setComprandoPack] = useState<string | null>(null);
   const [cargandoPago, setCargandoPago] = useState(false);
-  const [videosRestantes, setVideosRestantes] = useState<number | null>(null);
-  const [videoCooldown, setVideoCooldown] = useState(0);
-  const [recompensaPorVideo, setRecompensaPorVideo] = useState(20);
-  const [mostrarRewardedAd, setMostrarRewardedAd] = useState(false);
   const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
 
   const getUserId = (): number | null => {
@@ -108,16 +103,6 @@ export default function TiendaPage() {
           setMonedas(monedasResult.monedas ?? 0);
         }
 
-        const videosResult = await socketService.obtenerEstadoVideos();
-        if (videosResult.success) {
-          setVideosRestantes(videosResult.videosRestantes ?? 0);
-          if (videosResult.recompensaPorVideo) {
-            setRecompensaPorVideo(videosResult.recompensaPorVideo);
-          }
-          if (videosResult.cooldownRestante && videosResult.cooldownRestante > 0) {
-            setVideoCooldown(videosResult.cooldownRestante);
-          }
-        }
       } catch (err) {
         console.error('Error cargando datos de tienda:', err);
       } finally {
@@ -127,18 +112,6 @@ export default function TiendaPage() {
 
     cargarDatos();
   }, []);
-
-  // Cooldown timer
-  useEffect(() => {
-    if (videoCooldown <= 0) return;
-    const interval = setInterval(() => {
-      setVideoCooldown(prev => {
-        if (prev <= 1) { clearInterval(interval); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [videoCooldown]);
 
   // Handlers
   const handleComprarPremium = async () => {
@@ -269,23 +242,6 @@ export default function TiendaPage() {
           <div className="flex items-center gap-2">
             <span className="text-lg">&#x1FA99;</span>
             <span className="text-gold-300 font-bold">{monedas ?? 0}</span>
-            {!esPremium && videosRestantes !== null && videosRestantes > 0 && (
-              <button
-                onClick={() => setMostrarRewardedAd(true)}
-                disabled={videoCooldown > 0}
-                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all ${
-                  videoCooldown > 0
-                    ? 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
-                    : 'bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25'
-                }`}
-              >
-                <span>&#x1F4FA;</span>
-                {videoCooldown > 0 ? <span>{videoCooldown}s</span> : <span>+{recompensaPorVideo}</span>}
-              </button>
-            )}
-            {!esPremium && videosRestantes === 0 && (
-              <span className="text-white/30 text-[10px]">Videos agotados</span>
-            )}
           </div>
         </div>
       </div>
@@ -634,22 +590,6 @@ export default function TiendaPage() {
         </div>
       </div>
 
-      {/* Rewarded Ad Modal */}
-      {mostrarRewardedAd && (
-        <RewardedAd
-          rewardAmount={recompensaPorVideo}
-          onRewardEarned={async () => {
-            const result = await socketService.reclamarRecompensaVideo();
-            if (result.success) {
-              setMonedas(result.balance ?? monedas);
-              setVideosRestantes(result.videosRestantes ?? 0);
-              setVideoCooldown(30);
-            }
-            setMostrarRewardedAd(false);
-          }}
-          onCancel={() => setMostrarRewardedAd(false)}
-        />
-      )}
       <AlertModal {...alertState} onClose={closeAlert} />
     </div>
   );

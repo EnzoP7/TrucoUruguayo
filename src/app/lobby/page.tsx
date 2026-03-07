@@ -7,7 +7,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import socketService from '@/lib/socket';
 import audioManager from '@/lib/audioManager';
-import { AdBanner, RewardedAd } from '@/components/ads';
+import { AdBanner } from '@/components/ads';
 import { useShowAds, useUserPremium } from '@/hooks/useUserPremium';
 import FeedbackModal from '@/components/FeedbackModal';
 import TrucoLoader from '@/components/TrucoLoader';
@@ -98,10 +98,6 @@ function LobbyPageContent() {
   const [monedas, setMonedas] = useState<number | null>(null);
   const [recompensaDiaria, setRecompensaDiaria] = useState<{ yaReclamado: boolean; monedas: number; diasConsecutivos: number } | null>(null);
   const [mostrarModalDiario, setMostrarModalDiario] = useState(false);
-  const [mostrarRewardedAd, setMostrarRewardedAd] = useState(false);
-  const [videosRestantes, setVideosRestantes] = useState<number | null>(null);
-  const [videoCooldown, setVideoCooldown] = useState(0);
-  const [recompensaPorVideo, setRecompensaPorVideo] = useState(20);
   const [cargandoPremium, setCargandoPremium] = useState(false);
   const [usuariosOnline, setUsuariosOnline] = useState(0);
   const [buscandoPartida, setBuscandoPartida] = useState(false);
@@ -281,17 +277,6 @@ function LobbyPageContent() {
                 setRecompensaDiaria(loginResult.recompensaDiaria);
                 setMostrarModalDiario(true);
               }
-              // Obtener estado de videos rewarded
-              const estadoVideos = await socketService.obtenerEstadoVideos();
-              if (estadoVideos.success) {
-                setVideosRestantes(estadoVideos.videosRestantes ?? 0);
-                if (estadoVideos.recompensaPorVideo) {
-                  setRecompensaPorVideo(estadoVideos.recompensaPorVideo);
-                }
-                if (estadoVideos.cooldownRestante && estadoVideos.cooldownRestante > 0) {
-                  setVideoCooldown(estadoVideos.cooldownRestante);
-                }
-              }
             }
           } catch { /* ignorar */ }
         }
@@ -371,17 +356,6 @@ function LobbyPageContent() {
                 setMostrarModalDiario(true);
               }
 
-              // Obtener estado de videos rewarded
-              const estadoVideos = await socketService.obtenerEstadoVideos();
-              if (estadoVideos.success) {
-                setVideosRestantes(estadoVideos.videosRestantes ?? 0);
-                if (estadoVideos.recompensaPorVideo) {
-                  setRecompensaPorVideo(estadoVideos.recompensaPorVideo);
-                }
-                if (estadoVideos.cooldownRestante && estadoVideos.cooldownRestante > 0) {
-                  setVideoCooldown(estadoVideos.cooldownRestante);
-                }
-              }
 
               // Limpiar el query param si existe
               if (fromGoogle) {
@@ -444,18 +418,6 @@ function LobbyPageContent() {
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario, conectado]);
-
-  // Cooldown timer para rewarded ads
-  useEffect(() => {
-    if (videoCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setVideoCooldown(prev => {
-        if (prev <= 1) { clearInterval(timer); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [videoCooldown]);
 
   // Reconectar a partida como usuario logueado (usa userId)
   const handleReconectarPartidaUsuario = async (mesaId: string) => {
@@ -966,23 +928,6 @@ function LobbyPageContent() {
                     <span className="text-gold-400 text-sm">&#x1FA99;</span>
                     <span className="text-gold-300 font-bold text-sm">{monedas}</span>
                   </div>
-                )}
-                {usuario && showAds && videosRestantes !== null && videosRestantes > 0 && (
-                  <button
-                    onClick={() => setMostrarRewardedAd(true)}
-                    disabled={videoCooldown > 0}
-                    className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                      videoCooldown > 0
-                        ? 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
-                        : 'bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 hover:text-green-300'
-                    }`}
-                  >
-                    <span>&#x1F4FA;</span>
-                    {videoCooldown > 0
-                      ? <span>{videoCooldown}s</span>
-                      : <span>+{recompensaPorVideo}</span>
-                    }
-                  </button>
                 )}
               </div>
 
@@ -1678,20 +1623,6 @@ function LobbyPageContent() {
           )}
         </section>
 
-        {/* Banner de publicidad */}
-        <div className="flex justify-center my-6">
-          <AdBanner
-            size="leaderboard"
-            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
-            className="hidden sm:flex"
-          />
-          <AdBanner
-            size="banner"
-            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
-            className="flex sm:hidden"
-          />
-        </div>
-
         {/* Seccion SEO - Contenido informativo sobre el Truco Uruguayo */}
         <section className="glass rounded-2xl p-6 sm:p-8 mt-8 animate-fade-in border border-celeste-500/20" aria-labelledby="info-truco-heading">
           <h2 id="info-truco-heading" className="text-xl sm:text-2xl font-[var(--font-cinzel)] text-gold-400 mb-5 text-center">
@@ -1811,6 +1742,20 @@ function LobbyPageContent() {
           </div>
         </aside>
 
+        {/* Banner de publicidad - después del contenido editorial */}
+        <div className="flex justify-center my-6">
+          <AdBanner
+            size="leaderboard"
+            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
+            className="hidden sm:flex"
+          />
+          <AdBanner
+            size="banner"
+            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
+            className="flex sm:hidden"
+          />
+        </div>
+
         {/* Footer con caracteristicas */}
         <footer className="mt-10 text-center animate-fade-in">
           <div className="inline-flex items-center gap-6 text-gold-600/30 text-xs tracking-wider mb-6">
@@ -1888,23 +1833,6 @@ function LobbyPageContent() {
             </button>
           </div>
         </div>
-      )}
-
-      {/* Modal Rewarded Ad */}
-      {mostrarRewardedAd && (
-        <RewardedAd
-          rewardAmount={recompensaPorVideo}
-          onRewardEarned={async () => {
-            const result = await socketService.reclamarRecompensaVideo();
-            if (result.success) {
-              setMonedas(result.balance ?? monedas);
-              setVideosRestantes(result.videosRestantes ?? 0);
-              setVideoCooldown(30);
-            }
-            setMostrarRewardedAd(false);
-          }}
-          onCancel={() => setMostrarRewardedAd(false)}
-        />
       )}
 
       {/* Modal invitar amigos */}
@@ -2094,24 +2022,6 @@ function LobbyPageContent() {
                   </div>
                 )}
 
-                {/* Video reward button */}
-                {showAds && videosRestantes !== null && videosRestantes > 0 && (
-                  <button
-                    onClick={() => { setMostrarRewardedAd(true); setMenuOpen(false); }}
-                    disabled={videoCooldown > 0}
-                    className={`mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                      videoCooldown > 0
-                        ? 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
-                        : 'bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 hover:text-green-300'
-                    }`}
-                  >
-                    <span>&#x1F4FA;</span>
-                    {videoCooldown > 0
-                      ? <span>Espera {videoCooldown}s</span>
-                      : <span>Ver anuncio +{recompensaPorVideo} monedas</span>
-                    }
-                  </button>
-                )}
               </div>
             </div>
 

@@ -3,6 +3,7 @@ import { Inter, Cinzel, Permanent_Marker } from "next/font/google";
 import { Providers } from "./providers";
 import { AdSenseScript } from "@/components/ads";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
+import CookieBanner from "@/components/CookieBanner";
 import "./globals.css";
 
 const inter = Inter({
@@ -290,7 +291,10 @@ export default function RootLayout({
           Saltar al contenido principal
         </a>
         <GoogleAnalytics />
-        <Providers><main id="main-content">{children}</main></Providers>
+        <Providers>
+          <main id="main-content">{children}</main>
+          <CookieBanner />
+        </Providers>
       </body>
     </html>
   );

@@ -166,18 +166,33 @@ export default function HomePage() {
 
       {/* Footer compacto fijo al fondo */}
       <div className="relative z-10 pb-3 md:pb-4 pt-2">
-        <div className="flex items-center justify-center gap-2 text-xs text-white/40">
-          <Image src="/Images/SolDeMayo.png" alt="Sol de Mayo" width={14} height={14} className="w-3.5 h-3.5 opacity-30" />
-          <span className="tracking-widest uppercase text-[10px]">Truco Uruguayo Online</span>
-          <span className="text-white/20">·</span>
-          <span>por <span className="text-gold-400/70 font-medium">Enzo Pontet</span></span>
-          <span className="text-white/20">·</span>
-          <button
-            onClick={() => setFeedbackOpen(true)}
-            className="text-celeste-400/70 hover:text-celeste-300 transition-colors underline underline-offset-2"
-          >
-            Sugerencias
-          </button>
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex items-center justify-center gap-2 text-xs text-white/40">
+            <Image src="/Images/SolDeMayo.png" alt="Sol de Mayo" width={14} height={14} className="w-3.5 h-3.5 opacity-30" />
+            <span className="tracking-widest uppercase text-[10px]">Truco Uruguayo Online</span>
+            <span className="text-white/20">·</span>
+            <span>por <span className="text-gold-400/70 font-medium">Enzo Pontet</span></span>
+            <span className="text-white/20">·</span>
+            <button
+              onClick={() => setFeedbackOpen(true)}
+              className="text-celeste-400/70 hover:text-celeste-300 transition-colors underline underline-offset-2"
+            >
+              Sugerencias
+            </button>
+          </div>
+          <div className="flex items-center justify-center flex-wrap gap-x-3 gap-y-1 text-[10px] text-white/30">
+            <Link href="/sobre-nosotros" className="hover:text-gold-400/70 transition-colors">Sobre Nosotros</Link>
+            <span className="text-white/15">|</span>
+            <Link href="/privacidad" className="hover:text-gold-400/70 transition-colors">Privacidad</Link>
+            <span className="text-white/15">|</span>
+            <Link href="/terminos" className="hover:text-gold-400/70 transition-colors">Terminos</Link>
+            <span className="text-white/15">|</span>
+            <Link href="/cookies" className="hover:text-gold-400/70 transition-colors">Cookies</Link>
+            <span className="text-white/15">|</span>
+            <Link href="/aviso-legal" className="hover:text-gold-400/70 transition-colors">Aviso Legal</Link>
+            <span className="text-white/15">|</span>
+            <Link href="/contacto" className="hover:text-gold-400/70 transition-colors">Contacto</Link>
+          </div>
         </div>
       </div>
 

@@ -3,6 +3,21 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['socket.io'],
   },
+  // Configuración de imágenes externas
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'media.licdn.com',
+        pathname: '/dms/image/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        pathname: '/**',
+      },
+    ],
+  },
   // Eliminar header X-Powered-By por seguridad
   poweredByHeader: false,
   // Headers de seguridad adicionales

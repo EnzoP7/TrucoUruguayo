@@ -29,7 +29,8 @@
       "Bash(if exist \".next\" rmdir /s /q \".next\")",
       "Bash(grep:*)",
       "Bash(ls:*)",
-      "Read(//c/Users/epontet/Desktop/EnzoPontet/TrucoUruguayo/**)"
+      "Read(//c/Users/epontet/Desktop/EnzoPontet/TrucoUruguayo/**)",
+      "Bash(mkdir -p:*)"
     ]
   }
 }

@@ -3738,9 +3738,9 @@ function responderFlor(mesa, jugadorId, tipoRespuesta, diferirPuntos = false) {
   if (tipoRespuesta === 'no_quiero') {
     ganador = mesa.florPendiente.equipoQueCanta;
     if (ultimoTipoCantado === 'contra_flor') {
-      // No quiso contra flor al resto → el que la cantó gana la partida (todos los puntos restantes)
-      const puntajeActual = mesa.equipos.find(e => e.id === ganador)?.puntaje || 0;
-      puntosGanados = mesa.puntosLimite - puntajeActual;
+      // No quiso contra flor al resto → el que la cantó gana solo 3 pts por cada flor (NO gana el partido)
+      const floresDelGanador = ganador === 1 ? floresEquipo1 : floresEquipo2;
+      puntosGanados = 3 * floresDelGanador.length;
     } else if (ultimoTipoCantado === 'con_flor_envido') {
       // No quiso con flor envido → gana 3 pts por cada flor del equipo que cantó
       const floresDelGanador = ganador === 1 ? floresEquipo1 : floresEquipo2;

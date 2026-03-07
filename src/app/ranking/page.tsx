@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import socketService from '@/lib/socket';
-import { AdBanner } from '@/components/ads';
 
 interface RankingEntry {
   id: number;
@@ -530,14 +529,6 @@ export default function RankingPage() {
             </div>
           </div>
         )}
-
-        {/* Publicidad */}
-        <div className="flex justify-center mt-6">
-          <AdBanner
-            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_LOBBY}
-            size="banner"
-          />
-        </div>
 
         {/* Footer */}
         <footer className="mt-10 text-center">

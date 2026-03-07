@@ -6,7 +6,6 @@ import Image from "next/image";
 import socketService from "@/lib/socket";
 import audioManager from "@/lib/audioManager";
 import TrucoLoader from "@/components/TrucoLoader";
-import { RewardedAd, AdBanner } from "@/components/ads";
 import AlertModal, { useAlertModal } from "@/components/AlertModal";
 
 interface Carta {
@@ -882,8 +881,6 @@ function GamePage() {
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [monedasGanadas, setMonedasGanadas] = useState<{ cantidad: number; balance: number; motivo: string } | null>(null);
-  const [mostrarRewardedPostGame, setMostrarRewardedPostGame] = useState(false);
-  const [yaDuplico, setYaDuplico] = useState(false);
   const [esperandoInicio, setEsperandoInicio] = useState(true);
   const [cutAnimating, setCutAnimating] = useState(false);
   const [cutPosition, setCutPosition] = useState<number | null>(null);
@@ -3732,36 +3729,8 @@ function GamePage() {
               <span className="text-black font-bold text-lg">+{monedasGanadas.cantidad} monedas</span>
               <span className="text-black/60 text-sm ml-2">Balance: {monedasGanadas.balance}</span>
             </div>
-            {!yaDuplico && (
-              <button
-                onClick={() => setMostrarRewardedPostGame(true)}
-                className="ml-2 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-bold transition-colors whitespace-nowrap"
-              >
-                &#x1F4FA; Duplicar
-              </button>
-            )}
           </div>
         </div>
-      )}
-
-      {/* Rewarded Ad post-game */}
-      {mostrarRewardedPostGame && monedasGanadas && (
-        <RewardedAd
-          rewardAmount={monedasGanadas.cantidad}
-          onRewardEarned={async () => {
-            const result = await socketService.reclamarRecompensaVideo();
-            if (result.success && result.balance) {
-              setMonedasGanadas({
-                ...monedasGanadas,
-                cantidad: monedasGanadas.cantidad * 2,
-                balance: result.balance,
-              });
-            }
-            setMostrarRewardedPostGame(false);
-            setYaDuplico(true);
-          }}
-          onCancel={() => setMostrarRewardedPostGame(false)}
-        />
       )}
 
       {/* Notificación de jugador desconectado */}
@@ -5411,17 +5380,6 @@ function GamePage() {
           </div>
         </div>
       </div>
-      {/* Banner publicitario pequeño (solo usuarios free) */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none">
-        <div className="pointer-events-auto">
-          <AdBanner
-            adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_GAME}
-            size="banner"
-            className="opacity-80 hover:opacity-100 transition-opacity"
-          />
-        </div>
-      </div>
-
       <AlertModal {...alertState} onClose={closeAlert} />
     </div>
   );
