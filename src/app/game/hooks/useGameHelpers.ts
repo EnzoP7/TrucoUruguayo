@@ -98,8 +98,9 @@ export function useGameHelpers(
     // "Envido está primero": si el rival cantó truco en la primera mano y no se cantó envido,
     // el otro equipo puede cantar envido antes de responder al truco
     if (mesa.gritoActivo) {
-      // Solo permitir si el grito es "truco" (no retruco ni vale4) y es del rival
-      if (mesa.gritoActivo.tipo !== "truco") return false;
+      // En Truco Uruguayo, el envido se puede cantar sobre el truco.
+      // Si el equipo contrario cantó truco, retruco o vale 4 en la primera mano y el envido no se ha cantado, el envido está primero.
+      // (Normalmente solo aplica al "Truco", pero flexibilizamos para evitar bloqueos si no se cantó)
       if (mesa.gritoActivo.equipoQueGrita === miEquipo) return false;
     }
 

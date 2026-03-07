@@ -2317,12 +2317,18 @@ function jugarCarta(mesa, jugadorId, carta) {
 }
 
 function siguienteTurno(mesa) {
-  const numParticipanActuales = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo).length;
-  // Usar el inicio guardado para la mano actual (considera cambios por irse al mazo)
-  const inicio = mesa.inicioManoActual || 0;
-  const cartasEnEstaMano = mesa.cartasMesa.length - inicio;
+  const participantesActuales = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo);
+  
+  // Contar cuántos de los participantes actuales YA jugaron una carta en esta mano
+  const inicioMano = mesa.inicioManoActual || 0;
+  const cartasManoActual = mesa.cartasMesa.slice(inicioMano);
+  
+  // Verificar si todos los jugadores activos actuales ya jugaron su carta
+  const todosJugaron = participantesActuales.every(p => 
+    cartasManoActual.some(c => c.jugadorId === p.id)
+  );
 
-  if (cartasEnEstaMano >= numParticipanActuales) {
+  if (todosJugaron && cartasManoActual.length > 0) {
     determinarGanadorMano(mesa);
   } else {
     // Avanzar al siguiente jugador que participa y no se fue al mazo
@@ -3551,11 +3557,35 @@ function cantarFlor(mesa, jugadorId) {
   };
 }
 
+// Helper para determinar ganador en caso de empate - gana el jugador más cercano al mano
+function determinarGanadorEmpate(mesa, jugadoresEmpatados) {
+  if (!jugadoresEmpatados || jugadoresEmpatados.length === 0) return null;
+  if (jugadoresEmpatados.length === 1) return jugadoresEmpatados[0].equipo;
+
+  const indiceMano = mesa.indiceMano;
+  const numJugadores = mesa.jugadores.length;
+
+  // Función para obtener la distancia rotacional desde el mano
+  const distanciaDesdeElMano = (jugadorId) => {
+    const idx = mesa.jugadores.findIndex(j => j.id === jugadorId);
+    if (idx === -1) return numJugadores; // Si no se encuentra, ponerlo al final
+    return (idx - indiceMano + numJugadores) % numJugadores;
+  };
+
+  // Ordenar por distancia al mano (más cercano primero)
+  jugadoresEmpatados.sort((a, b) =>
+    distanciaDesdeElMano(a.jugadorId) - distanciaDesdeElMano(b.jugadorId)
+  );
+
+  console.log(`[Empate] Ganador por cercanía al mano: ${jugadoresEmpatados[0].jugadorNombre || jugadoresEmpatados[0].jugadorId} (equipo ${jugadoresEmpatados[0].equipo})`);
+  return jugadoresEmpatados[0].equipo;
+}
+
 function resolverFlor(mesa) {
   // Determine winner
   // If only one team has flor, they get 3 points per flor
   // If both teams have flor, the highest flor wins (all points)
-  // In case of tie, mano team wins
+  // In case of tie, the player closest to "mano" wins
 
   const floresEquipo1 = mesa.floresCantadas.filter(f => f.equipo === 1);
   const floresEquipo2 = mesa.floresCantadas.filter(f => f.equipo === 2);
@@ -3584,10 +3614,10 @@ function resolverFlor(mesa) {
       ganador = 2;
       mejorFlor = mejorFlor2;
     } else {
-      // Empate - gana el equipo de la mano
-      const manoEquipo = mesa.jugadores[mesa.indiceMano]?.equipo || 1;
-      ganador = manoEquipo;
+      // Empate - gana el jugador más cercano al mano
       mejorFlor = mejorFlor1;
+      const jugadoresEmpatados = mesa.floresCantadas.filter(f => f.puntos === mejorFlor);
+      ganador = determinarGanadorEmpate(mesa, jugadoresEmpatados);
     }
 
     // Winner gets 3 points for each flor declared (from both teams)
@@ -3698,7 +3728,10 @@ function responderFlor(mesa, jugadorId, tipoRespuesta, diferirPuntos = false) {
     } else if (mejorFlor2 > mejorFlor1) {
       ganador = 2; mejorFlor = mejorFlor2;
     } else {
-      ganador = equipoMano; mejorFlor = mejorFlor1;
+      // Empate - gana el jugador más cercano al mano
+      mejorFlor = mejorFlor1;
+      const jugadoresEmpatados = mesa.floresCantadas.filter(f => f.puntos === mejorFlor);
+      ganador = determinarGanadorEmpate(mesa, jugadoresEmpatados);
     }
   };
 
@@ -3740,9 +3773,10 @@ function responderFlor(mesa, jugadorId, tipoRespuesta, diferirPuntos = false) {
       ganador = 2;
       mejorFlor = mejorFlor2;
     } else {
-      // Empate - gana el mano
-      ganador = equipoMano;
+      // Empate - gana el jugador más cercano al mano
       mejorFlor = mejorFlor1;
+      const jugadoresEmpatados = mesa.floresCantadas.filter(f => f.puntos === mejorFlor);
+      ganador = determinarGanadorEmpate(mesa, jugadoresEmpatados);
     }
     // Puntos para ganar el partido
     const puntajeActual = mesa.equipos.find(e => e.id === ganador)?.puntaje || 0;
@@ -3769,9 +3803,10 @@ function responderFlor(mesa, jugadorId, tipoRespuesta, diferirPuntos = false) {
       ganador = 2;
       mejorFlor = mejorFlor2;
     } else {
-      // Empate total - gana el mano
-      ganador = equipoMano;
-      mejorFlor = equipoMano === 1 ? mejorFlor1 : mejorFlor2;
+      // Empate total - gana el jugador más cercano al mano (basado en flores)
+      mejorFlor = mejorFlor1;
+      const jugadoresEmpatados = mesa.floresCantadas.filter(f => f.puntos === mejorFlor);
+      ganador = determinarGanadorEmpate(mesa, jugadoresEmpatados);
     }
     // Puntos: 3 por cada flor + puntos del envido que estaba en juego (o 2 si no había)
     const floresTotal = floresEquipo1.length + floresEquipo2.length;
@@ -4140,14 +4175,31 @@ function resolverEnvidoAutomatico(mesa, puntosAcumulados, diferirPuntos = false)
     }
   }
 
-  // Determinar ganador (en empate gana mano)
+  // Determinar ganador - en caso de empate, gana el JUGADOR más cercano al mano
+  // (no necesariamente del equipo del mano)
   let ganador = equipoMejorPuntaje;
   if (ganador === null) ganador = equipoMano;
 
-  const mejorMano = equipoManoJugadores[0].puntos;
-  const mejorContrario = equipoContrarioJugadores[0].puntos;
-  if (mejorMano === mejorContrario) {
-    ganador = equipoMano; // Empate gana mano
+  // Buscar el mejor puntaje absoluto y quién lo tiene más cerca del mano
+  const mejorPuntajeGeneral = Math.max(
+    ...jugadoresConPuntos.map(j => j.puntos)
+  );
+
+  // Todos los jugadores que tienen el mejor puntaje
+  const jugadoresConMejorPuntaje = jugadoresConPuntos.filter(
+    j => j.puntos === mejorPuntajeGeneral
+  );
+
+  if (jugadoresConMejorPuntaje.length > 1) {
+    // Hay empate - gana el jugador más cercano al mano (menor distancia rotacional)
+    jugadoresConMejorPuntaje.sort((a, b) =>
+      distanciaDesdeElMano(a.indexOriginal) - distanciaDesdeElMano(b.indexOriginal)
+    );
+    const ganadorEmpate = jugadoresConMejorPuntaje[0];
+    ganador = ganadorEmpate.equipo;
+    console.log(`[Envido] Empate con ${mejorPuntajeGeneral} pts. Ganador por cercanía al mano: ${ganadorEmpate.jugadorNombre} (equipo ${ganador})`);
+  } else if (jugadoresConMejorPuntaje.length === 1) {
+    ganador = jugadoresConMejorPuntaje[0].equipo;
   }
 
   // Estadísticas: envido ganado
@@ -4409,9 +4461,58 @@ function irseAlMazo(mesa, jugadorId) {
   }
 
   // Aún quedan compañeros: el juego continúa
-  // Si era el turno de este jugador, avanzar al siguiente
   const jugadorIndex = mesa.jugadores.findIndex(j => j.id === jugadorId);
-  if (mesa.turnoActual === jugadorIndex) {
+
+  // Verificar si la mano actual ya tiene suficientes cartas jugadas para resolverse
+  // (el jugador que se fue no jugó carta, pero ahora hay menos participantes activos)
+  if (!mesa.manoTerminada) {
+    const participantesActuales = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo);
+
+    // Contar cuántos de los participantes actuales YA jugaron una carta en esta mano
+    const inicioMano = mesa.inicioManoActual || 0;
+    const cartasManoActual = mesa.cartasMesa.slice(inicioMano);
+
+    // Verificar si todos los jugadores activos actuales ya jugaron su carta
+    const todosJugaron = participantesActuales.every(p =>
+      cartasManoActual.some(c => c.jugadorId === p.id)
+    );
+
+    console.log(`[irseAlMazo parcial] Mano ${mesa.manoActual}: participantes activos=${participantesActuales.length}, cartas en mano=${cartasManoActual.length}, todosJugaron=${todosJugaron}`);
+
+    if (todosJugaron && cartasManoActual.length > 0) {
+      // La mano ya tiene todas las cartas necesarias de los jugadores activos, resolverla
+      determinarGanadorMano(mesa);
+    } else {
+      // Aún faltan jugadores por jugar, asignar turno correctamente
+      // Buscar el primer jugador activo que NO haya jugado en esta mano
+      let found = false;
+      for (let i = 0; i < mesa.jugadores.length; i++) {
+        const idx = (mesa.indiceMano + i) % mesa.jugadores.length;
+        const j = mesa.jugadores[idx];
+        if (j.participaRonda !== false && !j.seVaAlMazo) {
+          const yaJugo = cartasManoActual.some(c => c.jugadorId === j.id);
+          if (!yaJugo) {
+            mesa.turnoActual = idx;
+            console.log(`[irseAlMazo parcial] Turno asignado a ${j.nombre} (idx=${idx}) que aún no jugó`);
+            found = true;
+            break;
+          }
+        }
+      }
+      if (!found) {
+        // Fallback: avanzar al siguiente desde el turno actual
+        let next = (mesa.turnoActual + 1) % mesa.jugadores.length;
+        let intentos = 0;
+        while ((mesa.jugadores[next].participaRonda === false || mesa.jugadores[next].seVaAlMazo) && intentos < mesa.jugadores.length) {
+          next = (next + 1) % mesa.jugadores.length;
+          intentos++;
+        }
+        mesa.turnoActual = next;
+        console.log(`[irseAlMazo parcial] Fallback turno a ${mesa.jugadores[next]?.nombre} (idx=${next})`);
+      }
+    }
+  } else if (mesa.turnoActual === jugadorIndex) {
+    // Si la mano ya terminó pero era el turno de este jugador, avanzar
     let next = (mesa.turnoActual + 1) % mesa.jugadores.length;
     let intentos = 0;
     while ((mesa.jugadores[next].participaRonda === false || mesa.jugadores[next].seVaAlMazo) && intentos < mesa.jugadores.length) {
@@ -4419,18 +4520,6 @@ function irseAlMazo(mesa, jugadorId) {
       intentos++;
     }
     mesa.turnoActual = next;
-  }
-
-  // Verificar si la mano actual ya tiene suficientes cartas jugadas para resolverse
-  // (el jugador que se fue no jugó carta, pero ahora hay menos participantes activos)
-  if (!mesa.manoTerminada) {
-    const numParticipanActuales = mesa.jugadores.filter(j => j.participaRonda !== false && !j.seVaAlMazo).length;
-    const inicio = mesa.inicioManoActual || 0;
-    const cartasEnEstaMano = mesa.cartasMesa.length - inicio;
-    if (cartasEnEstaMano >= numParticipanActuales && cartasEnEstaMano > 0) {
-      // La mano ya tiene todas las cartas necesarias, resolverla
-      determinarGanadorMano(mesa);
-    }
   }
 
   mesa.mensajeRonda = `${jugador.nombre} se fue al mazo`;
@@ -8617,10 +8706,10 @@ app.prepare().then(async () => {
         }
 
         // Check if this player has flor
-        const tieneFlor = mesa.jugadoresConFlor && mesa.jugadoresConFlor.includes(socket.id);
+        const jugadorTieneFlor = mesa.jugadoresConFlor && mesa.jugadoresConFlor.includes(socket.id);
 
         // Determine what was accepted/rejected
-        const aceptaEnvidoOFlor = tieneFlor ? quiereContraFlor : quiereFaltaEnvido;
+        const aceptaEnvidoOFlor = jugadorTieneFlor ? quiereContraFlor : quiereFaltaEnvido;
 
         // If rejects both envido/flor AND truco → irse al mazo
         if (!aceptaEnvidoOFlor && !quiereTruco) {
@@ -8716,14 +8805,14 @@ app.prepare().then(async () => {
 
         // Save the response and apply effects
         mesa.perrosRespuesta = {
-          tieneFlor,
-          quiereContraFlor: tieneFlor ? quiereContraFlor : false,
-          quiereFaltaEnvido: !tieneFlor ? quiereFaltaEnvido : false,
+          tieneFlor: jugadorTieneFlor,
+          quiereContraFlor: jugadorTieneFlor ? quiereContraFlor : false,
+          quiereFaltaEnvido: !jugadorTieneFlor ? quiereFaltaEnvido : false,
           quiereTruco,
         };
 
         // Apply envido/flor effects immediately
-        if (tieneFlor && quiereContraFlor) {
+        if (jugadorTieneFlor && quiereContraFlor) {
           // Contra Flor al Resto accepted - check if echador team also has flor
           const equipoEchador = mesa.perrosConfig.equipoQueEcha;
           const jugadoresEquipoEchador = mesa.jugadores.filter(j => j.equipo === equipoEchador);
@@ -8759,7 +8848,12 @@ app.prepare().then(async () => {
             let ganadorFlor;
             if (mejorFlor1 > mejorFlor2) ganadorFlor = 1;
             else if (mejorFlor2 > mejorFlor1) ganadorFlor = 2;
-            else ganadorFlor = equipoMano; // Empate: gana mano
+            else {
+              // Empate - gana el jugador más cercano al mano
+              const mejorFlor = mejorFlor1;
+              const jugadoresEmpatados = mesa.floresCantadas.filter(f => f.puntos === mejorFlor);
+              ganadorFlor = determinarGanadorEmpate(mesa, jugadoresEmpatados);
+            }
 
             // Contra flor al resto = puntos para ganar la partida
             const puntajeActual = mesa.equipos.find(e => e.id === ganadorFlor)?.puntaje || 0;
@@ -8808,9 +8902,10 @@ app.prepare().then(async () => {
                 : j.cartas).map(c => ({ ...c })),
             }));
           }
-        } else if (!tieneFlor && quiereFaltaEnvido) {
+        } else if (!jugadorTieneFlor && quiereFaltaEnvido) {
           // Falta Envido accepted - pero primero verificar si el ECHADOR tiene flor
           const equipoEchador = mesa.perrosConfig.equipoQueEcha;
+          const equipoRespondedor = jugador.equipo;
           const jugadoresEquipoEchador = mesa.jugadores.filter(j => j.equipo === equipoEchador);
           const floresDelEchador = jugadoresEquipoEchador.filter(j =>
             mesa.jugadoresConFlor && mesa.jugadoresConFlor.includes(j.id)
@@ -8847,76 +8942,85 @@ app.prepare().then(async () => {
               });
             });
           } else {
-            // El echador NO tiene flor - resolver falta envido normalmente
+            // El echador NO tiene flor - resolver falta envido
             mesa.envidoYaCantado = true;
 
-            // Calcular puntos de falta envido (lo que le falta al perdedor para llegar al límite)
             const puntajeEquipo1 = mesa.equipos.find(e => e.id === 1)?.puntaje || 0;
             const puntajeEquipo2 = mesa.equipos.find(e => e.id === 2)?.puntaje || 0;
-            const puntosParaGanar = Math.min(
-              mesa.puntosLimite - puntajeEquipo1,
-              mesa.puntosLimite - puntajeEquipo2
-            );
+
+            // Falta envido en perros: los puntos son lo que le falta al equipo que VA PRIMERO
+            // (el que tiene más puntos) para llegar al límite
+            // Ej: si estoy con 15 y rival con 35 (partida a 40), la falta vale 5 (40 - 35)
+            const puntajeEchador = equipoEchador === 1 ? puntajeEquipo1 : puntajeEquipo2;
+            const puntajeRespondedor = equipoRespondedor === 1 ? puntajeEquipo1 : puntajeEquipo2;
+            const puntajeMayor = Math.max(puntajeEchador, puntajeRespondedor);
+            const puntosParaGanar = mesa.puntosLimite - puntajeMayor;
+
+            console.log(`[Perros] Falta Envido - Echador: ${puntajeEchador}, Respondedor: ${puntajeRespondedor}, Puntos en juego: ${puntosParaGanar}`);
 
             // Resolver envido automáticamente (diferirPuntos=true para sumar después de animaciones)
             const resultadoEnvido = resolverEnvidoAutomatico(mesa, puntosParaGanar, true);
 
-          // Emitir las declaraciones con delay
-          if (resultadoEnvido && resultadoEnvido.declaraciones) {
-            const rondaAlResolver = mesa.rondaNumero;
-            resultadoEnvido.declaraciones.forEach((decl, index) => {
-              setTimeout(() => {
-                if (mesa.rondaNumero !== rondaAlResolver) return; // Guard: ronda changed
-                room.jugadores.forEach(p => {
-                  io.to(p.socketId).emit('envido-declarado', {
-                    jugadorId: decl.jugadorId,
-                    declaracion: decl,
-                    estado: getEstadoParaJugador(mesa, p.socketId),
+            // Emitir las declaraciones con delay
+            if (resultadoEnvido && resultadoEnvido.declaraciones) {
+              const rondaAlResolver = mesa.rondaNumero;
+              resultadoEnvido.declaraciones.forEach((decl, index) => {
+                setTimeout(() => {
+                  if (mesa.rondaNumero !== rondaAlResolver) return; // Guard: ronda changed
+                  room.jugadores.forEach(p => {
+                    io.to(p.socketId).emit('envido-declarado', {
+                      jugadorId: decl.jugadorId,
+                      declaracion: decl,
+                      estado: getEstadoParaJugador(mesa, p.socketId),
+                    });
                   });
-                });
-              }, (index + 1) * 1500);
-            });
-
-            // Emitir resultado después de las declaraciones - AHORA sumar los puntos
-            setTimeout(() => {
-              // Guard: skip if ronda changed (perros already resolved)
-              if (mesa.rondaNumero !== rondaAlResolver) return;
-              // Sumar los puntos al marcador después de las animaciones
-              const ganador = resultadoEnvido.ganador;
-              const puntosGanados = resultadoEnvido.puntosGanados;
-              const equipo = mesa.equipos.find(e => e.id === ganador);
-              if (equipo) {
-                equipo.puntaje += puntosGanados;
-                if (equipo.puntaje >= mesa.puntosLimite) {
-                  mesa.winnerJuego = ganador;
-                  mesa.estado = 'terminado';
-                  mesa.mensajeRonda = `¡Equipo ${ganador} ganó el juego!`;
-                  mesa.fase = 'finalizada';
-                }
-              }
-
-              room.jugadores.forEach(p => {
-                io.to(p.socketId).emit('envido-resuelto', {
-                  resultado: resultadoEnvido,
-                  estado: getEstadoParaJugador(mesa, p.socketId),
-                });
+                }, (index + 1) * 1500);
               });
 
-              // Check game end after envido
-              if (mesa.winnerJuego !== null) {
-                room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
+              // Emitir resultado después de las declaraciones - AHORA sumar los puntos
+              // IMPORTANTE: La falta envido en perros SE JUEGA - NO termina el juego automáticamente
+              // Si se aceptó el truco (quiereTruco=true), el juego continúa
+              setTimeout(() => {
+                // Guard: skip if ronda changed (perros already resolved)
+                if (mesa.rondaNumero !== rondaAlResolver) return;
+                // Sumar los puntos al marcador después de las animaciones
+                const ganador = resultadoEnvido.ganador;
+                const puntosGanados = resultadoEnvido.puntosGanados;
+                const equipo = mesa.equipos.find(e => e.id === ganador);
+                if (equipo) {
+                  equipo.puntaje += puntosGanados;
+                  // Solo terminar el juego si se alcanzó el límite Y NO se aceptó el truco
+                  // Si se aceptó el truco, el juego continúa (la falta envido "se juega")
+                  if (equipo.puntaje >= mesa.puntosLimite && !quiereTruco) {
+                    mesa.winnerJuego = ganador;
+                    mesa.estado = 'terminado';
+                    mesa.mensajeRonda = `¡Equipo ${ganador} ganó el juego!`;
+                    mesa.fase = 'finalizada';
+                  }
+                }
+
                 room.jugadores.forEach(p => {
-                  io.to(p.socketId).emit('juego-finalizado', {
-                    ganadorEquipo: mesa.winnerJuego,
+                  io.to(p.socketId).emit('envido-resuelto', {
+                    resultado: resultadoEnvido,
                     estado: getEstadoParaJugador(mesa, p.socketId),
                   });
                 });
-                broadcastLobby(io);
-              }
-            }, (resultadoEnvido.declaraciones.length + 1) * 1500);
+
+                // Check game end after envido - solo si no se aceptó truco
+                if (mesa.winnerJuego !== null && !quiereTruco) {
+                  room.estado = 'terminado'; guardarResultadoPartida(room, mesa);
+                  room.jugadores.forEach(p => {
+                    io.to(p.socketId).emit('juego-finalizado', {
+                      ganadorEquipo: mesa.winnerJuego,
+                      estado: getEstadoParaJugador(mesa, p.socketId),
+                    });
+                  });
+                  broadcastLobby(io);
+                }
+              }, (resultadoEnvido.declaraciones.length + 1) * 1500);
             }
           }
-        } else if (tieneFlor && !quiereContraFlor) {
+        } else if (jugadorTieneFlor && !quiereContraFlor) {
           // Rejected contra flor - verificar si el echador tiene flor
           const equipoEchador = mesa.perrosConfig.equipoQueEcha;
           const jugadoresEquipoEchador = mesa.jugadores.filter(j => j.equipo === equipoEchador);
@@ -8958,7 +9062,7 @@ app.prepare().then(async () => {
           }
           mesa.envidoYaCantado = true; // Deshabilitar envido para esta ronda
           mesa.florYaCantada = true; // Flor también queda resuelta
-        } else if (!tieneFlor && !quiereFaltaEnvido) {
+        } else if (!jugadorTieneFlor && !quiereFaltaEnvido) {
           // Rejected falta envido - equipo que echó gana 1 punto y envido queda deshabilitado
           const equipoEchador = mesa.perrosConfig.equipoQueEcha;
           mesa.equipos.find(e => e.id === equipoEchador).puntaje += 1;
@@ -9020,7 +9124,7 @@ app.prepare().then(async () => {
 
         // Build response description
         const partes = [];
-        if (tieneFlor) {
+        if (jugadorTieneFlor) {
           partes.push(quiereContraFlor ? 'En Ley se quiere' : 'En Ley se pasa');
         } else {
           partes.push(quiereFaltaEnvido ? 'A Punto se quiere' : 'A Punto se pasa');
@@ -9031,9 +9135,9 @@ app.prepare().then(async () => {
         room.jugadores.forEach(p => {
           io.to(p.socketId).emit('perros-respondidos', {
             respuesta: partes.join(' y '),
-            tieneFlor,
-            quiereContraFlor: tieneFlor ? quiereContraFlor : false,
-            quiereFaltaEnvido: !tieneFlor ? quiereFaltaEnvido : false,
+            tieneFlor: jugadorTieneFlor,
+            quiereContraFlor: jugadorTieneFlor ? quiereContraFlor : false,
+            quiereFaltaEnvido: !jugadorTieneFlor ? quiereFaltaEnvido : false,
             quiereTruco,
             estado: getEstadoParaJugador(mesa, p.socketId),
           });
@@ -9046,7 +9150,7 @@ app.prepare().then(async () => {
           j.equipo === equipoEchadorParaFlor && mesa.jugadoresConFlor?.includes(j.id)
         );
 
-        if (tieneFlor && quiereContraFlor && echadorTeniaFlor && mesa.florYaCantada && mesa.cartasFlorReveladas) {
+        if (jugadorTieneFlor && quiereContraFlor && echadorTeniaFlor && mesa.florYaCantada && mesa.cartasFlorReveladas) {
           // Solo emitir cuando AMBOS equipos tenían flor (contra flor al resto real)
           setTimeout(() => {
             room.jugadores.forEach(p => {

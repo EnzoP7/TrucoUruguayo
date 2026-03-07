@@ -1236,7 +1236,7 @@ function GamePage() {
 
         {/* Header: Marcadores */}
         <div className="flex justify-between items-stretch gap-2 sm:gap-3 mb-1 sm:mb-2">
-          <ScoreBoard equipo={1} puntos={mesa.equipos[0].puntaje} isMyTeam={miEquipo === 1} />
+          <ScoreBoard equipo={1} puntos={mesa.equipos[0].puntaje} isMyTeam={miEquipo === 1} puntosLimite={mesa.puntosLimite} />
 
           {/* Info central */}
           <div className="flex-1 flex flex-col items-center justify-center boliche-panel rounded-xl px-2 sm:px-3 py-1.5 border-gold-700/30 relative">
@@ -1303,7 +1303,7 @@ function GamePage() {
             </div>
           </div>
 
-          <ScoreBoard equipo={2} puntos={mesa.equipos[1].puntaje} isMyTeam={miEquipo === 2} />
+          <ScoreBoard equipo={2} puntos={mesa.equipos[1].puntaje} isMyTeam={miEquipo === 2} puntosLimite={mesa.puntosLimite} />
         </div>
 
         {/* Sub-marcador Pico a Pico */}
@@ -1605,7 +1605,7 @@ function GamePage() {
                   {mesa.gritoActivo.tipo === "truco" && <button onClick={() => handleResponderTruco(true, "retruco")} disabled={loading} className="btn-truco text-white">QUIERO RETRUCO</button>}
                   {mesa.gritoActivo.tipo === "retruco" && <button onClick={() => handleResponderTruco(true, "vale4")} disabled={loading} className="btn-truco text-white">QUIERO VALE 4</button>}
                   {/* "Envido está primero": en primera mano, si no se cantó envido, se puede cantar antes de responder al truco */}
-                  {mesa.gritoActivo.tipo === "truco" && mesa.manoActual === 1 && !mesa.envidoYaCantado && !mesa.florYaCantada && (
+                  {mesa.gritoActivo.tipo === "truco" && mesa.manoActual === 1 && !mesa.envidoYaCantado && !mesa.florYaCantada && mesa.gritoActivo.equipoQueGrita !== miEquipo && (
                     <>
                       <span className="text-purple-300/60 text-xs self-center hidden sm:inline">|</span>
                       <button onClick={() => handleCantarEnvido("envido")} disabled={loading} className="btn-envido text-white text-sm">Envido</button>

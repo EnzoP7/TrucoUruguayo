@@ -659,6 +659,33 @@ export default function PerfilPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* DEV MODE: Toggle Premium para pruebas */}
+                  {process.env.NODE_ENV === 'development' && (
+                    <button
+                      onClick={async () => {
+                        const userId = getUserId();
+                        if (!userId) return;
+                        try {
+                          const res = await fetch('/api/dev/toggle-premium', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId, activar: !esPremium }),
+                          });
+                          if (res.ok) {
+                            setEsPremium(!esPremium);
+                            setDiasRestantesPremium(!esPremium ? 30 : 0);
+                            showAlert('success', 'Modo Dev', `Premium ${!esPremium ? 'activado' : 'desactivado'} para pruebas`);
+                          }
+                        } catch (err) {
+                          console.error('Error toggling premium:', err);
+                        }
+                      }}
+                      className="w-full px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 transition-all"
+                    >
+                      🔧 DEV: {esPremium ? 'Desactivar' : 'Activar'} Premium
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

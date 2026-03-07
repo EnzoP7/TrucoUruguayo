@@ -1489,13 +1489,14 @@ function GamePage() {
           });
           // Mostrar bocadillo de flor
           const bubbleId = `flor-${Date.now()}`;
+          const puntosTexto = data.declaracion.puntos ? `${data.declaracion.puntos} de Flor` : "🌸 ¡FLOR!";
           setSpeechBubbles((prev) => [
             ...prev,
             {
               id: bubbleId,
               jugadorId: data.jugadorId,
               tipo: "flor",
-              texto: "🌸 ¡FLOR!",
+              texto: puntosTexto,
               puntos: data.declaracion.puntos,
             },
           ]);
